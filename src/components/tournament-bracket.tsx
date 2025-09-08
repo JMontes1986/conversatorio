@@ -76,8 +76,6 @@ const bracketData: Round[] = [
       ]},
       { id: 8, participants: [
         { name: "Simón Mendieta", grade: "Décimo", avatar: "https://picsum.photos/id/1016/100/100", winner: true },
-        { name: "Daniel A. Cuellar", grade: "Décimo", avatar: "https://picsum.photos/id/1018/100/100", winner: false,  },
-        { name: "Juan A. Naranjo", grade: "Décimo", avatar: "https://picsum.photos/id/1019/100/100", winner: false,  },
       ]},
     ],
   },
@@ -142,6 +140,7 @@ export function TournamentBracket() {
       <div className="flex justify-between items-start min-w-[1200px] gap-8">
         {bracketData.map((round, roundIndex) => (
           <div key={round.title} className="flex flex-col justify-around h-full w-1/4">
+            <h3 className="text-center font-headline text-xl font-bold mb-8 text-primary uppercase">{round.title}</h3>
             <div className="space-y-16">
               {round.matches.map((match, matchIndex) => (
                 <div key={match.id} className="relative flex items-center">
@@ -180,5 +179,3 @@ export function TournamentBracket() {
     </div>
   );
 }
-
-    
