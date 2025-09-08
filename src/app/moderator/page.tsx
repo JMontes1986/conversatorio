@@ -99,6 +99,148 @@ function CompetitionSettings() {
     );
 }
 
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendVideo, onSendQuestion }: any) {
+    const { toast } = useToast();
+    const [newQuestionInput, setNewQuestionInput] = useState("");
+    const [newQuestionRound, setNewQuestionRound] = useState("");
+    const [isAddingQuestion, setIsAddingQuestion] = useState(false);
+
+    const handleAddQuestionSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsAddingQuestion(true);
+        try {
+            await onAddQuestion(newQuestionInput, newQuestionRound);
+            setNewQuestionInput("");
+            setNewQuestionRound("");
+        } finally {
+            setIsAddingQuestion(false);
+        }
+    };
+    
+    const questionsByRound = preparedQuestions.reduce((acc: any, q: Question) => {
+        (acc[q.round] = acc[q.round] || []).push(q);
+        return acc;
+    }, {} as Record<string, Question[]>);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Gestión de Preguntas y Videos</CardTitle>
+                 <CardDescription>
+                    Prepare, envíe y gestione las preguntas y videos del debate por ronda.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <form onSubmit={handleAddQuestionSubmit} className="space-y-3 p-3 border rounded-lg">
+                    <h3 className="font-medium">Añadir Pregunta a la Lista</h3>
+                    <div className="space-y-2">
+                        <Label htmlFor="new-question-input">Texto de la pregunta</Label>
+                        <Textarea 
+                            id="new-question-input"
+                            placeholder="Escriba la pregunta..."
+                            value={newQuestionInput}
+                            onChange={(e) => setNewQuestionInput(e.target.value)}
+                            rows={3}
+                            disabled={isAddingQuestion}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                         <Label htmlFor="new-question-round">Asignar a Ronda</Label>
+                         <Select onValueChange={setNewQuestionRound} value={newQuestionRound} disabled={isAddingQuestion}>
+                            <SelectTrigger id="new-question-round">
+                                <SelectValue placeholder="Seleccione una ronda" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {debateRounds.map(round => (
+                                    <SelectItem key={round} value={round}>{round}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isAddingQuestion || !newQuestionInput.trim() || !newQuestionRound}>
+                        {isAddingQuestion ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4"/>}
+                        Añadir a la lista
+                    </Button>
+                </form>
+               
+               <div className="space-y-2">
+                    <h3 className="font-medium text-sm text-muted-foreground pt-2">Preguntas Preparadas</h3>
+                    {loadingQuestions && <p className="text-center text-sm">Cargando preguntas...</p>}
+                    <Accordion type="single" collapsible className="w-full" defaultValue={currentDebateRound}>
+                        {debateRounds.map(round => (
+                            (questionsByRound[round]?.length > 0) && (
+                            <AccordionItem value={round} key={round}>
+                                <AccordionTrigger>{round}</AccordionTrigger>
+                                <AccordionContent className="space-y-4">
+                                    {questionsByRound[round].map((q: Question) => (
+                                        <div key={q.id} className="space-y-3 bg-background p-3 rounded-md border">
+                                            <p className="flex-grow text-sm font-medium">{q.text}</p>
+                                            
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`video-url-${q.id}`} className="text-xs">Enlace del Video (OneDrive)</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input 
+                                                        id={`video-url-${q.id}`}
+                                                        placeholder="Pegar enlace de OneDrive"
+                                                        value={videoInputs[q.id] || ''}
+                                                        onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
+                                                        disabled={savingVideoId === q.id}
+                                                    />
+                                                    <Button 
+                                                        size="icon" 
+                                                        variant="outline" 
+                                                        className="h-9 w-9 shrink-0" 
+                                                        onClick={() => onSaveVideoLink(q.id)}
+                                                        disabled={savingVideoId === q.id}
+                                                        title="Guardar Enlace">
+                                                        {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-end gap-2 pt-2">
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta acción no se puede deshacer. Se eliminará la pregunta y su video asociado de la lista de preparación.
+                                                        </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => onDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                                <Button size="sm" onClick={() => onSendVideo(q)} variant="outline">
+                                                    <Video className="mr-2 h-4 w-4" /> Enviar Video
+                                                </Button>
+                                                 <Button size="sm" onClick={() => onSendQuestion(q)}>
+                                                    <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </AccordionContent>
+                            </AccordionItem>
+                            )
+                        ))}
+                    </Accordion>
+                    {!loadingQuestions && Object.keys(questionsByRound).length === 0 && (
+                         <p className="text-xs text-center text-muted-foreground py-4">No hay preguntas preparadas.</p>
+                    )}
+               </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 
 function ModeratorDashboard() {
     const { toast } = useToast();
@@ -107,9 +249,6 @@ function ModeratorDashboard() {
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [currentDebateRound, setCurrentDebateRound] = useState("Ronda 1");
     
-    const [newQuestionInput, setNewQuestionInput] = useState("");
-    const [newQuestionRound, setNewQuestionRound] = useState("");
-    const [isAddingQuestion, setIsAddingQuestion] = useState(false);
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
     const [videoInputs, setVideoInputs] = useState<Record<string, string>>({});
@@ -215,13 +354,11 @@ function ModeratorDashboard() {
     }
 
 
-    const handleAddQuestion = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleAddQuestion = async (newQuestionInput: string, newQuestionRound: string) => {
         if (!newQuestionInput.trim() || !newQuestionRound) {
              toast({ variant: "destructive", title: "Error", description: "Debe escribir una pregunta y seleccionar una ronda." });
             return;
         }
-        setIsAddingQuestion(true);
         try {
             await addDoc(collection(db, "questions"), {
                 text: newQuestionInput,
@@ -229,14 +366,10 @@ function ModeratorDashboard() {
                 videoUrl: "",
                 createdAt: new Date()
             });
-            setNewQuestionInput("");
-            setNewQuestionRound("");
              toast({ title: "Pregunta Añadida", description: "La pregunta está lista en la sección correspondiente." });
         } catch(error) {
              console.error("Error adding question:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo añadir la pregunta." });
-        } finally {
-            setIsAddingQuestion(false);
         }
     };
 
@@ -317,12 +450,6 @@ function ModeratorDashboard() {
             </Popover>
         )
     };
-    
-    const questionsByRound = preparedQuestions.reduce((acc, q) => {
-        (acc[q.round] = acc[q.round] || []).push(q);
-        return acc;
-    }, {} as Record<string, Question[]>);
-
 
     return (
         <div className="container mx-auto py-10 px-4 md:px-6">
@@ -353,7 +480,22 @@ function ModeratorDashboard() {
                             </div>
                         </CardContent>
                     </Card>
+                    
                     <CompetitionSettings />
+
+                    <QuestionManagement 
+                        preparedQuestions={preparedQuestions}
+                        loadingQuestions={loadingQuestions}
+                        currentDebateRound={currentDebateRound}
+                        videoInputs={videoInputs}
+                        setVideoInputs={setVideoInputs}
+                        savingVideoId={savingVideoId}
+                        onAddQuestion={handleAddQuestion}
+                        onDeleteQuestion={handleDeleteQuestion}
+                        onSaveVideoLink={handleSaveVideoLink}
+                        onSendVideo={handleSendVideo}
+                        onSendQuestion={handleSendQuestion}
+                    />
                 </div>
 
                 <div className="space-y-6">
@@ -373,121 +515,6 @@ function ModeratorDashboard() {
                            </Button>
                         </CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Gestión de Preguntas y Videos</CardTitle>
-                             <CardDescription>
-                                Prepare, envíe y gestione las preguntas y videos del debate por ronda.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <form onSubmit={handleAddQuestion} className="space-y-3 p-3 border rounded-lg">
-                                <h3 className="font-medium">Añadir Pregunta a la Lista</h3>
-                                <div className="space-y-2">
-                                    <Label htmlFor="new-question-input">Texto de la pregunta</Label>
-                                    <Textarea 
-                                        id="new-question-input"
-                                        placeholder="Escriba la pregunta..."
-                                        value={newQuestionInput}
-                                        onChange={(e) => setNewQuestionInput(e.target.value)}
-                                        rows={3}
-                                        disabled={isAddingQuestion}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                     <Label htmlFor="new-question-round">Asignar a Ronda</Label>
-                                     <Select onValueChange={setNewQuestionRound} value={newQuestionRound} disabled={isAddingQuestion}>
-                                        <SelectTrigger id="new-question-round">
-                                            <SelectValue placeholder="Seleccione una ronda" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {debateRounds.map(round => (
-                                                <SelectItem key={round} value={round}>{round}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <Button type="submit" className="w-full" disabled={isAddingQuestion || !newQuestionInput.trim() || !newQuestionRound}>
-                                    {isAddingQuestion ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4"/>}
-                                    Añadir a la lista
-                                </Button>
-                            </form>
-                           
-                           <div className="space-y-2">
-                                <h3 className="font-medium text-sm text-muted-foreground pt-2">Preguntas Preparadas</h3>
-                                {loadingQuestions && <p className="text-center text-sm">Cargando preguntas...</p>}
-                                <Accordion type="single" collapsible className="w-full" defaultValue={currentDebateRound}>
-                                    {debateRounds.map(round => (
-                                        (questionsByRound[round]?.length > 0) && (
-                                        <AccordionItem value={round} key={round}>
-                                            <AccordionTrigger>{round}</AccordionTrigger>
-                                            <AccordionContent className="space-y-4">
-                                                {questionsByRound[round].map(q => (
-                                                    <div key={q.id} className="space-y-3 bg-background p-3 rounded-md border">
-                                                        <p className="flex-grow text-sm font-medium">{q.text}</p>
-                                                        
-                                                        <div className="space-y-2">
-                                                            <Label htmlFor={`video-url-${q.id}`} className="text-xs">Enlace del Video (OneDrive)</Label>
-                                                            <div className="flex items-center gap-2">
-                                                                <Input 
-                                                                    id={`video-url-${q.id}`}
-                                                                    placeholder="Pegar enlace de OneDrive"
-                                                                    value={videoInputs[q.id] || ''}
-                                                                    onChange={(e) => setVideoInputs(prev => ({...prev, [q.id]: e.target.value}))}
-                                                                    disabled={savingVideoId === q.id}
-                                                                />
-                                                                <Button 
-                                                                    size="icon" 
-                                                                    variant="outline" 
-                                                                    className="h-9 w-9 shrink-0" 
-                                                                    onClick={() => handleSaveVideoLink(q.id)}
-                                                                    disabled={savingVideoId === q.id}
-                                                                    title="Guardar Enlace">
-                                                                    {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center justify-end gap-2 pt-2">
-                                                            <AlertDialog>
-                                                                <AlertDialogTrigger asChild>
-                                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                </AlertDialogTrigger>
-                                                                <AlertDialogContent>
-                                                                    <AlertDialogHeader>
-                                                                    <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        Esta acción no se puede deshacer. Se eliminará la pregunta y su video asociado de la lista de preparación.
-                                                                    </AlertDialogDescription>
-                                                                    </AlertDialogHeader>
-                                                                    <AlertDialogFooter>
-                                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                                                                    </AlertDialogFooter>
-                                                                </AlertDialogContent>
-                                                            </AlertDialog>
-                                                            <Button size="sm" onClick={() => handleSendVideo(q)} variant="outline">
-                                                                <Video className="mr-2 h-4 w-4" /> Enviar Video
-                                                            </Button>
-                                                             <Button size="sm" onClick={() => handleSendQuestion(q)}>
-                                                                <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                        )
-                                    ))}
-                                </Accordion>
-                                {!loadingQuestions && Object.keys(questionsByRound).length === 0 && (
-                                     <p className="text-xs text-center text-muted-foreground py-4">No hay preguntas preparadas.</p>
-                                )}
-                           </div>
-                        </CardContent>
-                    </Card>
                 </div>
             </div>
         </div>
@@ -501,5 +528,3 @@ export default function ModeratorPage() {
         </AdminAuth>
     );
 }
-
-    

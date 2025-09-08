@@ -18,7 +18,6 @@ export default function DebatePage() {
         currentRound: "Ronda de Debate",
         videoUrl: ""
     });
-    const [showVideoPrompt, setShowVideoPrompt] = useState(false);
 
     useEffect(() => {
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -26,26 +25,15 @@ export default function DebatePage() {
         const unsubscribe = onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
-                const questionText = data.question || "Esperando la pregunta del moderador...";
-                const videoUrl = data.videoUrl || "";
-                
-                setDebateState(prevState => ({
-                    question: questionText,
-                    timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : prevState.timer,
-                    currentRound: data.currentRound || prevState.currentRound,
-                    videoUrl: videoUrl
-                }));
-
-                // Logic to decide what to show
-                if(videoUrl && !data.question) {
-                     setShowVideoPrompt(true);
-                } else {
-                    setShowVideoPrompt(false);
-                }
+                setDebateState({
+                    question: data.question || "Esperando la pregunta del moderador...",
+                    timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : { duration: 300, lastUpdated: Date.now() },
+                    currentRound: data.currentRound || "Ronda de Debate",
+                    videoUrl: data.videoUrl || ""
+                });
 
             } else {
                 console.log("No such document!");
-                setShowVideoPrompt(false);
             }
         });
 
@@ -61,7 +49,38 @@ export default function DebatePage() {
         }
     }
     
-    const questionToShow = showVideoPrompt ? "Por favor, observe el video presentado." : debateState.question;
+    // New logic: Show question if it exists, otherwise show video prompt if URL exists.
+    const showQuestion = debateState.question && debateState.question !== "Esperando la pregunta del moderador...";
+    const showVideo = !showQuestion && isValidHttpUrl(debateState.videoUrl);
+
+    let mainContent;
+
+    if (showQuestion) {
+        mainContent = (
+            <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+                {debateState.question}
+            </p>
+        );
+    } else if (showVideo) {
+        mainContent = (
+             <div className="flex flex-col items-center gap-6">
+                <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+                    Por favor, observe el video presentado.
+                </p>
+                 <Button asChild size="lg">
+                    <a href={debateState.videoUrl} target="_blank" rel="noopener noreferrer">
+                        <Video className="mr-2 h-5 w-5"/> Ver Video en OneDrive
+                    </a>
+                </Button>
+            </div>
+        );
+    } else {
+        mainContent = (
+             <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+                {debateState.question}
+            </p>
+        );
+    }
     
     return (
         <>
@@ -72,26 +91,14 @@ export default function DebatePage() {
                             {debateState.currentRound}
                         </h1>
                         <p className="text-muted-foreground mt-2">
-                            Siga la pregunta, el video y el tiempo asignado.
+                            Siga las instrucciones del moderador.
                         </p>
                     </div>
 
                     <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[300px] flex items-center justify-center">
-                        <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
-                            {questionToShow}
-                        </p>
+                       {mainContent}
                     </div>
 
-                    {isValidHttpUrl(debateState.videoUrl) && (
-                         <div className="flex flex-col items-center gap-4">
-                            <p className="text-muted-foreground">Hay un video disponible para esta ronda.</p>
-                             <Button asChild size="lg">
-                                <a href={debateState.videoUrl} target="_blank" rel="noopener noreferrer">
-                                    <Video className="mr-2 h-5 w-5"/> Ver Video en OneDrive
-                                </a>
-                            </Button>
-                        </div>
-                    )}
                 </div>
             </div>
             
