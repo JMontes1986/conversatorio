@@ -117,7 +117,8 @@ export function TournamentBracket() {
             // --- Build Bracket Logic ---
             const newBracketData: Round[] = [];
             
-            if (drawData && drawData.activeTab === 'quarters' && drawData.teams.every(t => t.round)) {
+            // Only build the bracket if the quarters draw is finished
+            if (drawData && drawData.activeTab === 'quarters' && drawData.rounds.length > 0 && drawData.teams.every(t => t.round)) {
                 
                 const quarterFinals: Round = { title: "Cuartos de Final", matches: [] };
                 drawData.rounds.forEach((roundInfo, index) => {
@@ -150,26 +151,30 @@ export function TournamentBracket() {
                 if(qfWinners.length > 0) {
                     for (let i = 0; i < Math.ceil(qfWinners.length / 2); i++) {
                         const matchParticipants = qfWinners.slice(i * 2, i * 2 + 2);
-                        const matchRoundName = `Semifinal ${i + 1}`; // Placeholder name
-                        
-                        const winner = getWinnerOfMatch(allScores, matchRoundName);
-                        const participantsWithStatus = matchParticipants.map(p => ({
-                            ...p,
-                            winner: winner ? p.name === winner.name : undefined,
-                        }));
+                        // Make sure we have 2 participants to form a match
+                        if (matchParticipants.length === 2) {
+                            const matchRoundName = `Semifinal ${i + 1}`; // Placeholder name, should match what's used in scoring
+                            
+                            const winner = getWinnerOfMatch(allScores, matchRoundName);
+                            const participantsWithStatus = matchParticipants.map(p => ({
+                                ...p,
+                                winner: winner ? p.name === winner.name : undefined,
+                            }));
 
-                        semiFinals.matches.push({
-                            id: i,
-                            participants: participantsWithStatus,
-                            roundName: matchRoundName
-                        });
+                            semiFinals.matches.push({
+                                id: i,
+                                participants: participantsWithStatus,
+                                roundName: matchRoundName
+                            });
+                        }
                     }
-                    newBracketData.push(semiFinals);
+                    if(semiFinals.matches.length > 0) newBracketData.push(semiFinals);
 
                     // Build Final
                     const final: Round = { title: "Final", matches: [] };
                     const semiWinners = semiFinals.matches.map(m => getWinnerOfMatch(allScores, m.roundName)).filter(Boolean) as Participant[];
-                    if(semiWinners.length > 0) {
+                    
+                    if(semiWinners.length === 2) {
                        const matchRoundName = "Final";
                        const winner = getWinnerOfMatch(allScores, matchRoundName);
                        const participantsWithStatus = semiWinners.map(p => ({
@@ -194,6 +199,7 @@ export function TournamentBracket() {
                 }
             }
 
+            // Post-processing to mark losers
             newBracketData.forEach(round => {
                 round.matches.forEach(match => {
                     const hasWinner = match.participants.some(p => p.winner === true);
@@ -297,5 +303,3 @@ export function TournamentBracket() {
     </div>
   );
 }
-
-    
