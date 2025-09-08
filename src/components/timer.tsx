@@ -22,6 +22,12 @@ export function Timer({ initialTime, title }: TimerProps) {
   }, []);
 
   useEffect(() => {
+    setTimeRemaining(initialTime);
+    setIsActive(false);
+  }, [initialTime]);
+
+
+  useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isActive && timeRemaining > 0) {
       interval = setInterval(() => {
@@ -70,9 +76,9 @@ export function Timer({ initialTime, title }: TimerProps) {
 
   return (
     <Card>
-      <CardContent className="p-6 flex flex-col items-center justify-center space-y-4">
-        <h3 className="text-lg font-medium text-muted-foreground">{title}</h3>
-        <div className="relative w-48 h-48">
+      <CardContent className="p-4 flex flex-col items-center justify-center space-y-3">
+        <h3 className="text-base font-medium text-muted-foreground">{title}</h3>
+        <div className="relative w-36 h-36 md:w-48 md:h-48">
           <svg className="w-full h-full" viewBox="0 0 100 100">
             <circle
               className="text-secondary"
@@ -98,14 +104,14 @@ export function Timer({ initialTime, title }: TimerProps) {
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-             <span className="text-4xl font-bold font-mono tabular-nums">
+             <span className="text-3xl md:text-4xl font-bold font-mono tabular-nums">
                 {formatTime(timeRemaining)}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={toggleTimer} size="icon" className="w-16 h-16 rounded-full">
-            {isActive ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}
+          <Button onClick={toggleTimer} size="icon" className="w-14 h-14 rounded-full">
+            {isActive ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
           </Button>
           <Button onClick={resetTimer} variant="outline" size="icon">
             <RotateCcw className="h-5 w-5" />
