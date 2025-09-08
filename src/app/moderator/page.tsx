@@ -112,9 +112,10 @@ function ModeratorDashboard() {
     const handleSendQuestion = async (question: Question) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const videoUrlToSend = videoInputs[question.id] || "";
             await setDoc(docRef, { 
                 question: question.text,
-                videoUrl: question.videoUrl || ""
+                videoUrl: videoUrlToSend
             }, { merge: true });
             toast({
                 title: "Pregunta Enviada",
@@ -407,5 +408,3 @@ export default function ModeratorPage() {
         </AdminAuth>
     );
 }
-
-    
