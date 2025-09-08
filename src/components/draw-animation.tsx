@@ -34,12 +34,13 @@ type ScoreData = {
 
 const shuffleArray = (array: any[]) => {
   let currentIndex = array.length, randomIndex;
+  const newArray = [...array]; // Create a copy to avoid mutating the original array
   while (currentIndex !== 0) {
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
-    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+    [newArray[currentIndex], newArray[randomIndex]] = [newArray[randomIndex], newArray[currentIndex]];
   }
-  return array;
+  return newArray;
 };
 
 function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
@@ -127,7 +128,7 @@ export function DrawAnimation() {
         unsubscribeScores();
         unsubscribeDrawState();
     };
-  }, []);
+  }, [activeTab]);
 
   const resetDraw = useCallback((isTabChange = false) => {
     let currentTeams: Team[] = [];
@@ -192,6 +193,7 @@ export function DrawAnimation() {
     setIsFinished(false);
 
     const shuffledTeams = shuffleArray([...teams]);
+    const shuffledRounds = shuffleArray([...rounds]);
     let assignedTeams = teams.map(t => ({...t, round: null}));
     setTeams(assignedTeams);
 
@@ -211,7 +213,7 @@ export function DrawAnimation() {
         await new Promise(resolve => setTimeout(resolve, i * 200));
 
         assignedTeams = assignedTeams.map(t => 
-            t.id === team.id ? { ...t, round: rounds[i % rounds.length].name } : t
+            t.id === team.id ? { ...t, round: shuffledRounds[i % shuffledRounds.length].name } : t
         );
 
         setTeams([...assignedTeams]);
@@ -222,7 +224,7 @@ export function DrawAnimation() {
 
     setIsDrawing(false);
     setIsFinished(true);
-    await updateLiveDrawState({ isDrawing: false, isFinished: true });
+    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds: shuffledRounds });
   };
   
   const fixToBlockchain = () => {
