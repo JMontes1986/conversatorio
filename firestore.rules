@@ -1,37 +1,33 @@
 
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read access to the debate state for students/viewers
-    match /debateState/{state} {
-      allow read: if true;
-      allow write: if request.auth != null; // Only authenticated (admin/moderator) can write
-    }
-
-    // Allow anyone to register a school
+    // Reglas para el registro de colegios
     match /schools/{schoolId} {
-      allow create: if true;
-      // Only authenticated users (admins) can read/update/delete
-      allow read, update, delete: if request.auth != null;
-    }
-    
-    match /schools/{schoolId}/{document=**} {
-       allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null; // Cualquiera puede registrar, pero solo admin puede editar/verificar
     }
 
-    // Allow authenticated users to manage judges
+    // Reglas para los jurados
     match /judges/{judgeId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null; // Solo admins/moderadores autenticados
+    }
+
+    // Reglas para las puntuaciones
+    match /scores/{scoreId} {
+        allow read, write: if request.auth != null; // Solo admins/jurados autenticados
     }
     
-    // Rules for scores
-    match /scores/{scoreId} {
-      // Allow anyone to submit a score (judges are not authenticated for now)
-      // In a real-world app, this should be restricted to authenticated judges.
-      allow create: if true;
-      
-      // Only authenticated users (admins) can read all scores
-      allow read, list: if request.auth != null;
+    // Reglas para el estado del debate (pregunta, timer, ronda)
+    match /debateState/{stateId} {
+        allow read: if true; // Todos pueden leer el estado
+        allow write: if request.auth != null; // Solo admins/moderadores pueden cambiarlo
+    }
+
+    // Reglas para las preguntas preparadas
+    match /questions/{questionId} {
+        allow read, write: if request.auth != null; // Solo admins/moderadores pueden gestionarlas
     }
   }
 }
