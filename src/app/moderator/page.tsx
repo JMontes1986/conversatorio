@@ -1,31 +1,39 @@
+
 "use client";
 
 import { useState } from "react";
 import { Timer } from "@/components/timer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, Video, Settings } from "lucide-react";
+import { PlayCircle, Video, Settings, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 
-interface TimerSettings {
-    duration: number;
-    label: string;
-}
+export default function ModeratorPage() {
+    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General" });
+    const [currentQuestion, setCurrentQuestion] = useState("¿Debería la inteligencia artificial tener un papel en las decisiones judiciales para garantizar la imparcialidad?");
+    const [questionInput, setQuestionInput] = useState(currentQuestion);
 
-const EditableTimer = ({ setting, onUpdate }: { setting: TimerSettings, onUpdate: (newDuration: number) => void }) => {
-    const [minutes, setMinutes] = useState(Math.floor(setting.duration / 60));
-    const [seconds, setSeconds] = useState(setting.duration % 60);
-
-    const handleUpdate = () => {
-        const newDuration = (minutes * 60) + seconds;
-        onUpdate(newDuration);
+    const updateTimer = (newDuration: number) => {
+        setMainTimer(prev => ({ ...prev, duration: newDuration }));
     };
+    
+    const handleSetQuestion = () => {
+        setCurrentQuestion(questionInput);
+    }
 
-    return (
-        <div className="space-y-4">
-            <Timer initialTime={setting.duration} title={setting.label} />
+    const TimerSettings = () => {
+        const [minutes, setMinutes] = useState(Math.floor(mainTimer.duration / 60));
+        const [seconds, setSeconds] = useState(mainTimer.duration % 60);
+
+        const handleUpdate = () => {
+            const newDuration = (minutes * 60) + seconds;
+            updateTimer(newDuration);
+        };
+
+        return (
             <Popover>
                 <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="w-full gap-2">
@@ -35,7 +43,7 @@ const EditableTimer = ({ setting, onUpdate }: { setting: TimerSettings, onUpdate
                 <PopoverContent className="w-60">
                     <div className="grid gap-4">
                         <div className="space-y-2">
-                            <h4 className="font-medium leading-none">{setting.label}</h4>
+                            <h4 className="font-medium leading-none">Ajustar Temporizador</h4>
                             <p className="text-sm text-muted-foreground">
                                 Ajuste los minutos y segundos.
                             </p>
@@ -66,24 +74,9 @@ const EditableTimer = ({ setting, onUpdate }: { setting: TimerSettings, onUpdate
                     </div>
                 </PopoverContent>
             </Popover>
-        </div>
-    );
-};
-
-
-export default function ModeratorPage() {
-    const [timerSettings, setTimerSettings] = useState({
-        roundTimer: { duration: 8 * 60, label: "Tiempo de Ronda" },
-        interventionTimer: { duration: 2 * 60, label: "Intervención" },
-        questionTimer: { duration: 30, label: "Pregunta" },
-    });
-
-    const updateTimer = (timerKey: keyof typeof timerSettings, newDuration: number) => {
-        setTimerSettings(prev => ({
-            ...prev,
-            [timerKey]: { ...prev[timerKey], duration: newDuration }
-        }));
+        )
     };
+
 
     return (
         <div className="container mx-auto py-10 px-4 md:px-6">
@@ -98,18 +91,7 @@ export default function ModeratorPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Pregunta Actual</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-lg font-semibold">
-                                "¿Debería la inteligencia artificial tener un papel en las decisiones judiciales para garantizar la imparcialidad?"
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <div className="grid md:grid-cols-2 gap-6">
+                     <div className="grid md:grid-cols-2 gap-6">
                         <Card className="relative overflow-hidden">
                             <CardHeader>
                                 <CardTitle>Equipo A: Águilas Doradas</CardTitle>
@@ -146,13 +128,47 @@ export default function ModeratorPage() {
                 <div className="space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="font-headline">Temporizadores</CardTitle>
-                            <CardDescription>Controle el flujo del debate.</CardDescription>
+                            <CardTitle className="font-headline">Control del Debate</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                             <EditableTimer setting={timerSettings.roundTimer} onUpdate={(d) => updateTimer('roundTimer', d)} />
-                             <EditableTimer setting={timerSettings.interventionTimer} onUpdate={(d) => updateTimer('interventionTimer', d)} />
-                             <EditableTimer setting={timerSettings.questionTimer} onUpdate={(d) => updateTimer('questionTimer', d)} />
+                           <div>
+                                <Timer initialTime={mainTimer.duration} title={mainTimer.label} />
+                                <div className="mt-2">
+                                     <TimerSettings />
+                                </div>
+                           </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Gestión de Preguntas</CardTitle>
+                             <CardDescription>
+                                Envíe la pregunta que los equipos debatirán.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="font-medium mb-2">Pregunta Actual:</h3>
+                                    <p className="text-sm p-3 bg-secondary rounded-md">
+                                        {currentQuestion}
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="question-input">Nueva Pregunta</Label>
+                                    <Textarea 
+                                        id="question-input"
+                                        placeholder="Escriba la nueva pregunta aquí..."
+                                        value={questionInput}
+                                        onChange={(e) => setQuestionInput(e.target.value)}
+                                        rows={4}
+                                    />
+                                </div>
+                                <Button onClick={handleSetQuestion} className="w-full">
+                                    <Send className="mr-2 h-4 w-4"/>
+                                    Enviar Pregunta
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
