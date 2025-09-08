@@ -18,7 +18,7 @@ const features = [
     icon: <Users className="h-8 w-8 text-primary" />,
     title: "Registro de Escuelas",
     description: "Inscriba a su escuela en la competencia de manera rápida y sencilla.",
-    link: "/admin",
+    link: "/register",
   },
   {
     icon: <Shuffle className="h-8 w-8 text-primary" />,
@@ -50,12 +50,6 @@ const features = [
     description: "Siga el progreso de la competencia con un marcador en vivo y brackets actualizados.",
     link: "/scoreboard",
   },
-  {
-    icon: <Shield className="h-8 w-8 text-primary" />,
-    title: "Panel de Administrador",
-    description: "Administre todos los aspectos de la competencia, desde escuelas hasta criterios de evaluación.",
-    link: "/admin",
-  },
 ];
 
 export default function Home() {
@@ -72,7 +66,7 @@ export default function Home() {
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Button asChild size="lg">
-                <Link href="/admin">Registrar Escuela</Link>
+                <Link href="/register">Registrar Escuela</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link href="/scoreboard">Ver Marcador</Link>
@@ -93,7 +87,7 @@ export default function Home() {
               Todo lo que necesita para una competencia de debate justa, transparente y emocionante.
             </p>
           </div>
-          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
             {features.map((feature) => (
               <Card key={feature.title} className="hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="flex flex-col items-center text-center">
@@ -102,7 +96,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-muted-foreground">{feature.description}</p>
-                   <Button variant="link" asChild className="mt-4 text-accent-foreground hover:text-primary">
+                   <Button variant="link" asChild className="mt-4 text-primary">
                     <Link href={feature.link}>
                       Ir a {feature.title.split(' ')[0]}
                     </Link>
@@ -128,7 +122,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col gap-2 min-[400px]:flex-row">
               <Button asChild size="lg">
-                <Link href="/admin">Únete a la Competencia</Link>
+                <Link href="/register">Únete a la Competencia</Link>
               </Button>
             </div>
           </div>

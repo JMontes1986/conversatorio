@@ -68,14 +68,15 @@ function ScoringPanel() {
     const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            const currentTeams = data.teams || [];
             setDebateState({
                 currentRound: data.currentRound || 'N/A',
-                teams: data.teams || [],
+                teams: currentTeams,
             });
             // Initialize scores state for the new teams
             const initialScores: Record<string, Record<string, number>> = {};
-            if (data.teams) {
-                data.teams.forEach((team: Team) => {
+            if (currentTeams) {
+                currentTeams.forEach((team: Team) => {
                     initialScores[team.name] = {};
                 });
             }
@@ -98,21 +99,10 @@ function ScoringPanel() {
       );
 
       const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
-          const scoresData: ScoreData[] = [];
-          querySnapshot.forEach(doc => {
-              const data = doc.data();
-              // Adapt to new and old data structures
-              const teamsData = data.teams ? data.teams : [
-                  { name: data.teamAName, total: data.teamA_total },
-                  { name: data.teamBName, total: data.teamB_total },
-              ];
-              scoresData.push({ 
-                  id: doc.id,
-                  matchId: data.matchId,
-                  teams: teamsData,
-                  createdAt: data.createdAt,
-              });
-          });
+          const scoresData: ScoreData[] = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+          } as ScoreData));
           setPastScores(scoresData);
           setLoadingHistory(false);
       }, (error) => {
@@ -149,7 +139,7 @@ function ScoringPanel() {
         hash = ((hash << 5) - hash) + char;
         hash = hash & hash;
     }
-    return hash.toString(16).toUpperCase();
+    return hash.toString(16).toUpperCase().slice(-6);
   }
 
   const handleSubmit = async () => {
@@ -178,8 +168,8 @@ function ScoringPanel() {
         judgeId: judge?.id || '',
         judgeName: judge?.name || 'Jurado Anónimo',
         judgeCedula: judge?.cedula || '',
-        teams: teamsScoreData.map(({name, total}) => ({name, total})), // Store only name and total for aggregation
-        fullScores: teamsScoreData, // Store detailed scores for auditing if needed
+        teams: teamsScoreData.map(({name, total}) => ({name, total})),
+        fullScores: teamsScoreData,
         createdAt: new Date(),
     };
 
@@ -189,7 +179,6 @@ function ScoringPanel() {
             title: "Puntuación Enviada",
             description: "Sus calificaciones han sido registradas exitosamente.",
         });
-        // Reset scores after submission
         const resetScores: Record<string, Record<string, number>> = {};
         debateState.teams.forEach(team => {
             resetScores[team.name] = {};
@@ -332,7 +321,7 @@ function ScoringPanel() {
                         <AccordionItem value={score.id} key={score.id}>
                             <AccordionTrigger>
                                 <div className="flex justify-between items-center w-full pr-4">
-                                    <span className="font-bold capitalize">{score.matchId}</span>
+                                    <span className="font-bold capitalize">{score.matchId.replace(/-/g, ' ')}</span>
                                     <div className="text-right text-sm">
                                       {score.teams.map(t => `${t.name}: ${t.total}`).join(' vs ')}
                                     </div>
@@ -360,3 +349,5 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
+
+    
