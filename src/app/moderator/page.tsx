@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -38,6 +39,66 @@ interface Question {
 }
 
 const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Final"];
+
+function CompetitionSettings() {
+    const { toast } = useToast();
+    const [currentRound, setCurrentRound] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const DEBATE_STATE_DOC_ID = "current";
+
+    const handleUpdateRound = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!currentRound) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor seleccione una ronda." });
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { currentRound: currentRound }, { merge: true });
+            toast({ title: "Ronda Actualizada", description: `La ronda activa ahora es: ${currentRound}.` });
+        } catch (error) {
+            console.error("Error updating round:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la ronda." });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Ajustes de la Competencia</CardTitle>
+                <CardDescription>Configuración general de la competencia.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={handleUpdateRound} className="space-y-4 max-w-sm">
+                    <div className="space-y-2">
+                        <Label htmlFor="current-round">Ronda de Debate Activa</Label>
+                         <Select onValueChange={setCurrentRound} value={currentRound} disabled={isSubmitting}>
+                            <SelectTrigger id="current-round">
+                                <SelectValue placeholder="Seleccione la ronda actual" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Ronda 1">Ronda 1</SelectItem>
+                                <SelectItem value="Ronda 2">Ronda 2</SelectItem>
+                                <SelectItem value="Cuartos de Final">Cuartos de Final</SelectItem>
+                                <SelectItem value="Semifinal">Semifinal</SelectItem>
+                                <SelectItem value="Final">Final</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Esta será la ronda que se mostrará públicamente en la página de Debate.</p>
+                    </div>
+                    <Button type="submit" disabled={isSubmitting || !currentRound}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Actualizar Ronda
+                    </Button>
+                </form>
+            </CardContent>
+        </Card>
+    );
+}
+
 
 function ModeratorDashboard() {
     const { toast } = useToast();
@@ -292,6 +353,7 @@ function ModeratorDashboard() {
                             </div>
                         </CardContent>
                     </Card>
+                    <CompetitionSettings />
                 </div>
 
                 <div className="space-y-6">

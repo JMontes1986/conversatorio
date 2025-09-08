@@ -28,14 +28,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, Send } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 
 interface Participant {
@@ -67,65 +66,6 @@ interface MatchResults {
     totalTeamA: number;
     totalTeamB: number;
     winner: 'teamA' | 'teamB' | 'Tie';
-}
-
-function CompetitionSettings() {
-    const { toast } = useToast();
-    const [currentRound, setCurrentRound] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const DEBATE_STATE_DOC_ID = "current";
-
-    const handleUpdateRound = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!currentRound) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor seleccione una ronda." });
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { currentRound: currentRound }, { merge: true });
-            toast({ title: "Ronda Actualizada", description: `La ronda activa ahora es: ${currentRound}.` });
-        } catch (error) {
-            console.error("Error updating round:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la ronda." });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Ajustes de la Competencia</CardTitle>
-                <CardDescription>Configuración general de la competencia.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={handleUpdateRound} className="space-y-4 max-w-sm">
-                    <div className="space-y-2">
-                        <Label htmlFor="current-round">Ronda de Debate Activa</Label>
-                         <Select onValueChange={setCurrentRound} value={currentRound} disabled={isSubmitting}>
-                            <SelectTrigger id="current-round">
-                                <SelectValue placeholder="Seleccione la ronda actual" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Ronda 1">Ronda 1</SelectItem>
-                                <SelectItem value="Ronda 2">Ronda 2</SelectItem>
-                                <SelectItem value="Cuartos de Final">Cuartos de Final</SelectItem>
-                                <SelectItem value="Semifinal">Semifinal</SelectItem>
-                                <SelectItem value="Final">Final</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">Esta será la ronda que se mostrará públicamente en la página de Debate.</p>
-                    </div>
-                    <Button type="submit" disabled={isSubmitting || !currentRound}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Actualizar Ronda
-                    </Button>
-                </form>
-            </CardContent>
-        </Card>
-    );
 }
 
 function AdminDashboard() {
@@ -247,11 +187,10 @@ function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="schools" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 md:w-[600px]">
+        <TabsList className="grid w-full grid-cols-3 md:w-[450px]">
           <TabsTrigger value="schools"><School className="h-4 w-4 mr-2" />Colegios</TabsTrigger>
           <TabsTrigger value="judges"><User className="h-4 w-4 mr-2" />Jurados</TabsTrigger>
           <TabsTrigger value="results"><Trophy className="h-4 w-4 mr-2"/>Resultados</TabsTrigger>
-          <TabsTrigger value="settings"><Settings className="h-4 w-4 mr-2" />Ajustes</TabsTrigger>
         </TabsList>
         <TabsContent value="schools">
           <Card>
@@ -453,9 +392,6 @@ function AdminDashboard() {
                 </Accordion>
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="settings">
-            <CompetitionSettings />
         </TabsContent>
       </Tabs>
     </div>
