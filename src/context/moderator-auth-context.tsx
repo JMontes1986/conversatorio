@@ -26,6 +26,7 @@ export function ModeratorProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // This effect runs only on the client-side
     try {
         const storedModerator = localStorage.getItem(MODERATOR_STORAGE_KEY);
         if (storedModerator) {
