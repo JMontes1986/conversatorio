@@ -14,6 +14,7 @@ export default function DebatePage() {
     const [debateState, setDebateState] = useState({
         question: "Esperando la pregunta del moderador...",
         timer: { duration: 300, lastUpdated: Date.now() },
+        currentRound: "Ronda de Debate"
     });
 
     useEffect(() => {
@@ -25,6 +26,7 @@ export default function DebatePage() {
                 setDebateState(prevState => ({
                     question: data.question || prevState.question,
                     timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : prevState.timer,
+                    currentRound: data.currentRound || prevState.currentRound,
                 }));
             } else {
                 console.log("No such document!");
@@ -38,8 +40,8 @@ export default function DebatePage() {
         <div className="container mx-auto py-10 px-4 md:px-6 flex justify-center items-center min-h-[calc(100vh-200px)]">
             <div className="w-full max-w-4xl space-y-8">
                  <div className="text-center">
-                    <h1 className="font-headline text-3xl md:text-4xl font-bold">
-                        Ronda de Debate
+                    <h1 className="font-headline text-3xl md:text-4xl font-bold capitalize">
+                        {debateState.currentRound}
                     </h1>
                     <p className="text-muted-foreground mt-2">
                         Siga la pregunta y el tiempo asignado.
@@ -79,3 +81,5 @@ export default function DebatePage() {
         </div>
     );
 }
+
+    
