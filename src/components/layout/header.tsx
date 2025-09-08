@@ -28,7 +28,7 @@ const navLinks = [
   { href: "/debate", label: "Debate", icon: MessageSquare },
   { href: "/register", label: "Registro", icon: Users },
   { href: "/moderator", label: "Moderar", icon: Gavel, private: true },
-  { href: "/admin", label: "Admin", icon: Shield, private: true },
+  { href: "/admin", label: "Admin", icon: Shield, private: false }, // Changed private to false
 ];
 
 export function Header() {
