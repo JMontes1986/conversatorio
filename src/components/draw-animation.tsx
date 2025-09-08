@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 type Team = {
   id: string;
@@ -21,6 +22,12 @@ type RoundData = {
     phase: string;
 }
 
+type ScoreData = {
+    id: string;
+    matchId: string;
+    teams: { name: string; total: number }[];
+}
+
 const shuffleArray = (array: any[]) => {
   let currentIndex = array.length, randomIndex;
   while (currentIndex !== 0) {
@@ -31,13 +38,52 @@ const shuffleArray = (array: any[]) => {
   return array;
 };
 
+function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
+    const roundScores = scores.filter(s => s.matchId === roundName);
+    
+    const matches: Record<string, { name: string; total: number }[][]> = {};
+    roundScores.forEach(s => {
+        const key = s.teams.map(t => t.name).sort().join('-');
+        if (!matches[key]) matches[key] = [];
+        matches[key].push(s.teams);
+    });
+
+    const winners: string[] = [];
+    Object.values(matches).forEach(matchJudgements => {
+        const matchTotals: Record<string, number> = {};
+        matchJudgements.forEach(judgement => {
+            judgement.forEach(team => {
+                 if (!matchTotals[team.name]) matchTotals[team.name] = 0;
+                 matchTotals[team.name] += team.total;
+            });
+        });
+        
+        let winner = '';
+        let maxScore = -1;
+        for (const [teamName, total] of Object.entries(matchTotals)) {
+            if (total > maxScore) {
+                maxScore = total;
+                winner = teamName;
+            }
+        }
+        if (winner) winners.push(winner);
+    });
+    
+    return winners;
+}
+
+
 export function DrawAnimation() {
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [allRounds, setAllRounds] = useState<RoundData[]>([]);
   const [rounds, setRounds] = useState<RoundData[]>([]);
+  const [allScores, setAllScores] = useState<ScoreData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
+  const [activeTab, setActiveTab] = useState("groups");
 
   useEffect(() => {
     setLoading(true);
@@ -48,33 +94,63 @@ export function DrawAnimation() {
             name: doc.data().teamName,
             round: null
         }));
+        setAllTeams(fetchedTeams);
         setTeams(fetchedTeams);
-        if(!rounds.length) setLoading(false);
+        setLoading(false);
     });
 
     const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
     const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
-        let groupRounds = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as RoundData))
-            .filter(r => r.phase === "Fase de Grupos");
-        
-        // Fallback for rounds named 'Ronda X' if phase is not set
-        if (groupRounds.length === 0) {
-            groupRounds = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as RoundData))
-            .filter(r => r.name.toLowerCase().startsWith("ronda"));
-        }
-
-        setRounds(groupRounds);
+        const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+        setAllRounds(roundsData);
         setLoading(false);
+    });
+
+    const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
+    const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
+        const scoresData: ScoreData[] = [];
+        snapshot.forEach((doc) => {
+            scoresData.push({ id: doc.id, ...doc.data()} as ScoreData);
+        });
+        setAllScores(scoresData);
     });
 
 
     return () => {
         unsubscribeSchools();
         unsubscribeRounds();
+        unsubscribeScores();
     };
   }, []);
+
+  useEffect(() => {
+    resetDraw();
+    if (activeTab === "groups") {
+        let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        if (groupRounds.length === 0) {
+            groupRounds = allRounds.filter(r => r.name.toLowerCase().startsWith("ronda"));
+        }
+        setRounds(groupRounds);
+        setTeams(allTeams);
+    } else if (activeTab === "quarters") {
+        const quarterRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
+        setRounds(quarterRounds);
+        
+        let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos").map(r => r.name);
+        if (groupRounds.length === 0) {
+            groupRounds = allRounds.filter(r => r.name.toLowerCase().startsWith("ronda")).map(r => r.name);
+        }
+        
+        const winners = groupRounds.flatMap(r => getWinnersOfRound(allScores, r));
+        const uniqueWinners = [...new Set(winners)];
+
+        const winnerTeams = allTeams
+            .filter(t => uniqueWinners.includes(t.name))
+            .map(t => ({...t, round: null})); // Reset round assignment
+        
+        setTeams(winnerTeams);
+    }
+  }, [activeTab, allRounds, allTeams, allScores]);
 
   const startDraw = () => {
     if (teams.length === 0 || rounds.length === 0) return;
@@ -132,50 +208,68 @@ export function DrawAnimation() {
 
   return (
     <div className="w-full max-w-6xl mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <div className="space-y-1">
-          <h1 className="font-headline text-3xl font-bold">Sorteo Automático de Grupos</h1>
-          <p className="text-muted-foreground">Observe cómo los equipos son asignados aleatoriamente a sus rondas.</p>
+        <div className="space-y-1 mb-8">
+            <h1 className="font-headline text-3xl font-bold">Sorteo Automático</h1>
+            <p className="text-muted-foreground">Seleccione la fase y realice el sorteo de los equipos.</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0 || rounds.length === 0}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
-            {loading ? "Cargando..." : "Iniciar Sorteo"}
-          </Button>
-          <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
-            Reiniciar
-          </Button>
-        </div>
-      </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4">
+                <TabsTrigger value="groups">Fase de Grupos</TabsTrigger>
+                <TabsTrigger value="quarters">Cuartos de Final</TabsTrigger>
+            </TabsList>
+            
+            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                <div className="space-y-1">
+                    <h2 className="font-headline text-2xl font-bold capitalize">{activeTab === 'groups' ? 'Sorteo de Grupos' : 'Sorteo de Cuartos'}</h2>
+                    <p className="text-muted-foreground">
+                        {activeTab === 'groups' 
+                        ? 'Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.'
+                        : 'Los equipos clasificados serán sorteados para los enfrentamientos de cuartos de final.'}
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0 || rounds.length === 0}>
+                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
+                        {loading ? "Cargando..." : "Iniciar Sorteo"}
+                    </Button>
+                    <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
+                        Reiniciar
+                    </Button>
+                </div>
+            </div>
 
-      {loading ? (
-          <div className="flex justify-center items-center min-h-[400px]">
-              <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-      ) : teams.length === 0 || rounds.length === 0 ? (
-          <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
-            <p className="text-muted-foreground">
-                {teams.length === 0 ? "No hay colegios verificados para el sorteo." : "No hay rondas de 'Fase de Grupos' configuradas."}
-            </p>
-          </div>
-      ) : (
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${rounds.length} gap-6 min-h-[400px]`}>
-          {rounds.map(round => (
-            <Card key={round.id} className="flex flex-col">
-              <CardHeader>
-                <CardTitle className="font-headline text-center">{round.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow space-y-2 relative">
-                {getRoundTeams(round.name).map((team, index) => (
-                  <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
-                    {team.name}
-                  </div>
+            {loading ? (
+                <div className="flex justify-center items-center min-h-[400px]">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+            ) : teams.length === 0 || rounds.length === 0 ? (
+                <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
+                    <p className="text-muted-foreground text-center px-4">
+                        {teams.length === 0 
+                            ? (activeTab === 'groups' ? "No hay colegios verificados para el sorteo." : "No hay equipos clasificados para esta fase.")
+                            : (activeTab === 'groups' ? "No hay rondas de 'Fase de Grupos' configuradas." : "No hay rondas de 'Cuartos de Final' configuradas.")
+                        }
+                    </p>
+                </div>
+            ) : (
+                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.max(1, rounds.length)} gap-6 min-h-[400px]`}>
+                {rounds.map(round => (
+                    <Card key={round.id} className="flex flex-col">
+                    <CardHeader>
+                        <CardTitle className="font-headline text-center">{round.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-grow space-y-2 relative">
+                        {getRoundTeams(round.name).map((team, index) => (
+                        <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
+                            {team.name}
+                        </div>
+                        ))}
+                    </CardContent>
+                    </Card>
                 ))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                </div>
+            )}
+        </Tabs>
 
 
       <div className={cn(
@@ -223,3 +317,5 @@ export function DrawAnimation() {
     </div>
   );
 }
+
+    
