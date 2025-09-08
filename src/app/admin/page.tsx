@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -35,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Link from 'next/link';
 
 interface Participant {
     name: string;
@@ -260,9 +262,11 @@ function AdminDashboard() {
                         Añada, edite o elimine colegios participantes.
                     </CardDescription>
                 </div>
-                 <Button size="sm" className="gap-1">
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    Añadir Colegio
+                 <Button size="sm" className="gap-1" asChild>
+                    <Link href="/register">
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      Añadir Colegio
+                    </Link>
                 </Button>
             </CardHeader>
             <CardContent>

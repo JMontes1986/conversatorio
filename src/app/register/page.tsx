@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -23,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import React from "react";
 import { Separator } from "@/components/ui/separator";
+import { AdminAuth } from "@/components/auth/admin-auth";
 
 const participantSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -94,7 +96,7 @@ function DynamicFieldArray({ control, name, label, buttonText, Icon }: {
     );
 }
 
-export default function RegisterPage() {
+function RegisterForm() {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -124,7 +126,7 @@ export default function RegisterPage() {
         description: "La escuela ha sido registrada y está pendiente de verificación.",
       });
       form.reset();
-      router.push("/");
+      router.push("/admin");
     } catch (error) {
       console.error("Error adding document: ", error);
       toast({
@@ -144,7 +146,7 @@ export default function RegisterPage() {
           <School className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="font-headline text-3xl">Registro de Escuelas</CardTitle>
           <CardDescription>
-            Inscriba a su equipo en el Conversatorio Colgemelli.
+            Inscriba a un equipo en el Conversatorio Colgemelli.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -236,4 +238,12 @@ export default function RegisterPage() {
       </Card>
     </div>
   );
+}
+
+export default function RegisterPage() {
+    return (
+        <AdminAuth>
+            <RegisterForm />
+        </AdminAuth>
+    );
 }

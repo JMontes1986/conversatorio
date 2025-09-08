@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import Link from "next/link";
@@ -26,7 +27,7 @@ import { useAuth } from "@/context/auth-context";
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/debate", label: "Debate", icon: MessageSquare },
-  { href: "/register", label: "Registro", icon: Users },
+  { href: "/register", label: "Registro", icon: Users, private: true },
   { href: "/moderator", label: "Moderar", icon: Gavel, private: true },
   { href: "/admin", label: "Admin", icon: Shield, private: false }, // Changed private to false
 ];

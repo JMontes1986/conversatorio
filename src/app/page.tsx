@@ -17,7 +17,7 @@ const features = [
     icon: <Users className="h-8 w-8 text-primary" />,
     title: "Registro de Escuelas",
     description: "Inscriba a su escuela en la competencia de manera rápida y sencilla.",
-    link: "/register",
+    link: "/admin",
   },
   {
     icon: <Shuffle className="h-8 w-8 text-primary" />,
@@ -71,7 +71,7 @@ export default function Home() {
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Button asChild size="lg">
-                <Link href="/register">Registrar Escuela</Link>
+                <Link href="/admin">Registrar Escuela</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link href="/scoreboard">Ver Marcador</Link>
@@ -127,7 +127,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col gap-2 min-[400px]:flex-row">
               <Button asChild size="lg">
-                <Link href="/register">Únete a la Competencia</Link>
+                <Link href="/admin">Únete a la Competencia</Link>
               </Button>
             </div>
           </div>
