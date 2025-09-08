@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, addDoc, query, orderBy, deleteDoc, updateDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { AdminAuth } from "@/components/auth/admin-auth";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { ModeratorAuth } from "@/components/auth/moderator-auth";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -523,8 +523,8 @@ function ModeratorDashboard() {
 
 export default function ModeratorPage() {
     return (
-        <AdminAuth>
+        <ModeratorAuth>
             <ModeratorDashboard />
-        </AdminAuth>
+        </ModeratorAuth>
     );
 }

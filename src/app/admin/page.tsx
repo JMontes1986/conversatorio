@@ -28,14 +28,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
+import { nanoid } from 'nanoid';
 
 interface Participant {
     name: string;
@@ -52,6 +53,11 @@ interface JudgeData {
     id: string;
     name: string;
     cedula: string;
+}
+interface ModeratorData {
+    id: string;
+    username: string;
+    token: string;
 }
 interface ScoreData {
     id: string;
@@ -73,13 +79,21 @@ function AdminDashboard() {
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [judges, setJudges] = useState<JudgeData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
+  const [moderators, setModerators] = useState<ModeratorData[]>([]);
+
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [loadingJudges, setLoadingJudges] = useState(true);
   const [loadingScores, setLoadingScores] = useState(true);
+  const [loadingModerators, setLoadingModerators] = useState(true);
   
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeCedula, setNewJudgeCedula] = useState("");
   const [isSubmittingJudge, setIsSubmittingJudge] = useState(false);
+  
+  const [newModeratorUsername, setNewModeratorUsername] = useState("");
+  const [isSubmittingModerator, setIsSubmittingModerator] = useState(false);
+  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+
 
   useEffect(() => {
     const schoolsQuery = query(collection(db, "schools"), orderBy("createdAt", "desc"));
@@ -125,11 +139,26 @@ function AdminDashboard() {
         setScores(scoresData);
         setLoadingScores(false);
     });
+    
+     const moderatorsQuery = query(collection(db, "moderators"), orderBy("createdAt", "asc"));
+     const unsubscribeModerators = onSnapshot(moderatorsQuery, (querySnapshot) => {
+        const moderatorsData: ModeratorData[] = [];
+        querySnapshot.forEach((doc) => {
+            moderatorsData.push({ id: doc.id, ...doc.data() } as ModeratorData);
+        });
+        setModerators(moderatorsData);
+        setLoadingModerators(false);
+     }, (error) => {
+        console.error("Error fetching moderators:", error);
+        setLoadingModerators(false);
+     });
+
 
     return () => {
         unsubscribeSchools();
         unsubscribeJudges();
         unsubscribeScores();
+        unsubscribeModerators();
     };
   }, []);
 
@@ -144,7 +173,7 @@ function AdminDashboard() {
         await addDoc(collection(db, "judges"), {
             name: newJudgeName,
             cedula: newJudgeCedula,
-            createdAt: new Date(),
+            createdAt: serverTimestamp(),
         });
         toast({ title: "Jurado Añadido", description: "El nuevo jurado ha sido registrado." });
         setNewJudgeName("");
@@ -156,6 +185,52 @@ function AdminDashboard() {
         setIsSubmittingJudge(false);
     }
  };
+ 
+   const handleAddModerator = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newModeratorUsername.trim()) {
+        toast({ variant: "destructive", title: "Error", description: "El nombre de usuario es requerido." });
+        return;
+    }
+    setIsSubmittingModerator(true);
+    try {
+        const existingModeratorQuery = query(collection(db, "moderators"), where("username", "==", newModeratorUsername.trim()));
+        const existingModeratorSnapshot = await getDocs(existingModeratorQuery);
+        if (!existingModeratorSnapshot.empty) {
+            toast({ variant: "destructive", title: "Error", description: "Ese nombre de usuario ya existe." });
+            return;
+        }
+
+        await addDoc(collection(db, "moderators"), {
+            username: newModeratorUsername.trim(),
+            token: nanoid(16), // Generate a 16-character secure token
+            createdAt: serverTimestamp(),
+        });
+        toast({ title: "Moderador Creado", description: "Se ha creado un nuevo moderador con su token de acceso." });
+        setNewModeratorUsername("");
+    } catch (error) {
+        console.error("Error adding moderator:", error);
+        toast({ variant: "destructive", title: "Error", description: "No se pudo añadir el moderador." });
+    } finally {
+        setIsSubmittingModerator(false);
+    }
+  };
+
+  const handleDeleteModerator = async (moderatorId: string) => {
+    try {
+      await deleteDoc(doc(db, "moderators", moderatorId));
+      toast({ title: "Moderador Eliminado" });
+    } catch (error) {
+      console.error("Error deleting moderator:", error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el moderador." });
+    }
+  };
+
+  const copyToken = (token: string, id: string) => {
+    navigator.clipboard.writeText(token);
+    setCopiedTokenId(id);
+    setTimeout(() => setCopiedTokenId(null), 2000);
+  };
  
   const processedResults: MatchResults[] = scores.reduce((acc, score) => {
     let match = acc.find(m => m.matchId === score.matchId);
@@ -187,9 +262,10 @@ function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="schools" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 md:w-[450px]">
+        <TabsList className="grid w-full grid-cols-4 md:w-[600px]">
           <TabsTrigger value="schools"><School className="h-4 w-4 mr-2" />Colegios</TabsTrigger>
           <TabsTrigger value="judges"><User className="h-4 w-4 mr-2" />Jurados</TabsTrigger>
+          <TabsTrigger value="moderators"><KeyRound className="h-4 w-4 mr-2" />Moderadores</TabsTrigger>
           <TabsTrigger value="results"><Trophy className="h-4 w-4 mr-2"/>Resultados</TabsTrigger>
         </TabsList>
         <TabsContent value="schools">
@@ -329,6 +405,73 @@ function AdminDashboard() {
                                                         <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4"/>Eliminar</DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </TabsContent>
+         <TabsContent value="moderators">
+            <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-1">
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Crear Moderador</CardTitle>
+                            <CardDescription>Cree un nuevo acceso para un moderador.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleAddModerator} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="moderator-username">Nombre de usuario</Label>
+                                    <Input id="moderator-username" value={newModeratorUsername} onChange={(e) => setNewModeratorUsername(e.target.value)} placeholder="Ej: moderador1" disabled={isSubmittingModerator}/>
+                                </div>
+                                <Button type="submit" className="w-full" disabled={isSubmittingModerator}>
+                                     {isSubmittingModerator && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Crear Moderador
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+                <div className="md:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Moderadores Activos</CardTitle>
+                            <CardDescription>Lista de moderadores y sus tokens de acceso.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Usuario</TableHead>
+                                        <TableHead>Token de Acceso</TableHead>
+                                        <TableHead><span className="sr-only">Acciones</span></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {loadingModerators ? (
+                                         <TableRow>
+                                            <TableCell colSpan={3} className="text-center">Cargando moderadores...</TableCell>
+                                        </TableRow>
+                                    ) : moderators.map((mod) => (
+                                        <TableRow key={mod.id}>
+                                            <TableCell className="font-medium">{mod.username}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="text" readOnly value={mod.token} className="font-mono text-xs h-8"/>
+                                                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToken(mod.token, mod.id)}>
+                                                        {copiedTokenId === mod.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                                     </Button>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteModerator(mod.id)}>
+                                                    <Trash2 className="h-4 w-4"/>
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     ))}

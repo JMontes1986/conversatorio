@@ -12,6 +12,7 @@ import {
   Gavel,
   MessageSquare,
   LogOut,
+  KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,20 +24,33 @@ import {
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
+import { useModeratorAuth } from "@/context/moderator-auth-context";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/debate", label: "Debate", icon: MessageSquare },
-  { href: "/register", label: "Registro", icon: Users, private: true },
-  { href: "/moderator", label: "Moderar", icon: Gavel, private: true },
-  { href: "/admin", label: "Admin", icon: Shield, private: false }, // Changed private to false
+  { href: "/register", label: "Registro", icon: Users, private: true }, // Admin only
+  { href: "/moderator", label: "Moderar", icon: Gavel, private: true, moderator: true }, // Admin or Moderator
+  { href: "/admin", label: "Admin", icon: Shield, private: false }, // Public link to login
 ];
 
 export function Header() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user: adminUser, logout: adminLogout } = useAuth();
+  const { moderator: moderatorUser, logout: moderatorLogout } = useModeratorAuth();
+  const isAuthenticated = adminUser || moderatorUser;
 
-  const filteredNavLinks = navLinks.filter(link => !link.private || (link.private && user));
+  const handleLogout = () => {
+    if (adminUser) adminLogout();
+    if (moderatorUser) moderatorLogout();
+  };
+
+  const filteredNavLinks = navLinks.filter(link => {
+    if (link.href === '/register') return adminUser; // Only admin sees register
+    if (link.href === '/moderator') return adminUser || moderatorUser; // Admin or Mod sees moderar
+    if (link.href === '/admin') return !isAuthenticated; // Hide admin login if anyone is logged in
+    return true;
+  });
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -61,8 +75,20 @@ export function Header() {
               {link.label}
             </Link>
           ))}
-           {user && (
-            <Button variant="ghost" size="sm" onClick={logout}>
+          {!isAuthenticated && (
+             <Link
+                href="/moderator/login"
+                className={cn(
+                    "transition-colors hover:text-primary flex items-center",
+                    pathname === "/moderator/login" ? "text-primary" : "text-muted-foreground"
+                )}
+            >
+                <KeyRound className="mr-2 h-4 w-4" />
+                Moderador Login
+            </Link>
+          )}
+           {isAuthenticated && (
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Salir
             </Button>
@@ -99,9 +125,20 @@ export function Header() {
                     </Link>
                   </SheetClose>
                 ))}
-                {user && (
+                 {!isAuthenticated && (
+                   <SheetClose asChild>
+                     <Link
+                        href="/moderator/login"
+                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground"
+                    >
+                        <KeyRound className="h-5 w-5" />
+                        Moderador Login
+                    </Link>
+                  </SheetClose>
+                )}
+                {isAuthenticated && (
                   <SheetClose asChild>
-                    <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
+                    <Button variant="ghost" onClick={handleLogout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
                        <LogOut className="h-5 w-5" />
                        Salir
                     </Button>

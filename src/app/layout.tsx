@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { AuthProvider } from '@/context/auth-context';
+import { ModeratorProvider } from '@/context/moderator-auth-context';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -24,14 +25,16 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          <div className="flex flex-col min-h-screen">
-            <Header />
-            <main className="flex-grow">
-              {children}
-            </main>
-            <Footer />
-          </div>
-          <Toaster />
+          <ModeratorProvider>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow">
+                {children}
+              </main>
+              <Footer />
+            </div>
+            <Toaster />
+          </ModeratorProvider>
         </AuthProvider>
       </body>
     </html>
