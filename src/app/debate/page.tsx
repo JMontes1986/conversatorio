@@ -61,11 +61,13 @@ export default function DebatePage() {
         }
     }
     
+    const questionToShow = showVideoPrompt ? "Por favor, observe el video presentado." : debateState.question;
+    
     return (
         <>
-            <div className="container mx-auto py-10 px-4 md:px-6 flex justify-center items-center min-h-[calc(100vh-200px)]">
-                <div className="w-full max-w-4xl space-y-8">
-                     <div className="text-center">
+            <div className="container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)]">
+                <div className="w-full max-w-5xl space-y-8 text-center">
+                     <div>
                         <h1 className="font-headline text-3xl md:text-4xl font-bold capitalize">
                             {debateState.currentRound}
                         </h1>
@@ -74,43 +76,22 @@ export default function DebatePage() {
                         </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-8 items-start">
-                        <Card className="shadow-lg h-full">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-3 font-headline text-2xl">
-                                    <MessageSquare className="h-7 w-7 text-primary" />
-                                    Pregunta Actual
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-xl md:text-2xl text-center font-medium p-6 bg-secondary rounded-lg min-h-[200px] flex items-center justify-center">
-                                    {showVideoPrompt ? "Por favor, observe el video presentado." : debateState.question}
-                                </p>
-                            </CardContent>
-                        </Card>
-                        
-                        <Card className="shadow-lg h-full">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-3 font-headline text-2xl">
-                                    <Video className="h-7 w-7 text-primary" />
-                                    Video de la Ronda
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="aspect-video bg-secondary rounded-lg flex items-center justify-center text-center p-4">
-                                {isValidHttpUrl(debateState.videoUrl) ? (
-                                    <Button asChild size="lg">
-                                        <a href={debateState.videoUrl} target="_blank" rel="noopener noreferrer">
-                                            Ver Video en OneDrive
-                                        </a>
-                                    </Button>
-                                ) : (
-                                    <p className="text-muted-foreground">No hay video para esta ronda.</p>
-                                )}
-                                </div>
-                            </CardContent>
-                        </Card>
+                    <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[300px] flex items-center justify-center">
+                        <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+                            {questionToShow}
+                        </p>
                     </div>
+
+                    {isValidHttpUrl(debateState.videoUrl) && (
+                         <div className="flex flex-col items-center gap-4">
+                            <p className="text-muted-foreground">Hay un video disponible para esta ronda.</p>
+                             <Button asChild size="lg">
+                                <a href={debateState.videoUrl} target="_blank" rel="noopener noreferrer">
+                                    <Video className="mr-2 h-5 w-5"/> Ver Video en OneDrive
+                                </a>
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
             
