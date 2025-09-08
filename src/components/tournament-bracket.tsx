@@ -170,7 +170,7 @@ export function TournamentBracket() {
 
                      for (let i = 0; i < winnersFromPreviousRound.length / 2; i++) {
                          const matchRoundName = phaseRoundsData[i]?.name || `${phaseName} ${i + 1}`;
-                         const participants = winnersFromPreviousRound.slice(i * 2, i * 2 + 2);
+                         let participants = winnersFromPreviousRound.slice(i * 2, i * 2 + 2);
                          while(participants.length < 2) participants.push({name: '', avatar: ''});
 
                          const winnerName = getWinnerOfMatch(allScores, matchRoundName);
@@ -226,20 +226,20 @@ export function TournamentBracket() {
             <h2 className="text-3xl font-bold text-foreground">"¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?"</h2>
             <p className="text-lg text-muted-foreground">Debate Intercolegial</p>
         </div>
-      <div className="flex justify-center items-start min-w-[1400px] gap-8">
+      <div className="flex justify-center items-start min-w-[1400px]">
         {bracketData.map((round, roundIndex) => (
-          <div key={round.title} className="flex flex-col w-1/4 pt-10">
-            <h3 className="text-center font-headline text-xl font-bold mb-8 text-primary uppercase">{round.title}</h3>
-            <div className={cn("flex flex-col justify-around flex-grow", round.matches.length > 1 ? "space-y-20" : "")}>
-              {round.matches.map((match) => (
-                <div key={match.id} className="relative flex flex-col items-center justify-center gap-4">
-                    <div className="flex justify-around w-full items-center">
+          <div key={round.title} className="flex flex-col flex-1">
+            <h3 className="text-center font-headline text-xl font-bold mb-8 text-primary uppercase h-10 flex items-center justify-center">{round.title}</h3>
+            <div className="flex flex-col justify-around flex-grow gap-y-12">
+              {round.matches.map((match, matchIndex) => (
+                <div key={match.id} className="relative flex flex-col items-center justify-center">
+                    <div className={cn(
+                        "flex flex-col items-center w-full gap-4",
+                        roundIndex > 0 && "justify-center"
+                    )}>
                      {match.participants.map((p, pIndex) => (
-                        <div key={p.name || pIndex} className="relative">
+                        <div key={p.name || pIndex} className="relative z-10">
                            <ParticipantCard participant={p} />
-                           {match.participants.length > 1 && pIndex === 0 && (
-                                <div className="absolute top-1/2 -translate-y-1/2 -right-6 h-0.5 w-6 bg-gray-300 z-0"></div>
-                           )}
                         </div>
                      ))}
                     </div>
@@ -247,17 +247,26 @@ export function TournamentBracket() {
                     {/* Connecting Lines */}
                     {roundIndex < bracketData.length -1 && match.participants.length > 1 && (
                       <>
-                        <div className="absolute top-1/2 -translate-y-1/2 left-1/2 h-0.5 w-[calc(50%_+_2rem)] bg-gray-300 -ml-4 z-0"></div>
-                        <div className="absolute top-1/2 -translate-y-1/2 -right-4 h-0.5 w-4 bg-gray-300 z-0"></div>
+                        {/* Horizontal line from match */}
+                        <div className="absolute top-1/2 -translate-y-1/2 left-[calc(50%_-_1px)] w-1/2 h-0.5 bg-gray-300 z-0"></div>
+                        
+                        {/* Vertical line connecting pairs */}
+                         <div className={cn(
+                            "absolute left-1/2 w-0.5 bg-gray-300 z-0",
+                            "h-[calc(50%_+1.5rem)]", // 1.5rem is gap-y-12 / 2
+                            matchIndex % 2 === 0 ? "top-1/2" : "bottom-1/2"
+                         )}></div>
 
-                        { match.id % 2 === 0 && (
-                             <div className="absolute top-1/2 -right-4 h-[calc(100%_+_5rem)] w-0.5 bg-gray-300 z-0"></div>
-                        )}
-                         { match.id % 2 !== 0 && (
-                             <div className="absolute bottom-1/2 -right-4 h-[calc(100%_+_5rem)] w-0.5 bg-gray-300 z-0"></div>
-                        )}
+                        {/* Horizontal line to next round */}
+                        <div className={cn(
+                            "absolute top-1/2 -translate-y-1/2 w-[calc(50%_+_1.5rem)] h-0.5 bg-gray-300 z-0",
+                             matchIndex % 2 === 0 ? "left-[calc(50%_+_1px)]" : "right-[calc(50%_+_1px)]"
+                        )}></div>
                       </>
                     )}
+                     {roundIndex === 2 && ( // Final round
+                         <div className="absolute top-1/2 -translate-y-1/2 left-1/2 w-1/2 h-0.5 bg-gray-300 z-0"></div>
+                     )}
                 </div>
               ))}
             </div>
