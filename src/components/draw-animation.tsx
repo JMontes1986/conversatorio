@@ -1,18 +1,25 @@
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type Team = {
   id: string;
   name: string;
-  group: number | null;
+  round: string | null;
 };
+
+type RoundData = {
+    id: string;
+    name: string;
+    phase: string;
+}
 
 const shuffleArray = (array: any[]) => {
   let currentIndex = array.length, randomIndex;
@@ -26,27 +33,51 @@ const shuffleArray = (array: any[]) => {
 
 export function DrawAnimation() {
   const [teams, setTeams] = useState<Team[]>([]);
+  const [rounds, setRounds] = useState<RoundData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
     const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-    const unsubscribe = onSnapshot(schoolsQuery, (snapshot) => {
+    const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
         const fetchedTeams = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().teamName,
-            group: null
+            round: null
         }));
         setTeams(fetchedTeams);
+        if(!rounds.length) setLoading(false);
+    });
+
+    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+    const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+        let groupRounds = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as RoundData))
+            .filter(r => r.phase === "Fase de Grupos");
+        
+        // Fallback for rounds named 'Ronda X' if phase is not set
+        if (groupRounds.length === 0) {
+            groupRounds = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as RoundData))
+            .filter(r => r.name.toLowerCase().startsWith("ronda"));
+        }
+
+        setRounds(groupRounds);
         setLoading(false);
     });
-    return () => unsubscribe();
+
+
+    return () => {
+        unsubscribeSchools();
+        unsubscribeRounds();
+    };
   }, []);
 
   const startDraw = () => {
-    if (teams.length === 0) return;
+    if (teams.length === 0 || rounds.length === 0) return;
     setIsDrawing(true);
     setIsFinished(false);
     const shuffledTeams = shuffleArray([...teams]);
@@ -55,7 +86,7 @@ export function DrawAnimation() {
       setTimeout(() => {
         setTeams(prevTeams =>
           prevTeams.map(t =>
-            t.id === team.id ? { ...t, group: (index % 4) + 1 } : t
+            t.id === team.id ? { ...t, round: rounds[index % rounds.length].name } : t
           )
         );
         if (index === shuffledTeams.length - 1) {
@@ -67,21 +98,10 @@ export function DrawAnimation() {
   };
 
   const resetDraw = () => {
-    setLoading(true);
-     const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-    const unsubscribe = onSnapshot(schoolsQuery, (snapshot) => {
-        const fetchedTeams = snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().teamName,
-            group: null
-        }));
-        setTeams(fetchedTeams);
-        setLoading(false);
-    });
+    setTeams(teams.map(t => ({...t, round: null})));
     setIsDrawing(false);
     setIsFinished(false);
     setIsFixing(false);
-    return () => unsubscribe();
   };
   
   const fixToBlockchain = () => {
@@ -91,19 +111,34 @@ export function DrawAnimation() {
     }, 2000);
   };
 
-  const getGroupTeams = (groupNumber: number) => {
-    return teams.filter(t => t.group === groupNumber);
+  const getRoundTeams = (roundName: string) => {
+    return teams.filter(t => t.round === roundName);
   }
+
+  const animationStyles = useMemo(() => {
+    if (rounds.length === 0) return '';
+    
+    const numRounds = rounds.length;
+    const baseWidth = 100 / numRounds;
+    
+    return rounds.map((round, index) => `
+        @keyframes fly-to-round-${index + 1} {
+          0% { transform: translate(var(--tx, 0), var(--ty, 0)); opacity: 1; }
+          100% { transform: translate(calc(-50vw + ${baseWidth * (index + 0.5)}vw), -20vh) scale(0); opacity: 0; }
+        }
+    `).join('\n');
+  }, [rounds]);
+
 
   return (
     <div className="w-full max-w-6xl mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div className="space-y-1">
           <h1 className="font-headline text-3xl font-bold">Sorteo Automático de Grupos</h1>
-          <p className="text-muted-foreground">Observe cómo los equipos son asignados aleatoriamente a sus grupos.</p>
+          <p className="text-muted-foreground">Observe cómo los equipos son asignados aleatoriamente a sus rondas.</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0}>
+          <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0 || rounds.length === 0}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
             {loading ? "Cargando..." : "Iniciar Sorteo"}
           </Button>
@@ -117,19 +152,21 @@ export function DrawAnimation() {
           <div className="flex justify-center items-center min-h-[400px]">
               <Loader2 className="h-8 w-8 animate-spin" />
           </div>
-      ) : teams.length === 0 ? (
+      ) : teams.length === 0 || rounds.length === 0 ? (
           <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
-            <p className="text-muted-foreground">No hay colegios verificados para el sorteo.</p>
+            <p className="text-muted-foreground">
+                {teams.length === 0 ? "No hay colegios verificados para el sorteo." : "No hay rondas de 'Fase de Grupos' configuradas."}
+            </p>
           </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-h-[400px]">
-          {[1, 2, 3, 4].map(groupNumber => (
-            <Card key={groupNumber} className="flex flex-col">
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${rounds.length} gap-6 min-h-[400px]`}>
+          {rounds.map(round => (
+            <Card key={round.id} className="flex flex-col">
               <CardHeader>
-                <CardTitle className="font-headline text-center">Grupo {groupNumber}</CardTitle>
+                <CardTitle className="font-headline text-center">{round.name}</CardTitle>
               </CardHeader>
               <CardContent className="flex-grow space-y-2 relative">
-                {getGroupTeams(groupNumber).map((team, index) => (
+                {getRoundTeams(round.name).map((team, index) => (
                   <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
                     {team.name}
                   </div>
@@ -150,17 +187,17 @@ export function DrawAnimation() {
             const angle = (index / teams.length) * 2 * Math.PI;
             const x = Math.cos(angle) * 120;
             const y = Math.sin(angle) * 120;
-            const group = (team.id.charCodeAt(0) % 4) + 1; // Pseudo-random but deterministic based on ID
+            const roundIndex = rounds.findIndex(r => r.name === team.round) + 1;
             
             return (
               <div
                 key={team.id}
                 className={cn(
                   "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-2 bg-primary text-primary-foreground rounded-md shadow-lg transition-all duration-1000 ease-in-out",
-                  isDrawing && team.group === null ? "opacity-100" : "opacity-0"
+                  isDrawing && team.round === null ? "opacity-100" : "opacity-0"
                 )}
                 style={{
-                  animation: isDrawing ? `fly-to-group-${group} 1s ${index * 0.1}s forwards ease-in-out` : "none",
+                  animation: isDrawing && roundIndex > 0 ? `fly-to-round-${roundIndex} 1s ${index * 0.1}s forwards ease-in-out` : "none",
                   transform: `translate(${x}px, ${y}px) rotate(${angle}rad)`
                 }}
               >
@@ -182,24 +219,7 @@ export function DrawAnimation() {
         </div>
       )}
       
-      <style jsx>{`
-        @keyframes fly-to-group-1 {
-          0% { transform: translate(var(--tx, 0), var(--ty, 0)); opacity: 1; }
-          100% { transform: translate(-30vw, -20vh) scale(0); opacity: 0; }
-        }
-        @keyframes fly-to-group-2 {
-          0% { transform: translate(var(--tx, 0), var(--ty, 0)); opacity: 1; }
-          100% { transform: translate(-10vw, -20vh) scale(0); opacity: 0; }
-        }
-        @keyframes fly-to-group-3 {
-          0% { transform: translate(var(--tx, 0), var(--ty, 0)); opacity: 1; }
-          100% { transform: translate(10vw, -20vh) scale(0); opacity: 0; }
-        }
-        @keyframes fly-to-group-4 {
-          0% { transform: translate(var(--tx, 0), var(--ty, 0)); opacity: 1; }
-          100% { transform: translate(30vw, -20vh) scale(0); opacity: 0; }
-        }
-      `}</style>
+      <style jsx>{animationStyles}</style>
     </div>
   );
 }
