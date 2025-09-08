@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -7,7 +8,8 @@ import {
   Trophy,
   Users,
   Shield,
-  Gavel
+  Gavel,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
+  { href: "/debate", label: "Debate", icon: MessageSquare },
   { href: "/register", label: "Registro", icon: Users },
   { href: "/moderator", label: "Moderar", icon: Gavel },
   { href: "/admin", label: "Admin", icon: Shield },

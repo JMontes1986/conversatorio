@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Timer } from "@/components/timer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,18 +10,76 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
+
+const DEBATE_STATE_DOC_ID = "current";
 
 export default function ModeratorPage() {
-    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General" });
-    const [currentQuestion, setCurrentQuestion] = useState("¿Debería la inteligencia artificial tener un papel en las decisiones judiciales para garantizar la imparcialidad?");
-    const [questionInput, setQuestionInput] = useState(currentQuestion);
+    const { toast } = useToast();
+    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
+    const [currentQuestion, setCurrentQuestion] = useState("Esperando pregunta del moderador...");
+    const [questionInput, setQuestionInput] = useState("");
 
-    const updateTimer = (newDuration: number) => {
-        setMainTimer(prev => ({ ...prev, duration: newDuration }));
+    useEffect(() => {
+        const fetchDebateState = async () => {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if(data.question) {
+                    setCurrentQuestion(data.question);
+                    setQuestionInput(data.question);
+                }
+                if(data.timer) {
+                    setMainTimer(prev => ({...prev, duration: data.timer.duration}));
+                }
+            }
+        };
+        fetchDebateState();
+    }, []);
+    
+
+    const updateTimer = async (newDuration: number) => {
+        const newTime = { ...mainTimer, duration: newDuration, lastUpdated: Date.now() };
+        setMainTimer(newTime);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { timer: { duration: newDuration } }, { merge: true });
+             toast({
+                title: "Temporizador Actualizado",
+                description: `El tiempo se ha establecido en ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,
+            });
+        } catch (error) {
+            console.error("Error updating timer: ", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo actualizar el temporizador.",
+            });
+        }
     };
     
-    const handleSetQuestion = () => {
+    const handleSetQuestion = async () => {
+        if(!questionInput.trim()) return;
         setCurrentQuestion(questionInput);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { question: questionInput }, { merge: true });
+            toast({
+                title: "Pregunta Enviada",
+                description: "La nueva pregunta es visible para los participantes.",
+            });
+        } catch (error) {
+             console.error("Error setting question: ", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo enviar la pregunta.",
+            });
+        }
     }
 
     const TimerSettings = () => {
@@ -132,7 +190,7 @@ export default function ModeratorPage() {
                         </CardHeader>
                         <CardContent className="space-y-6">
                            <div>
-                                <Timer initialTime={mainTimer.duration} title={mainTimer.label} />
+                                <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} />
                                 <div className="mt-2">
                                      <TimerSettings />
                                 </div>
@@ -150,7 +208,7 @@ export default function ModeratorPage() {
                             <div className="space-y-4">
                                 <div>
                                     <h3 className="font-medium mb-2">Pregunta Actual:</h3>
-                                    <p className="text-sm p-3 bg-secondary rounded-md">
+                                    <p className="text-sm p-3 bg-secondary rounded-md min-h-[60px]">
                                         {currentQuestion}
                                     </p>
                                 </div>
