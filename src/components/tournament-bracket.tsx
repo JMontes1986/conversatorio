@@ -135,7 +135,7 @@ export function TournamentBracket() {
                     const round: Round = { title: phaseName, matches: [] };
                     
                     if (phaseName === "Cuartos de Final") {
-                         const quarterFinalsDrawTeams = drawState?.activeTab === 'quarters' ? drawState.teams : [];
+                         const quarterFinalsDrawTeams = drawState?.teams || [];
                          
                          for(let i = 0; i < phaseRoundsData.length; i++) {
                              const roundName = phaseRoundsData[i].name;
