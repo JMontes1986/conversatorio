@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -39,8 +38,6 @@ import { CompetitionSettings } from '@/components/competition-settings';
 
 const DEBATE_STATE_DOC_ID = "current";
 
-const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Final"];
-
 interface Question {
     id: string;
     text: string;
@@ -60,7 +57,7 @@ interface ScoreData {
 }
 
 
-function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendVideo, onSendQuestion }: any) {
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendVideo, onSendQuestion }: any) {
     const { toast } = useToast();
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
@@ -112,7 +109,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                 <SelectValue placeholder="Seleccione una ronda" />
                             </SelectTrigger>
                             <SelectContent>
-                                {debateRounds.map(round => (
+                                {debateRounds.map((round: string) => (
                                     <SelectItem key={round} value={round}>{round}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -128,7 +125,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                     <h3 className="font-medium text-sm text-muted-foreground pt-2">Preguntas Preparadas</h3>
                     {loadingQuestions && <p className="text-center text-sm">Cargando preguntas...</p>}
                     <Accordion type="single" collapsible className="w-full" defaultValue={currentDebateRound}>
-                        {debateRounds.map(round => (
+                        {Object.keys(questionsByRound).length > 0 && debateRounds.map((round: string) => (
                             (questionsByRound[round]?.length > 0) && (
                             <AccordionItem value={round} key={round}>
                                 <AccordionTrigger>{round}</AccordionTrigger>
@@ -214,6 +211,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
     const [currentRound, setCurrentRound] = useState('');
 
+    const debateRounds = useMemo(() => {
+        const numTeams = registeredSchools.length;
+        if (numTeams === 0) return ["Cuartos de Final", "Semifinal", "Final"];
+        const groupRoundsCount = Math.ceil(numTeams / 2);
+        const groupRounds = Array.from({ length: groupRoundsCount }, (_, i) => `Ronda ${i + 1}`);
+        return [...groupRounds, "Cuartos de Final", "Semifinal", "Final"];
+    }, [registeredSchools]);
 
     useEffect(() => {
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -291,6 +295,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: question.text,
+                 videoUrl: "" // Clear video when sending question
             }, { merge: true });
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
@@ -437,6 +442,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     preparedQuestions={preparedQuestions}
                     loadingQuestions={loadingQuestions}
                     currentDebateRound={currentRound}
+                    debateRounds={debateRounds}
                     videoInputs={videoInputs}
                     setVideoInputs={setVideoInputs}
                     savingVideoId={savingVideoId}

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,7 +20,6 @@ import { nanoid } from 'nanoid';
 
 const DEBATE_STATE_DOC_ID = "current";
 
-const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Final"];
 const advancedRounds = ["Cuartos de Final", "Semifinal", "Final"];
 
 interface Team {
@@ -91,23 +90,34 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
     const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isAutoFilled, setIsAutoFilled] = useState(false);
+    
+    const debateRounds = useMemo(() => {
+        const numTeams = registeredSchools.length;
+        if (numTeams === 0) return [...advancedRounds];
+
+        // Assuming 2 teams per match in group stage
+        const groupRoundsCount = Math.ceil(numTeams / 2);
+        const groupRounds = Array.from({ length: groupRoundsCount }, (_, i) => `Ronda ${i + 1}`);
+
+        return [...groupRounds, ...advancedRounds];
+    }, [registeredSchools]);
 
     const handleRoundChange = useCallback((round: string) => {
         setCurrentRound(round);
         if (advancedRounds.includes(round)) {
             setIsAutoFilled(true);
             let winners: string[] = [];
-            const roundDependencies: Record<string, string> = {
-                "Semifinal": "Cuartos de Final",
-                "Final": "Semifinal"
-            };
-
+            
             if (round === "Cuartos de Final") {
-                const ronda1Winners = getWinnersOfRound(allScores, "Ronda 1");
-                const ronda2Winners = getWinnersOfRound(allScores, "Ronda 2");
-                winners = [...new Set([...ronda1Winners, ...ronda2Winners])];
+                 const groupStageRounds = debateRounds.filter(r => r.startsWith("Ronda"));
+                 const allWinners = groupStageRounds.flatMap(r => getWinnersOfRound(allScores, r));
+                 winners = [...new Set(allWinners)];
 
             } else {
+                 const roundDependencies: Record<string, string> = {
+                    "Semifinal": "Cuartos de Final",
+                    "Final": "Semifinal"
+                };
                 const previousRound = roundDependencies[round];
                 if (previousRound) {
                     winners = getWinnersOfRound(allScores, previousRound);
@@ -126,7 +136,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
             setIsAutoFilled(false);
             setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
         }
-    }, [allScores, toast]);
+    }, [allScores, toast, debateRounds]);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
