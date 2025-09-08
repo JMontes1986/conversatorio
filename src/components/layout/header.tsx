@@ -24,38 +24,33 @@ import {
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
-import { useModeratorAuth } from "@/context/moderator-auth-context";
 import { useJudgeAuth } from "@/context/judge-auth-context";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/debate", label: "Debate", icon: MessageSquare },
-  { href: "/scoring", label: "Puntuación", icon: ClipboardCheck }, // Judge login
+  { href: "/scoring", label: "Puntuación", icon: ClipboardCheck },
   { href: "/register", label: "Registro", icon: Users, admin: true }, 
-  { href: "/moderator", label: "Moderar", icon: Gavel, moderator: true }, 
   { href: "/admin", label: "Admin", icon: Shield, admin: true }, 
 ];
 
 export function Header() {
   const pathname = usePathname();
   const { user: adminUser, logout: adminLogout } = useAuth();
-  const { moderator: moderatorUser, logout: moderatorLogout } = useModeratorAuth();
   const { judge: judgeUser, logout: judgeLogout } = useJudgeAuth();
   
-  const isAuthenticated = adminUser || moderatorUser || judgeUser;
+  const isAuthenticated = adminUser || judgeUser;
 
   const handleLogout = () => {
     if (adminUser) adminLogout();
-    if (moderatorUser) moderatorLogout();
     if (judgeUser) judgeLogout();
   };
 
   const filteredNavLinks = navLinks.filter(link => {
     if (link.admin) return adminUser;
-    if (link.moderator) return adminUser || moderatorUser;
     
     // Hide auth pages if any user is logged in
-    if ((link.href === '/admin/login' || link.href === '/moderator/login' || link.href === '/scoring/login' || link.href === '/scoring') && isAuthenticated) {
+    if ((link.href === '/admin/login' || link.href === '/scoring/login') && isAuthenticated) {
          // Special case for scoring, show it if the logged in user is a judge
         if(link.href === '/scoring' && judgeUser) return true;
         return false;
@@ -96,12 +91,6 @@ export function Header() {
                     className={cn("transition-colors hover:text-primary flex items-center", pathname === "/scoring/login" ? "text-primary" : "text-muted-foreground")}
                 >
                     <ClipboardCheck className="mr-2 h-4 w-4" /> Jurado
-                </Link>
-                 <Link
-                    href="/moderator/login"
-                    className={cn("transition-colors hover:text-primary flex items-center", pathname === "/moderator/login" ? "text-primary" : "text-muted-foreground")}
-                >
-                    <KeyRound className="mr-2 h-4 w-4" /> Moderador
                 </Link>
                 <Link
                     href="/admin/login"
@@ -157,11 +146,6 @@ export function Header() {
                        </Link>
                     </SheetClose>
                     <SheetClose asChild>
-                       <Link href="/moderator/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
-                          <KeyRound className="h-5 w-5" /> Moderador
-                       </Link>
-                    </SheetClose>
-                    <SheetClose asChild>
                        <Link href="/admin/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
                           <Shield className="h-5 w-5" /> Admin
                        </Link>
@@ -184,5 +168,3 @@ export function Header() {
     </header>
   );
 }
-
-    
