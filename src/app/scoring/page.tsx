@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -11,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
 import { Swords, Check, Hash, Loader2 } from 'lucide-react';
@@ -20,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { JudgeAuth } from '@/components/auth/judge-auth';
 import { useJudgeAuth } from '@/context/judge-auth-context';
+import { cn } from '@/lib/utils';
 
 const rubricCriteria = [
     { id: 'arg', name: 'Argumentación', description: 'Calidad y solidez de los argumentos.' },
@@ -119,6 +119,23 @@ function ScoringPanel() {
     }
   };
 
+  const ScoreButtons = ({ team, criteriaId }: { team: 'teamA' | 'teamB', criteriaId: string }) => (
+    <div className="flex justify-center items-center gap-1 md:gap-2">
+      {[1, 2, 3, 4, 5].map((value) => (
+        <Button
+          key={value}
+          variant={scores[team][criteriaId] === value ? 'default' : 'outline'}
+          size="icon"
+          className="h-8 w-8 md:h-9 md:w-9 rounded-full"
+          onClick={() => handleScoreChange(team, criteriaId, value)}
+          disabled={isSubmitting}
+        >
+          {value}
+        </Button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8 text-center">
@@ -131,72 +148,54 @@ function ScoringPanel() {
       </div>
 
       <div className="flex justify-center items-center mb-8 space-x-4">
-        <h2 className="font-headline text-2xl">{MOCK_MATCH_DATA.teamAName}</h2>
-        <Swords className="h-8 w-8 text-primary" />
-        <h2 className="font-headline text-2xl">{MOCK_MATCH_DATA.teamBName}</h2>
+        <h2 className="font-headline text-2xl text-center">{MOCK_MATCH_DATA.teamAName}</h2>
+        <Swords className="h-8 w-8 text-primary shrink-0" />
+        <h2 className="font-headline text-2xl text-center">{MOCK_MATCH_DATA.teamBName}</h2>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Rúbrica de Evaluación</CardTitle>
-          <CardDescription>Deslice para asignar una puntuación de 1 a 10 para cada criterio.</CardDescription>
+          <CardDescription>Seleccione una puntuación de 1 a 5 para cada criterio.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-1/4">Criterio</TableHead>
-                <TableHead className="w-1/3 text-center">{MOCK_MATCH_DATA.teamAName}</TableHead>
-                <TableHead className="w-1/3 text-center">{MOCK_MATCH_DATA.teamBName}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rubricCriteria.map(criterion => (
-                <TableRow key={criterion.id}>
-                  <TableCell>
-                    <p className="font-medium">{criterion.name}</p>
-                    <p className="text-xs text-muted-foreground">{criterion.description}</p>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-4">
-                        <Slider
-                            defaultValue={[5]}
-                            max={10}
-                            min={1}
-                            step={1}
-                            onValueChange={(value) => handleScoreChange('teamA', criterion.id, value[0])}
-                            disabled={isSubmitting}
-                        />
-                        <Badge className="w-12 justify-center" variant="secondary">{scores.teamA[criterion.id] || '-'}</Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-4">
-                        <Slider
-                            defaultValue={[5]}
-                            max={10}
-                            min={1}
-                            step={1}
-                            onValueChange={(value) => handleScoreChange('teamB', criterion.id, value[0])}
-                            disabled={isSubmitting}
-                        />
-                        <Badge className="w-12 justify-center" variant="secondary">{scores.teamB[criterion.id] || '-'}</Badge>
-                    </div>
-                  </TableCell>
+          <div className="w-full overflow-x-auto">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
+                    <TableHead className="w-1/3 text-center min-w-[200px]">{MOCK_MATCH_DATA.teamAName}</TableHead>
+                    <TableHead className="w-1/3 text-center min-w-[200px]">{MOCK_MATCH_DATA.teamBName}</TableHead>
                 </TableRow>
-              ))}
-               <TableRow className="bg-secondary/50">
-                  <TableCell className="font-bold">Total</TableCell>
-                  <TableCell className="text-center font-bold text-lg text-primary">{calculateTotal('teamA')}</TableCell>
-                  <TableCell className="text-center font-bold text-lg text-primary">{calculateTotal('teamB')}</TableCell>
-               </TableRow>
-               <TableRow>
-                  <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
-                  <TableCell className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum('teamA')}</TableCell>
-                  <TableCell className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum('teamB')}</TableCell>
-               </TableRow>
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                {rubricCriteria.map(criterion => (
+                    <TableRow key={criterion.id}>
+                    <TableCell>
+                        <p className="font-medium">{criterion.name}</p>
+                        <p className="text-xs text-muted-foreground">{criterion.description}</p>
+                    </TableCell>
+                    <TableCell>
+                        <ScoreButtons team="teamA" criteriaId={criterion.id} />
+                    </TableCell>
+                    <TableCell>
+                        <ScoreButtons team="teamB" criteriaId={criterion.id} />
+                    </TableCell>
+                    </TableRow>
+                ))}
+                <TableRow className="bg-secondary/50">
+                    <TableCell className="font-bold">Total</TableCell>
+                    <TableCell className="text-center font-bold text-lg text-primary">{calculateTotal('teamA')}</TableCell>
+                    <TableCell className="text-center font-bold text-lg text-primary">{calculateTotal('teamB')}</TableCell>
+                </TableRow>
+                <TableRow>
+                    <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
+                    <TableCell className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum('teamA')}</TableCell>
+                    <TableCell className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum('teamB')}</TableCell>
+                </TableRow>
+                </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
       <div className="mt-8 flex justify-end">
@@ -220,5 +219,3 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
-
-    
