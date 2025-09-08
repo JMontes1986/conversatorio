@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -46,7 +47,8 @@ export function ModeratorProvider({ children }: { children: ReactNode }) {
       const q = query(
         collection(db, "moderators"),
         where("username", "==", username),
-        where("token", "==", token)
+        where("token", "==", token),
+        where("status", "==", "active") // <-- Check if the token is active
       );
       const querySnapshot = await getDocs(q);
 

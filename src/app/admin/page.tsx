@@ -28,10 +28,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -58,6 +58,7 @@ interface ModeratorData {
     id: string;
     username: string;
     token: string;
+    status: 'active' | 'inactive';
 }
 interface ScoreData {
     id: string;
@@ -204,6 +205,7 @@ function AdminDashboard() {
         await addDoc(collection(db, "moderators"), {
             username: newModeratorUsername.trim(),
             token: nanoid(16), // Generate a 16-character secure token
+            status: 'active',
             createdAt: serverTimestamp(),
         });
         toast({ title: "Moderador Creado", description: "Se ha creado un nuevo moderador con su token de acceso." });
@@ -225,6 +227,21 @@ function AdminDashboard() {
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el moderador." });
     }
   };
+  
+  const handleToggleModeratorStatus = async (moderator: ModeratorData) => {
+    const newStatus = moderator.status === 'active' ? 'inactive' : 'active';
+    try {
+        const moderatorRef = doc(db, "moderators", moderator.id);
+        await updateDoc(moderatorRef, { status: newStatus });
+        toast({
+            title: "Estado Actualizado",
+            description: `El token de ${moderator.username} ahora está ${newStatus === 'active' ? 'activo' : 'inactivo'}.`
+        });
+    } catch (error) {
+         console.error("Error toggling moderator status:", error);
+         toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar el estado del moderador." });
+    }
+  }
 
   const copyToken = (token: string, id: string) => {
     navigator.clipboard.writeText(token);
@@ -449,13 +466,14 @@ function AdminDashboard() {
                                     <TableRow>
                                         <TableHead>Usuario</TableHead>
                                         <TableHead>Token de Acceso</TableHead>
-                                        <TableHead><span className="sr-only">Acciones</span></TableHead>
+                                        <TableHead className="text-center">Estado</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {loadingModerators ? (
                                          <TableRow>
-                                            <TableCell colSpan={3} className="text-center">Cargando moderadores...</TableCell>
+                                            <TableCell colSpan={4} className="text-center">Cargando moderadores...</TableCell>
                                         </TableRow>
                                     ) : moderators.map((mod) => (
                                         <TableRow key={mod.id}>
@@ -468,10 +486,31 @@ function AdminDashboard() {
                                                      </Button>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>
-                                                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteModerator(mod.id)}>
-                                                    <Trash2 className="h-4 w-4"/>
-                                                </Button>
+                                             <TableCell className="text-center">
+                                                <Badge variant={mod.status === 'active' ? 'default' : 'destructive'}>
+                                                    {mod.status === 'active' ? 'Activo' : 'Inactivo'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                            <span className="sr-only">Toggle menu</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => handleToggleModeratorStatus(mod)}>
+                                                            {mod.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
+                                                            {mod.status === 'active' ? 'Desactivar' : 'Activar'}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteModerator(mod.id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))}
