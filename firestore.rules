@@ -1,0 +1,18 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Allow school registrations
+    match /schools/{schoolId} {
+      allow create: if true;
+      allow read, write: if false; // Only allow creation
+    }
+
+    // Allow moderator to update and anyone to read the debate state
+    match /debateState/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
