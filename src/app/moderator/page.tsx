@@ -39,12 +39,15 @@ interface Question {
 }
 
 const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Final"];
+interface Team {
+    id: number;
+    name: string;
+}
 
 function CompetitionSettings() {
     const { toast } = useToast();
     const [currentRound, setCurrentRound] = useState('');
-    const [teamAName, setTeamAName] = useState('');
-    const [teamBName, setTeamBName] = useState('');
+    const [teams, setTeams] = useState<Team[]>([{ id: 1, name: '' }, { id: 2, name: '' }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -53,8 +56,16 @@ function CompetitionSettings() {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setCurrentRound(data.currentRound || '');
-                setTeamAName(data.teamAName || '');
-                setTeamBName(data.teamBName || '');
+                 if (data.teams && data.teams.length > 0) {
+                    setTeams(data.teams);
+                } else {
+                    // Legacy support or default state
+                    const legacyTeams = [
+                        data.teamAName && { id: 1, name: data.teamAName },
+                        data.teamBName && { id: 2, name: data.teamBName }
+                    ].filter(Boolean);
+                    setTeams(legacyTeams.length > 0 ? legacyTeams : [{ id: 1, name: '' }, { id: 2, name: '' }]);
+                }
             }
         });
         return () => unsubscribe();
@@ -62,19 +73,21 @@ function CompetitionSettings() {
 
     const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!currentRound || !teamAName.trim() || !teamBName.trim()) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor, complete todos los campos: ronda y nombres de equipos." });
+        const validTeams = teams.filter(t => t.name.trim() !== '');
+
+        if (!currentRound || validTeams.length < 2) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y añada al menos dos equipos." });
             return;
         }
         setIsSubmitting(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            // We store the clean list of teams
             await setDoc(docRef, { 
                 currentRound,
-                teamAName,
-                teamBName
+                teams: validTeams
             }, { merge: true });
-            toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound} con los equipos ${teamAName} vs ${teamBName}.` });
+            toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound}.` });
         } catch (error) {
             console.error("Error updating round:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la configuración." });
@@ -82,6 +95,27 @@ function CompetitionSettings() {
             setIsSubmitting(false);
         }
     }
+    
+    const handleTeamNameChange = (id: number, name: string) => {
+        setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
+    };
+
+    const addTeam = () => {
+        setTeams([...teams, { id: Date.now(), name: '' }]);
+    };
+
+    const removeTeam = (id: number) => {
+        if (teams.length > 2) {
+            setTeams(teams.filter(team => team.id !== id));
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Debe haber al menos dos equipos.'
+            });
+        }
+    };
+
 
     return (
         <Card>
@@ -90,7 +124,7 @@ function CompetitionSettings() {
                 <CardDescription>Configuración de la ronda activa y los equipos que se enfrentan.</CardDescription>
             </CardHeader>
             <CardContent>
-                <form onSubmit={handleUpdateRound} className="space-y-4 max-w-sm">
+                <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
                     <div className="space-y-2">
                         <Label htmlFor="current-round">Ronda de Debate Activa</Label>
                          <Select onValueChange={setCurrentRound} value={currentRound} disabled={isSubmitting}>
@@ -102,13 +136,24 @@ function CompetitionSettings() {
                             </SelectContent>
                         </Select>
                     </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="team-a-name">Nombre del Equipo A</Label>
-                        <Input id="team-a-name" value={teamAName} onChange={(e) => setTeamAName(e.target.value)} placeholder="Ej: Águilas Doradas" disabled={isSubmitting}/>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="team-b-name">Nombre del Equipo B</Label>
-                        <Input id="team-b-name" value={teamBName} onChange={(e) => setTeamBName(e.target.value)} placeholder="Ej: Búhos Sabios" disabled={isSubmitting}/>
+                     <div className="space-y-3">
+                        <Label>Equipos Participantes</Label>
+                        {teams.map((team, index) => (
+                            <div key={team.id} className="flex items-center gap-2">
+                                <Input 
+                                    value={team.name}
+                                    onChange={(e) => handleTeamNameChange(team.id, e.target.value)}
+                                    placeholder={`Nombre del Equipo ${index + 1}`}
+                                    disabled={isSubmitting}
+                                />
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting}>
+                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                </Button>
+                            </div>
+                        ))}
+                         <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting}>
+                            <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
+                        </Button>
                     </div>
                     <Button type="submit" disabled={isSubmitting || !currentRound}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}

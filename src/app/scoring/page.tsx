@@ -32,19 +32,20 @@ const rubricCriteria = [
 
 const DEBATE_STATE_DOC_ID = "current";
 
+interface Team {
+    id: number;
+    name: string;
+}
+
 interface DebateState {
     currentRound: string;
-    teamAName: string;
-    teamBName: string;
+    teams: Team[];
 }
 
 interface ScoreData {
     id: string;
     matchId: string;
-    teamAName: string;
-    teamBName: string;
-    teamA_total: number;
-    teamB_total: number;
+    teams: { name: string; total: number }[];
     createdAt: any;
 }
 
@@ -53,14 +54,10 @@ function ScoringPanel() {
   const { toast } = useToast();
   const { judge } = useJudgeAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [scores, setScores] = useState<Record<string, Record<string, number>>>({
-    teamA: {},
-    teamB: {}
-  });
+  const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
   const [debateState, setDebateState] = useState<DebateState>({
       currentRound: 'N/A',
-      teamAName: 'Equipo A',
-      teamBName: 'Equipo B',
+      teams: [],
   });
   const [loadingDebateState, setLoadingDebateState] = useState(true);
   const [pastScores, setPastScores] = useState<ScoreData[]>([]);
@@ -73,9 +70,16 @@ function ScoringPanel() {
             const data = docSnap.data();
             setDebateState({
                 currentRound: data.currentRound || 'N/A',
-                teamAName: data.teamAName || 'Equipo A',
-                teamBName: data.teamBName || 'Equipo B',
+                teams: data.teams || [],
             });
+            // Initialize scores state for the new teams
+            const initialScores: Record<string, Record<string, number>> = {};
+            if (data.teams) {
+                data.teams.forEach((team: Team) => {
+                    initialScores[team.name] = {};
+                });
+            }
+            setScores(initialScores);
         }
         setLoadingDebateState(false);
     });
@@ -96,7 +100,18 @@ function ScoringPanel() {
       const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
           const scoresData: ScoreData[] = [];
           querySnapshot.forEach(doc => {
-              scoresData.push({ id: doc.id, ...doc.data() } as ScoreData);
+              const data = doc.data();
+              // Adapt to new and old data structures
+              const teamsData = data.teams ? data.teams : [
+                  { name: data.teamAName, total: data.teamA_total },
+                  { name: data.teamBName, total: data.teamB_total },
+              ];
+              scoresData.push({ 
+                  id: doc.id,
+                  matchId: data.matchId,
+                  teams: teamsData,
+                  createdAt: data.createdAt,
+              });
           });
           setPastScores(scoresData);
           setLoadingHistory(false);
@@ -110,22 +125,24 @@ function ScoringPanel() {
   }, [judge]);
 
 
-  const handleScoreChange = (team: 'teamA' | 'teamB', criteriaId: string, value: number) => {
+  const handleScoreChange = (teamName: string, criteriaId: string, value: number) => {
     setScores(prev => ({
       ...prev,
-      [team]: {
-        ...prev[team],
+      [teamName]: {
+        ...prev[teamName],
         [criteriaId]: value
       }
     }));
   };
 
-  const calculateTotal = (team: 'teamA' | 'teamB') => {
-    return Object.values(scores[team]).reduce((sum, score) => sum + score, 0);
+  const calculateTotal = (teamName: string) => {
+    if (!scores[teamName]) return 0;
+    return Object.values(scores[teamName]).reduce((sum, score) => sum + score, 0);
   };
   
-  const calculateChecksum = (team: 'teamA' | 'teamB') => {
-    const scoreString = Object.keys(rubricCriteria).map(key => scores[team][rubricCriteria[parseInt(key)].id] || 0).join('-');
+  const calculateChecksum = (teamName: string) => {
+    if (!scores[teamName]) return '';
+    const scoreString = rubricCriteria.map(criterion => scores[teamName][criterion.id] || 0).join('-');
     let hash = 0;
     for (let i = 0; i < scoreString.length; i++) {
         const char = scoreString.charCodeAt(i);
@@ -136,44 +153,48 @@ function ScoringPanel() {
   }
 
   const handleSubmit = async () => {
-     if (Object.keys(scores.teamA).length < rubricCriteria.length || Object.keys(scores.teamB).length < rubricCriteria.length) {
-        toast({
-            variant: "destructive",
-            title: "Error de Validación",
-            description: "Por favor, asigne una puntuación a todos los criterios para ambos equipos.",
-        });
-        return;
+    for (const team of debateState.teams) {
+        if (Object.keys(scores[team.name] || {}).length < rubricCriteria.length) {
+            toast({
+                variant: "destructive",
+                title: "Error de Validación",
+                description: `Por favor, asigne una puntuación a todos los criterios para el equipo ${team.name}.`,
+            });
+            return;
+        }
     }
 
     setIsSubmitting(true);
     
-    const totalTeamA = calculateTotal('teamA');
-    const totalTeamB = calculateTotal('teamB');
+    const teamsScoreData = debateState.teams.map(team => ({
+        name: team.name,
+        scores: scores[team.name],
+        total: calculateTotal(team.name),
+        checksum: calculateChecksum(team.name),
+    }));
 
-    const scoreData = {
+    const finalScoreData = {
         matchId: debateState.currentRound,
         judgeId: judge?.id || '',
         judgeName: judge?.name || 'Jurado Anónimo',
         judgeCedula: judge?.cedula || '',
-        teamAName: debateState.teamAName,
-        teamBName: debateState.teamBName,
-        scoresTeamA: scores.teamA,
-        scoresTeamB: scores.teamB,
-        teamA_total: totalTeamA,
-        teamB_total: totalTeamB,
-        checksumA: calculateChecksum('teamA'),
-        checksumB: calculateChecksum('teamB'),
+        teams: teamsScoreData.map(({name, total}) => ({name, total})), // Store only name and total for aggregation
+        fullScores: teamsScoreData, // Store detailed scores for auditing if needed
         createdAt: new Date(),
     };
 
     try {
-        await addDoc(collection(db, "scores"), scoreData);
+        await addDoc(collection(db, "scores"), finalScoreData);
         toast({
             title: "Puntuación Enviada",
             description: "Sus calificaciones han sido registradas exitosamente.",
         });
         // Reset scores after submission
-        setScores({ teamA: {}, teamB: {} });
+        const resetScores: Record<string, Record<string, number>> = {};
+        debateState.teams.forEach(team => {
+            resetScores[team.name] = {};
+        });
+        setScores(resetScores);
     } catch(error) {
         console.error("Error submitting score: ", error);
         toast({
@@ -186,15 +207,15 @@ function ScoringPanel() {
     }
   };
 
-  const ScoreButtons = ({ team, criteriaId }: { team: 'teamA' | 'teamB', criteriaId: string }) => (
+  const ScoreButtons = ({ teamName, criteriaId }: { teamName: string, criteriaId: string }) => (
     <div className="flex justify-center items-center gap-1 md:gap-2">
       {[1, 2, 3, 4, 5].map((value) => (
         <Button
           key={value}
-          variant={scores[team][criteriaId] === value ? 'default' : 'outline'}
+          variant={(scores[teamName]?.[criteriaId]) === value ? 'default' : 'outline'}
           size="icon"
           className="h-8 w-8 md:h-9 md:w-9 rounded-full"
-          onClick={() => handleScoreChange(team, criteriaId, value)}
+          onClick={() => handleScoreChange(teamName, criteriaId, value)}
           disabled={isSubmitting}
         >
           {value}
@@ -217,68 +238,86 @@ function ScoringPanel() {
             Juez: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
         </div>
       </div>
+      
+      {debateState.teams.length > 0 && (
+         <div className="flex justify-center items-center mb-8 space-x-2 md:space-x-4 flex-wrap">
+            {debateState.teams.map((team, index) => (
+                <div key={team.id} className="flex items-center">
+                    <h2 className="font-headline text-xl md:text-2xl text-center">{team.name}</h2>
+                    {index < debateState.teams.length - 1 && <Swords className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0 mx-2" />}
+                </div>
+            ))}
+        </div>
+      )}
 
-      <div className="flex justify-center items-center mb-8 space-x-4">
-        <h2 className="font-headline text-2xl text-center">{debateState.teamAName}</h2>
-        <Swords className="h-8 w-8 text-primary shrink-0" />
-        <h2 className="font-headline text-2xl text-center">{debateState.teamBName}</h2>
-      </div>
+      {debateState.teams.length > 0 ? (
+        <>
+            <Card>
+                <CardHeader>
+                <CardTitle>Rúbrica de Evaluación</CardTitle>
+                <CardDescription>Seleccione una puntuación de 1 a 5 para cada criterio.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                <div className="w-full overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
+                            {debateState.teams.map(team => (
+                                <TableHead key={team.id} className="w-1/3 text-center min-w-[200px]">{team.name}</TableHead>
+                            ))}
+                        </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {rubricCriteria.map(criterion => (
+                            <TableRow key={criterion.id}>
+                            <TableCell>
+                                <p className="font-medium">{criterion.name}</p>
+                                <p className="text-xs text-muted-foreground">{criterion.description}</p>
+                            </TableCell>
+                            {debateState.teams.map(team => (
+                                <TableCell key={team.id}>
+                                    <ScoreButtons teamName={team.name} criteriaId={criterion.id} />
+                                </TableCell>
+                            ))}
+                            </TableRow>
+                        ))}
+                        <TableRow className="bg-secondary/50">
+                            <TableCell className="font-bold">Total</TableCell>
+                            {debateState.teams.map(team => (
+                                <TableCell key={team.id} className="text-center font-bold text-lg text-primary">{calculateTotal(team.name)}</TableCell>
+                            ))}
+                        </TableRow>
+                        <TableRow>
+                            <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
+                            {debateState.teams.map(team => (
+                                <TableCell key={team.id} className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum(team.name)}</TableCell>
+                            ))}
+                        </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
+                </CardContent>
+            </Card>
+            <div className="mt-8 flex justify-end">
+                <Button size="lg" onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Check className="mr-2 h-4 w-4" />
+                    )}
+                    {isSubmitting ? 'Enviando...' : 'Enviar Puntuación'}
+                </Button>
+            </div>
+        </>
+      ) : (
+        <Card>
+            <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">Esperando a que el moderador configure los equipos para la ronda actual...</p>
+            </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Rúbrica de Evaluación</CardTitle>
-          <CardDescription>Seleccione una puntuación de 1 a 5 para cada criterio.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="w-full overflow-x-auto">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
-                    <TableHead className="w-1/3 text-center min-w-[200px]">{debateState.teamAName}</TableHead>
-                    <TableHead className="w-1/3 text-center min-w-[200px]">{debateState.teamBName}</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {rubricCriteria.map(criterion => (
-                    <TableRow key={criterion.id}>
-                    <TableCell>
-                        <p className="font-medium">{criterion.name}</p>
-                        <p className="text-xs text-muted-foreground">{criterion.description}</p>
-                    </TableCell>
-                    <TableCell>
-                        <ScoreButtons team="teamA" criteriaId={criterion.id} />
-                    </TableCell>
-                    <TableCell>
-                        <ScoreButtons team="teamB" criteriaId={criterion.id} />
-                    </TableCell>
-                    </TableRow>
-                ))}
-                <TableRow className="bg-secondary/50">
-                    <TableCell className="font-bold">Total</TableCell>
-                    <TableCell className="text-center font-bold text-lg text-primary">{calculateTotal('teamA')}</TableCell>
-                    <TableCell className="text-center font-bold text-lg text-primary">{calculateTotal('teamB')}</TableCell>
-                </TableRow>
-                <TableRow>
-                    <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
-                    <TableCell className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum('teamA')}</TableCell>
-                    <TableCell className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum('teamB')}</TableCell>
-                </TableRow>
-                </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      <div className="mt-8 flex justify-end">
-          <Button size="lg" onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="mr-2 h-4 w-4" />
-              )}
-              {isSubmitting ? 'Enviando...' : 'Enviar Puntuación'}
-          </Button>
-      </div>
 
        <Card className="mt-12">
             <CardHeader>
@@ -294,15 +333,15 @@ function ScoringPanel() {
                             <AccordionTrigger>
                                 <div className="flex justify-between items-center w-full pr-4">
                                     <span className="font-bold capitalize">{score.matchId}</span>
-                                    <div className="text-right">
-                                        <p className="text-sm">{score.teamAName} vs {score.teamBName}</p>
-                                        <p className="text-xs text-muted-foreground">{score.teamA_total} vs {score.teamB_total}</p>
+                                    <div className="text-right text-sm">
+                                      {score.teams.map(t => `${t.name}: ${t.total}`).join(' vs ')}
                                     </div>
                                 </div>
                             </AccordionTrigger>
                              <AccordionContent>
-                                <p className="text-sm">Puntuación final para <span className="font-semibold">{score.teamAName}</span>: <span className="font-bold text-primary">{score.teamA_total}</span></p>
-                                <p className="text-sm">Puntuación final para <span className="font-semibold">{score.teamBName}</span>: <span className="font-bold text-primary">{score.teamB_total}</span></p>
+                                {score.teams.map(t => (
+                                     <p key={t.name} className="text-sm">Puntuación final para <span className="font-semibold">{t.name}</span>: <span className="font-bold text-primary">{t.total}</span></p>
+                                ))}
                                 <p className="text-xs text-muted-foreground mt-2">Enviado el: {new Date(score.createdAt.seconds * 1000).toLocaleString()}</p>
                             </AccordionContent>
                         </AccordionItem>
