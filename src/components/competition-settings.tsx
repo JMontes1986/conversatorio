@@ -42,21 +42,9 @@ interface RoundData {
     phase: string;
 }
 
-
 function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
     const roundScores = scores.filter(s => s.matchId === roundName);
     
-    const teamTotals: Record<string, number> = {};
-    
-    roundScores.forEach(score => {
-        score.teams.forEach(team => {
-            if (!teamTotals[team.name]) {
-                teamTotals[team.name] = 0;
-            }
-            teamTotals[team.name] += team.total;
-        });
-    });
-
     const matches: Record<string, { name: string; total: number }[][]> = {};
     roundScores.forEach(s => {
         const key = s.teams.map(t => t.name).sort().join('-');
@@ -86,6 +74,27 @@ function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
     });
     
     return winners;
+}
+
+function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
+    const phaseRoundNames = phaseRounds.map(r => r.name);
+    const phaseScores = scores.filter(s => phaseRoundNames.includes(s.matchId));
+
+    const teamTotals: Record<string, number> = {};
+
+    phaseScores.forEach(score => {
+        score.teams.forEach(team => {
+            if (!teamTotals[team.name]) {
+                teamTotals[team.name] = 0;
+            }
+            teamTotals[team.name] += team.total;
+        });
+    });
+
+    return Object.entries(teamTotals)
+        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
+        .slice(0, limit)
+        .map(([teamName]) => teamName);
 }
 
 
@@ -138,32 +147,33 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
 
     const handleRoundChange = useCallback((round: string) => {
         setCurrentRound(round);
-        if (advancedRounds.includes(round)) {
+        const selectedRoundData = debateRounds.find(r => r.name === round);
+        
+        if (selectedRoundData && advancedRounds.includes(selectedRoundData.phase)) {
             setIsAutoFilled(true);
-            let winners: string[] = [];
+            let qualifiedTeams: string[] = [];
             
-            if (round === "Cuartos de Final") {
-                 const groupStageRounds = debateRounds.filter(r => r.name.startsWith("Ronda")).map(r => r.name);
-                 const allWinners = groupStageRounds.flatMap(r => getWinnersOfRound(allScores, r));
-                 winners = [...new Set(allWinners)];
-
+            if (selectedRoundData.phase === "Cuartos de Final") {
+                 const groupStageRounds = debateRounds.filter(r => r.phase === "Fase de Grupos");
+                 qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
             } else {
                  const roundDependencies: Record<string, string> = {
                     "Semifinal": "Cuartos de Final",
                     "Final": "Semifinal"
                 };
-                const previousRound = roundDependencies[round];
-                if (previousRound) {
-                    winners = getWinnersOfRound(allScores, previousRound);
+                const previousRoundPhase = roundDependencies[selectedRoundData.phase];
+                if (previousRoundPhase) {
+                    const previousRounds = debateRounds.filter(r => r.phase === previousRoundPhase).map(r => r.name);
+                    qualifiedTeams = previousRounds.flatMap(r => getWinnersOfRound(allScores, r));
                 }
             }
             
-            if (winners.length > 0) {
-                 setTeams(winners.map((name) => ({ id: nanoid(), name })));
-                 toast({ title: "Equipos Llenados Automáticamente", description: `Los ganadores de la ronda anterior han sido seleccionados para ${round}.`});
+            if (qualifiedTeams.length > 0) {
+                 setTeams(qualifiedTeams.map((name) => ({ id: nanoid(), name })));
+                 toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos clasificados han sido seleccionados para ${round}.`});
             } else {
                  setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
-                 toast({ variant: "destructive", title: "No se encontraron ganadores", description: `No se pudieron determinar los ganadores de la ronda anterior para autocompletar.`});
+                 toast({ variant: "destructive", title: "No se encontraron equipos", description: `No se pudieron determinar los equipos clasificados para esta fase.`});
             }
 
         } else {
@@ -278,4 +288,3 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         </Card>
     );
 }
-

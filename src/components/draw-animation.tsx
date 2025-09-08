@@ -38,38 +38,25 @@ const shuffleArray = (array: any[]) => {
   return array;
 };
 
-function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
-    const roundScores = scores.filter(s => s.matchId === roundName);
-    
-    const matches: Record<string, { name: string; total: number }[][]> = {};
-    roundScores.forEach(s => {
-        const key = s.teams.map(t => t.name).sort().join('-');
-        if (!matches[key]) matches[key] = [];
-        matches[key].push(s.teams);
+function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
+    const phaseRoundNames = phaseRounds.map(r => r.name);
+    const phaseScores = scores.filter(s => phaseRoundNames.includes(s.matchId));
+
+    const teamTotals: Record<string, number> = {};
+
+    phaseScores.forEach(score => {
+        score.teams.forEach(team => {
+            if (!teamTotals[team.name]) {
+                teamTotals[team.name] = 0;
+            }
+            teamTotals[team.name] += team.total;
+        });
     });
 
-    const winners: string[] = [];
-    Object.values(matches).forEach(matchJudgements => {
-        const matchTotals: Record<string, number> = {};
-        matchJudgements.forEach(judgement => {
-            judgement.forEach(team => {
-                 if (!matchTotals[team.name]) matchTotals[team.name] = 0;
-                 matchTotals[team.name] += team.total;
-            });
-        });
-        
-        let winner = '';
-        let maxScore = -1;
-        for (const [teamName, total] of Object.entries(matchTotals)) {
-            if (total > maxScore) {
-                maxScore = total;
-                winner = teamName;
-            }
-        }
-        if (winner) winners.push(winner);
-    });
-    
-    return winners;
+    return Object.entries(teamTotals)
+        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
+        .slice(0, limit)
+        .map(([teamName]) => teamName);
 }
 
 
@@ -95,7 +82,6 @@ export function DrawAnimation() {
             round: null
         }));
         setAllTeams(fetchedTeams);
-        setTeams(fetchedTeams);
         setLoading(false);
     });
 
@@ -127,25 +113,18 @@ export function DrawAnimation() {
     resetDraw();
     if (activeTab === "groups") {
         let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        if (groupRounds.length === 0) {
-            groupRounds = allRounds.filter(r => r.name.toLowerCase().startsWith("ronda"));
-        }
         setRounds(groupRounds);
         setTeams(allTeams);
     } else if (activeTab === "quarters") {
         const quarterRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
         setRounds(quarterRounds);
         
-        let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos").map(r => r.name);
-        if (groupRounds.length === 0) {
-            groupRounds = allRounds.filter(r => r.name.toLowerCase().startsWith("ronda")).map(r => r.name);
-        }
+        let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
         
-        const winners = groupRounds.flatMap(r => getWinnersOfRound(allScores, r));
-        const uniqueWinners = [...new Set(winners)];
+        const qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
 
         const winnerTeams = allTeams
-            .filter(t => uniqueWinners.includes(t.name))
+            .filter(t => qualifiedTeams.includes(t.name))
             .map(t => ({...t, round: null})); // Reset round assignment
         
         setTeams(winnerTeams);
@@ -174,7 +153,7 @@ export function DrawAnimation() {
   };
 
   const resetDraw = () => {
-    setTeams(teams.map(t => ({...t, round: null})));
+    setTeams(prev => prev.map(t => ({...t, round: null})));
     setIsDrawing(false);
     setIsFinished(false);
     setIsFixing(false);
@@ -317,5 +296,3 @@ export function DrawAnimation() {
     </div>
   );
 }
-
-    
