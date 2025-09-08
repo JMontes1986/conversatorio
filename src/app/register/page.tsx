@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray, Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -15,36 +16,102 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { School, Loader2 } from "lucide-react";
+import { School, Loader2, UserPlus, Trash2, Users } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import React from "react";
+import { Separator } from "@/components/ui/separator";
+
+const participantSchema = z.object({
+  name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
+});
 
 const formSchema = z.object({
   schoolName: z.string().min(3, "El nombre de la escuela debe tener al menos 3 caracteres."),
+  teamName: z.string().min(3, "El nombre del equipo debe tener al menos 3 caracteres."),
   contactName: z.string().min(3, "El nombre del contacto debe tener al menos 3 caracteres."),
   contactEmail: z.string().email("Por favor, introduzca un correo electrónico válido."),
-  teamName: z.string().min(3, "El nombre del equipo debe tener al menos 3 caracteres."),
+  participants: z.array(participantSchema).min(1, "Debe haber al menos un participante en el debate."),
+  attendees: z.array(participantSchema).optional(),
 });
+
+type FormData = z.infer<typeof formSchema>;
+
+function DynamicFieldArray({ control, name, label, buttonText, Icon }: {
+    control: Control<FormData>;
+    name: "participants" | "attendees";
+    label: string;
+    buttonText: string;
+    Icon: React.ElementType
+}) {
+    const { fields, append, remove } = useFieldArray({
+        control,
+        name
+    });
+
+    return (
+        <div className="space-y-4 rounded-md border p-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium flex items-center gap-2"><Icon className="h-5 w-5" /> {label}</h3>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => append({ name: "" })}
+                >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {buttonText}
+                </Button>
+            </div>
+            {fields.map((field, index) => (
+                <FormField
+                    key={field.id}
+                    control={control}
+                    name={`${name}.${index}.name` as const}
+                    render={({ field }) => (
+                        <FormItem>
+                            <div className="flex items-center gap-2">
+                                <FormControl>
+                                    <Input placeholder={`Nombre del ${label.slice(0, -1).toLowerCase()} ${index + 1}`} {...field} />
+                                </FormControl>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            ))}
+            {name === 'participants' && fields.length === 0 && (
+                <p className="text-sm text-destructive">
+                    Debe registrar al menos un participante para el debate.
+                </p>
+            )}
+        </div>
+    );
+}
 
 export default function RegisterPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       schoolName: "",
       contactName: "",
       contactEmail: "",
       teamName: "",
+      participants: [{ name: "" }],
+      attendees: [],
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, "schools"), {
@@ -72,7 +139,7 @@ export default function RegisterPage() {
 
   return (
     <div className="container mx-auto flex items-center justify-center py-10 md:py-20 px-4">
-      <Card className="w-full max-w-2xl">
+      <Card className="w-full max-w-3xl">
         <CardHeader className="text-center">
           <School className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="font-headline text-3xl">Registro de Escuelas</CardTitle>
@@ -118,7 +185,7 @@ export default function RegisterPage() {
                   name="contactName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nombre del Contacto</FormLabel>
+                      <FormLabel>Nombre del Contacto Responsable</FormLabel>
                       <FormControl>
                         <Input placeholder="Ej: Juana Pérez" {...field} />
                       </FormControl>
@@ -140,6 +207,24 @@ export default function RegisterPage() {
                   )}
                 />
               </div>
+
+              <Separator />
+
+                <DynamicFieldArray
+                    control={form.control}
+                    name="participants"
+                    label="Participantes del Debate"
+                    buttonText="Añadir Participante"
+                    Icon={Users}
+                />
+                
+                <DynamicFieldArray
+                    control={form.control}
+                    name="attendees"
+                    label="Asistentes"
+                    buttonText="Añadir Asistente"
+                    Icon={Users}
+                />
 
               <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

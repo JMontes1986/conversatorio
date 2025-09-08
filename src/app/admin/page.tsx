@@ -1,3 +1,7 @@
+
+"use client";
+
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,16 +34,52 @@ import {
     DialogTrigger,
   } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2 } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Users as UsersIcon } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 
-const schools = [
-    { id: 'ESC001', name: 'Águilas Doradas', contact: 'Juan Pérez', email: 'juan.perez@aguilas.edu', status: 'Verificado' },
-    { id: 'ESC002', name: 'Leones Intrépidos', contact: 'Ana Gómez', email: 'ana.gomez@leones.edu', status: 'Pendiente' },
-    { id: 'ESC003', name: 'Tigres del Saber', contact: 'Carlos Ruiz', email: 'carlos.ruiz@tigres.edu', status: 'Verificado' },
-];
+interface Participant {
+    name: string;
+}
+interface SchoolData {
+    id: string;
+    schoolName: string;
+    teamName: string;
+    participants: Participant[];
+    attendees: Participant[];
+    status: 'Verificado' | 'Pendiente';
+}
 
 export default function AdminPage() {
+  const [schools, setSchools] = useState<SchoolData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, "schools"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const schoolsData: SchoolData[] = [];
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            schoolsData.push({
+                id: doc.id,
+                schoolName: data.schoolName,
+                teamName: data.teamName,
+                status: data.status,
+                participants: data.participants || [],
+                attendees: data.attendees || [],
+            });
+        });
+        setSchools(schoolsData);
+        setLoading(false);
+    }, (error) => {
+        console.error("Error fetching schools:", error);
+        setLoading(false);
+    });
+
+    return () => unsubscribe();
+}, []);
+
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8">
@@ -75,9 +115,9 @@ export default function AdminPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead className="hidden md:table-cell">Contacto</TableHead>
-                    <TableHead className="hidden md:table-cell">Email</TableHead>
+                    <TableHead>Escuela (Equipo)</TableHead>
+                    <TableHead className="text-center">Participantes</TableHead>
+                    <TableHead className="text-center hidden md:table-cell">Asistentes</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>
                       <span className="sr-only">Acciones</span>
@@ -85,11 +125,18 @@ export default function AdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {schools.map(school => (
+                  {loading ? (
+                    <TableRow>
+                        <TableCell colSpan={5} className="text-center">Cargando escuelas...</TableCell>
+                    </TableRow>
+                  ) : schools.map(school => (
                     <TableRow key={school.id}>
-                        <TableCell className="font-medium">{school.name}</TableCell>
-                        <TableCell className="hidden md:table-cell">{school.contact}</TableCell>
-                        <TableCell className="hidden md:table-cell">{school.email}</TableCell>
+                        <TableCell className="font-medium">
+                            <div>{school.schoolName}</div>
+                            <div className="text-xs text-muted-foreground">{school.teamName}</div>
+                        </TableCell>
+                        <TableCell className="text-center">{school.participants.length}</TableCell>
+                        <TableCell className="text-center hidden md:table-cell">{school.attendees.length}</TableCell>
                         <TableCell>
                             <Badge variant={school.status === 'Verificado' ? 'default' : 'secondary'}>{school.status}</Badge>
                         </TableCell>
