@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -18,6 +18,8 @@ import { Swords, Check, Hash, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
+import { JudgeAuth } from '@/components/auth/judge-auth';
+import { useJudgeAuth } from '@/context/judge-auth-context';
 
 const rubricCriteria = [
     { id: 'arg', name: 'Argumentación', description: 'Calidad y solidez de los argumentos.' },
@@ -32,12 +34,11 @@ const MOCK_MATCH_DATA = {
     matchId: 'semifinal-1',
     teamAName: 'Águilas Doradas',
     teamBName: 'Búhos Sabios',
-    judgeName: 'Jurado Anónimo' // In a real app, this would be the logged in judge's name
 };
 
-
-export default function ScoringPage() {
+function ScoringPanel() {
   const { toast } = useToast();
+  const { judge } = useJudgeAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({
     teamA: {},
@@ -86,7 +87,8 @@ export default function ScoringPage() {
 
     const scoreData = {
         matchId: MOCK_MATCH_DATA.matchId,
-        judgeName: MOCK_MATCH_DATA.judgeName,
+        judgeName: judge?.name || 'Jurado Anónimo',
+        judgeCedula: judge?.cedula || '',
         teamAName: MOCK_MATCH_DATA.teamAName,
         teamBName: MOCK_MATCH_DATA.teamBName,
         scoresTeamA: scores.teamA,
@@ -124,7 +126,7 @@ export default function ScoringPage() {
           Panel de Puntuación del Juez
         </h1>
         <p className="text-muted-foreground mt-2 capitalize">
-          Ronda: {MOCK_MATCH_DATA.matchId.replace('-', ' ')}
+            Juez: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda: {MOCK_MATCH_DATA.matchId.replace('-', ' ')}
         </p>
       </div>
 
@@ -210,3 +212,13 @@ export default function ScoringPage() {
     </div>
   );
 }
+
+export default function ScoringPage() {
+    return (
+        <JudgeAuth>
+            <ScoringPanel />
+        </JudgeAuth>
+    )
+}
+
+    

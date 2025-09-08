@@ -1,3 +1,4 @@
+
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -35,13 +36,13 @@ const features = [
     icon: <Gavel className="h-8 w-8 text-primary" />,
     title: "Panel de Moderador",
     description: "Gestione los debates con controles de video, preguntas y temporizadores.",
-    link: "/moderator",
+    link: "/moderator/login",
   },
   {
     icon: <ClipboardCheck className="h-8 w-8 text-primary" />,
     title: "Puntuación por Rúbrica",
     description: "Jueces calificarán a los equipos con una rúbrica detallada y configurable.",
-    link: "/scoring",
+    link: "/scoring/login",
   },
   {
     icon: <Trophy className="h-8 w-8 text-primary" />,
@@ -145,3 +146,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

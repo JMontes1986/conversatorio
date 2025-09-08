@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import Link from "next/link";
@@ -13,6 +12,7 @@ import {
   MessageSquare,
   LogOut,
   KeyRound,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,30 +25,44 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 import { useModeratorAuth } from "@/context/moderator-auth-context";
+import { useJudgeAuth } from "@/context/judge-auth-context";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/debate", label: "Debate", icon: MessageSquare },
-  { href: "/register", label: "Registro", icon: Users, private: true }, // Admin only
-  { href: "/moderator", label: "Moderar", icon: Gavel, private: true, moderator: true }, // Admin or Moderator
-  { href: "/admin", label: "Admin", icon: Shield, private: false }, // Public link to login
+  { href: "/scoring", label: "Puntuación", icon: ClipboardCheck }, // Judge login
+  { href: "/register", label: "Registro", icon: Users, admin: true }, 
+  { href: "/moderator", label: "Moderar", icon: Gavel, moderator: true }, 
+  { href: "/admin", label: "Admin", icon: Shield, admin: true }, 
 ];
 
 export function Header() {
   const pathname = usePathname();
   const { user: adminUser, logout: adminLogout } = useAuth();
   const { moderator: moderatorUser, logout: moderatorLogout } = useModeratorAuth();
-  const isAuthenticated = adminUser || moderatorUser;
+  const { judge: judgeUser, logout: judgeLogout } = useJudgeAuth();
+  
+  const isAuthenticated = adminUser || moderatorUser || judgeUser;
 
   const handleLogout = () => {
     if (adminUser) adminLogout();
     if (moderatorUser) moderatorLogout();
+    if (judgeUser) judgeLogout();
   };
 
   const filteredNavLinks = navLinks.filter(link => {
-    if (link.href === '/register') return adminUser; // Only admin sees register
-    if (link.href === '/moderator') return adminUser || moderatorUser; // Admin or Mod sees moderar
-    if (link.href === '/admin') return !isAuthenticated; // Hide admin login if anyone is logged in
+    if (link.admin) return adminUser;
+    if (link.moderator) return adminUser || moderatorUser;
+    
+    // Hide auth pages if any user is logged in
+    if ((link.href === '/admin/login' || link.href === '/moderator/login' || link.href === '/scoring/login' || link.href === '/scoring') && isAuthenticated) {
+         // Special case for scoring, show it if the logged in user is a judge
+        if(link.href === '/scoring' && judgeUser) return true;
+        return false;
+    }
+    
+    if (link.href === '/scoring' && !judgeUser) return false;
+
     return true;
   });
 
@@ -76,16 +90,26 @@ export function Header() {
             </Link>
           ))}
           {!isAuthenticated && (
-             <Link
-                href="/moderator/login"
-                className={cn(
-                    "transition-colors hover:text-primary flex items-center",
-                    pathname === "/moderator/login" ? "text-primary" : "text-muted-foreground"
-                )}
-            >
-                <KeyRound className="mr-2 h-4 w-4" />
-                Moderador Login
-            </Link>
+              <>
+                 <Link
+                    href="/scoring/login"
+                    className={cn("transition-colors hover:text-primary flex items-center", pathname === "/scoring/login" ? "text-primary" : "text-muted-foreground")}
+                >
+                    <ClipboardCheck className="mr-2 h-4 w-4" /> Jurado
+                </Link>
+                 <Link
+                    href="/moderator/login"
+                    className={cn("transition-colors hover:text-primary flex items-center", pathname === "/moderator/login" ? "text-primary" : "text-muted-foreground")}
+                >
+                    <KeyRound className="mr-2 h-4 w-4" /> Moderador
+                </Link>
+                <Link
+                    href="/admin/login"
+                    className={cn("transition-colors hover:text-primary flex items-center", pathname === "/admin/login" ? "text-primary" : "text-muted-foreground")}
+                >
+                    <Shield className="mr-2 h-4 w-4" /> Admin
+                </Link>
+              </>
           )}
            {isAuthenticated && (
             <Button variant="ghost" size="sm" onClick={handleLogout}>
@@ -126,15 +150,23 @@ export function Header() {
                   </SheetClose>
                 ))}
                  {!isAuthenticated && (
-                   <SheetClose asChild>
-                     <Link
-                        href="/moderator/login"
-                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground"
-                    >
-                        <KeyRound className="h-5 w-5" />
-                        Moderador Login
-                    </Link>
-                  </SheetClose>
+                   <>
+                     <SheetClose asChild>
+                       <Link href="/scoring/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
+                          <ClipboardCheck className="h-5 w-5" /> Jurado
+                       </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                       <Link href="/moderator/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
+                          <KeyRound className="h-5 w-5" /> Moderador
+                       </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                       <Link href="/admin/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
+                          <Shield className="h-5 w-5" /> Admin
+                       </Link>
+                    </SheetClose>
+                   </>
                 )}
                 {isAuthenticated && (
                   <SheetClose asChild>
@@ -152,3 +184,5 @@ export function Header() {
     </header>
   );
 }
+
+    
