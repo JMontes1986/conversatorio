@@ -21,12 +21,6 @@ const features = [
     link: "/register",
   },
   {
-    icon: <UploadCloud className="h-8 w-8 text-primary" />,
-    title: "Envío de Video",
-    description: "Suba de forma segura las presentaciones de video de su equipo para cada ronda.",
-    link: "/upload",
-  },
-  {
     icon: <Gavel className="h-8 w-8 text-primary" />,
     title: "Panel de Moderador",
     description: "Gestione los debates con controles de video, preguntas y temporizadores.",
