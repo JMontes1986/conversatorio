@@ -29,7 +29,7 @@ const bracketData: Round[] = [
         id: 1,
         participants: [
           { name: "Colegio Isaac Newton", avatar: "https://picsum.photos/id/10/100/100", winner: false },
-          { name: "Escuela Albert Einstein", avatar: "https://picsum.photos/id/20/100/100", winner: true },
+          { name: "Colegio Albert Einstein", avatar: "https://picsum.photos/id/20/100/100", winner: true },
         ],
       },
        {
@@ -49,7 +49,7 @@ const bracketData: Round[] = [
        {
         id: 4,
         participants: [
-           { name: "Escuela Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: true },
+           { name: "Colegio Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: true },
            { name: "Colegio Arquímedes", avatar: "https://picsum.photos/id/80/100/100", winner: false },
         ]
       },
@@ -59,12 +59,12 @@ const bracketData: Round[] = [
     title: "Semifinal",
     matches: [
       { id: 5, participants: [
-        { name: "Escuela Albert Einstein", avatar: "https://picsum.photos/id/20/100/100", winner: false },
+        { name: "Colegio Albert Einstein", avatar: "https://picsum.photos/id/20/100/100", winner: false },
         { name: "Instituto Marie Curie", avatar: "https://picsum.photos/id/30/100/100", winner: true },
       ]},
       { id: 6, participants: [
         { name: "Centro Educativo Copérnico", avatar: "https://picsum.photos/id/60/100/100", winner: false },
-        { name: "Escuela Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: true },
+        { name: "Colegio Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: true },
       ]},
     ],
   },
@@ -73,7 +73,7 @@ const bracketData: Round[] = [
     matches: [
       { id: 7, participants: [
         { name: "Instituto Marie Curie", avatar: "https://picsum.photos/id/30/100/100", winner: true },
-        { name: "Escuela Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: false },
+        { name: "Colegio Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: false },
       ]},
     ],
   },

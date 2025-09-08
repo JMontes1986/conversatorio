@@ -10,7 +10,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Conversatorio Colgemelli',
-  description: 'Plataforma de debate y competencia para escuelas.',
+  description: 'Plataforma de debate y competencia para colegios.',
 };
 
 export default function RootLayout({

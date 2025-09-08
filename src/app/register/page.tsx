@@ -31,7 +31,7 @@ const participantSchema = z.object({
 });
 
 const formSchema = z.object({
-  schoolName: z.string().min(3, "El nombre de la escuela debe tener al menos 3 caracteres."),
+  schoolName: z.string().min(3, "El nombre del colegio debe tener al menos 3 caracteres."),
   teamName: z.string().min(3, "El nombre del equipo debe tener al menos 3 caracteres."),
   contactName: z.string().min(3, "El nombre del contacto debe tener al menos 3 caracteres."),
   contactEmail: z.string().email("Por favor, introduzca un correo electrónico válido."),
@@ -123,7 +123,7 @@ function RegisterForm() {
       });
       toast({
         title: "¡Registro Exitoso!",
-        description: "La escuela ha sido registrada y está pendiente de verificación.",
+        description: "El colegio ha sido registrado y está pendiente de verificación.",
       });
       form.reset();
       router.push("/admin");
@@ -144,7 +144,7 @@ function RegisterForm() {
       <Card className="w-full max-w-3xl">
         <CardHeader className="text-center">
           <School className="mx-auto h-12 w-12 text-primary mb-4" />
-          <CardTitle className="font-headline text-3xl">Registro de Escuelas</CardTitle>
+          <CardTitle className="font-headline text-3xl">Registro de Colegios</CardTitle>
           <CardDescription>
             Inscriba a un equipo en el Conversatorio Colgemelli.
           </CardDescription>
@@ -157,7 +157,7 @@ function RegisterForm() {
                 name="schoolName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre de la Escuela</FormLabel>
+                    <FormLabel>Nombre del Colegio</FormLabel>
                     <FormControl>
                       <Input placeholder="Ej: Instituto Nacional" {...field} />
                     </FormControl>
@@ -175,7 +175,7 @@ function RegisterForm() {
                       <Input placeholder="Ej: Los Lógicos" {...field} />
                     </FormControl>
                      <FormDescription>
-                        El nombre creativo que representará a su escuela.
+                        El nombre creativo que representará a su colegio.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
