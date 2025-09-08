@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -23,23 +23,34 @@ export default function ModeratorPage() {
     const [questionInput, setQuestionInput] = useState("");
 
     useEffect(() => {
-        const fetchDebateState = async () => {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            const docSnap = await getDoc(docRef);
-
+        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if(data.question) {
                     setCurrentQuestion(data.question);
-                    setQuestionInput(data.question);
+                    if (!questionInput) { // Only set input if it's empty to avoid overwriting user edits
+                        setQuestionInput(data.question);
+                    }
                 }
                 if(data.timer) {
                     setMainTimer(prev => ({...prev, duration: data.timer.duration}));
                 }
+            } else {
+                console.log("No such document! Initializing...");
+                // Optionally initialize the document here if it doesn't exist
             }
-        };
-        fetchDebateState();
-    }, []);
+        }, (error) => {
+            console.error("Error listening to debate state:", error);
+             toast({
+                variant: "destructive",
+                title: "Error de Conexión",
+                description: "No se pudo sincronizar con la base de datos.",
+            });
+        });
+
+        return () => unsubscribe();
+    }, [questionInput]);
     
 
     const updateTimer = async (newDuration: number) => {
