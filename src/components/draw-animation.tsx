@@ -5,16 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-
-const TEAMS = [
-  "Águilas Doradas", "Leones Intrépidos", "Tigres del Saber", "Cobras Estratégicas",
-  "Halcones Reales", "Lobos Plateados", "Pumas Analíticos", "Serpientes de Élite",
-  "Jaguares Audaces", "Osos Polares", "Búhos Sabios", "Panteras Negras",
-  "Caimanes Filosóficos", "Dragones del Debate", "Fénix Retóricos", "Grifos Elocuentes",
-];
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type Team = {
-  id: number;
+  id: string;
   name: string;
   group: number | null;
 };
@@ -31,15 +26,27 @@ const shuffleArray = (array: any[]) => {
 
 export function DrawAnimation() {
   const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
 
   useEffect(() => {
-    setTeams(TEAMS.map((name, index) => ({ id: index, name, group: null })));
+    const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+    const unsubscribe = onSnapshot(schoolsQuery, (snapshot) => {
+        const fetchedTeams = snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().teamName,
+            group: null
+        }));
+        setTeams(fetchedTeams);
+        setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   const startDraw = () => {
+    if (teams.length === 0) return;
     setIsDrawing(true);
     setIsFinished(false);
     const shuffledTeams = shuffleArray([...teams]);
@@ -60,10 +67,21 @@ export function DrawAnimation() {
   };
 
   const resetDraw = () => {
-    setTeams(TEAMS.map((name, index) => ({ id: index, name, group: null })));
+    setLoading(true);
+     const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+    const unsubscribe = onSnapshot(schoolsQuery, (snapshot) => {
+        const fetchedTeams = snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().teamName,
+            group: null
+        }));
+        setTeams(fetchedTeams);
+        setLoading(false);
+    });
     setIsDrawing(false);
     setIsFinished(false);
     setIsFixing(false);
+    return () => unsubscribe();
   };
   
   const fixToBlockchain = () => {
@@ -85,9 +103,9 @@ export function DrawAnimation() {
           <p className="text-muted-foreground">Observe cómo los equipos son asignados aleatoriamente a sus grupos.</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={startDraw} disabled={isDrawing || isFinished}>
-            <Shuffle className="mr-2 h-4 w-4" />
-            Iniciar Sorteo
+          <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
+            {loading ? "Cargando..." : "Iniciar Sorteo"}
           </Button>
           <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
             Reiniciar
@@ -95,22 +113,33 @@ export function DrawAnimation() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-h-[400px]">
-        {[1, 2, 3, 4].map(groupNumber => (
-          <Card key={groupNumber} className="flex flex-col">
-            <CardHeader>
-              <CardTitle className="font-headline text-center">Grupo {groupNumber}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex-grow space-y-2 relative">
-              {getGroupTeams(groupNumber).map((team, index) => (
-                <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
-                  {team.name}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {loading ? (
+          <div className="flex justify-center items-center min-h-[400px]">
+              <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+      ) : teams.length === 0 ? (
+          <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
+            <p className="text-muted-foreground">No hay colegios verificados para el sorteo.</p>
+          </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-h-[400px]">
+          {[1, 2, 3, 4].map(groupNumber => (
+            <Card key={groupNumber} className="flex flex-col">
+              <CardHeader>
+                <CardTitle className="font-headline text-center">Grupo {groupNumber}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-grow space-y-2 relative">
+                {getGroupTeams(groupNumber).map((team, index) => (
+                  <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
+                    {team.name}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
 
       <div className={cn(
         "fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center transition-opacity duration-300",
@@ -121,7 +150,7 @@ export function DrawAnimation() {
             const angle = (index / teams.length) * 2 * Math.PI;
             const x = Math.cos(angle) * 120;
             const y = Math.sin(angle) * 120;
-            const group = (team.id % 4) + 1;
+            const group = (team.id.charCodeAt(0) % 4) + 1; // Pseudo-random but deterministic based on ID
             
             return (
               <div

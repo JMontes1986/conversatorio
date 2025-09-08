@@ -3,10 +3,14 @@
 
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 
 type Participant = {
   name: string; // School Name
-  avatar: string; // School Logo
+  avatar: string; // School Logo placeholder
   winner?: boolean;
 };
 
@@ -20,64 +24,6 @@ type Round = {
   matches: Match[];
 };
 
-// MOCK DATA: Represents schools instead of students
-const bracketData: Round[] = [
-  {
-    title: "Ronda 1",
-    matches: [
-      {
-        id: 1,
-        participants: [
-          { name: "Colegio Isaac Newton", avatar: "https://picsum.photos/id/10/100/100", winner: false },
-          { name: "Colegio Albert Einstein", avatar: "https://picsum.photos/id/20/100/100", winner: true },
-        ],
-      },
-       {
-        id: 2,
-        participants: [
-            { name: "Instituto Marie Curie", avatar: "https://picsum.photos/id/30/100/100", winner: true },
-            { name: "Academia Galileo Galilei", avatar: "https://picsum.photos/id/40/100/100", winner: false },
-        ]
-      },
-      {
-        id: 3,
-        participants: [
-           { name: "Liceo Leonardo da Vinci", avatar: "https://picsum.photos/id/50/100/100", winner: false },
-           { name: "Centro Educativo Copérnico", avatar: "https://picsum.photos/id/60/100/100", winner: true },
-        ],
-      },
-       {
-        id: 4,
-        participants: [
-           { name: "Colegio Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: true },
-           { name: "Colegio Arquímedes", avatar: "https://picsum.photos/id/80/100/100", winner: false },
-        ]
-      },
-    ],
-  },
-  {
-    title: "Semifinal",
-    matches: [
-      { id: 5, participants: [
-        { name: "Colegio Albert Einstein", avatar: "https://picsum.photos/id/20/100/100", winner: false },
-        { name: "Instituto Marie Curie", avatar: "https://picsum.photos/id/30/100/100", winner: true },
-      ]},
-      { id: 6, participants: [
-        { name: "Centro Educativo Copérnico", avatar: "https://picsum.photos/id/60/100/100", winner: false },
-        { name: "Colegio Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: true },
-      ]},
-    ],
-  },
-   {
-    title: "Final",
-    matches: [
-      { id: 7, participants: [
-        { name: "Instituto Marie Curie", avatar: "https://picsum.photos/id/30/100/100", winner: true },
-        { name: "Colegio Pitágoras", avatar: "https://picsum.photos/id/70/100/100", winner: false },
-      ]},
-    ],
-  },
-];
 
 const ParticipantCard = ({ participant }: { participant: Participant }) => (
     <div className={cn("flex flex-col items-center gap-2 w-32 text-center", !participant.winner && "opacity-50")}>
@@ -98,6 +44,43 @@ const ParticipantCard = ({ participant }: { participant: Participant }) => (
 
 
 export function TournamentBracket() {
+  const [bracketData, setBracketData] = useState<Round[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // This is a placeholder for fetching and processing real tournament data.
+    // For now, it just shows a loading state.
+    // In a real implementation, you would fetch rounds, teams, and scores from Firestore
+    // and build the bracket structure.
+    
+    // Simulating loading
+    setTimeout(() => {
+        // You would replace this with your data fetching and processing logic
+        setBracketData([]); // Start with empty data
+        setLoading(false);
+    }, 1500);
+
+  }, []);
+
+  if (loading) {
+    return (
+        <div className="bg-card p-4 md:p-8 rounded-lg w-full min-h-[400px] flex justify-center items-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    )
+  }
+  
+  if (bracketData.length === 0) {
+      return (
+        <div className="bg-card p-4 md:p-8 rounded-lg w-full min-h-[400px] flex justify-center items-center">
+            <div className="text-center">
+                 <h2 className="text-2xl font-bold text-foreground">"¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?"</h2>
+                 <p className="text-lg text-muted-foreground mt-2">El bracket del torneo aparecerá aquí una vez que comiencen las rondas.</p>
+            </div>
+        </div>
+      )
+  }
+
   return (
     <div className="bg-card p-4 md:p-8 rounded-lg w-full overflow-x-auto">
         <div className="text-center mb-12">
