@@ -93,29 +93,29 @@ export default function AdminPage() {
 
       <Tabs defaultValue="schools" className="w-full">
         <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
-          <TabsTrigger value="schools"><School className="h-4 w-4 mr-2" />Escuelas</TabsTrigger>
-          <TabsTrigger value="judges"><User className="h-4 w-4 mr-2" />Jueces</TabsTrigger>
+          <TabsTrigger value="schools"><School className="h-4 w-4 mr-2" />Colegios</TabsTrigger>
+          <TabsTrigger value="judges"><User className="h-4 w-4 mr-2" />Jurados</TabsTrigger>
           <TabsTrigger value="settings"><Settings className="h-4 w-4 mr-2" />Ajustes</TabsTrigger>
         </TabsList>
         <TabsContent value="schools">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                    <CardTitle>Gestión de Escuelas</CardTitle>
+                    <CardTitle>Gestión de Colegios</CardTitle>
                     <CardDescription>
-                        Añada, edite o elimine escuelas participantes.
+                        Añada, edite o elimine colegios participantes.
                     </CardDescription>
                 </div>
                  <Button size="sm" className="gap-1">
                     <PlusCircle className="h-3.5 w-3.5" />
-                    Añadir Escuela
+                    Añadir Colegio
                 </Button>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Escuela (Equipo)</TableHead>
+                    <TableHead>Colegio (Equipo)</TableHead>
                     <TableHead className="text-center">Participantes</TableHead>
                     <TableHead className="text-center hidden md:table-cell">Asistentes</TableHead>
                     <TableHead>Estado</TableHead>
@@ -127,7 +127,7 @@ export default function AdminPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                        <TableCell colSpan={5} className="text-center">Cargando escuelas...</TableCell>
+                        <TableCell colSpan={5} className="text-center">Cargando colegios...</TableCell>
                     </TableRow>
                   ) : schools.map(school => (
                     <TableRow key={school.id}>
@@ -169,8 +169,8 @@ export default function AdminPage() {
         <TabsContent value="judges">
             <Card>
                 <CardHeader>
-                    <CardTitle>Gestión de Jueces</CardTitle>
-                    <CardDescription>Contenido para la gestión de jueces.</CardDescription>
+                    <CardTitle>Gestión de Jurados</CardTitle>
+                    <CardDescription>Contenido para la gestión de jurados.</CardDescription>
                 </CardHeader>
                 <CardContent className="text-center p-10 text-muted-foreground">
                     Próximamente...
