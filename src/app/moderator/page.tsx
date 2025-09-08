@@ -301,7 +301,7 @@ function ModeratorDashboard() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                            <div>
-                                <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} />
+                                <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
                                 <div className="mt-2">
                                      <TimerSettings />
                                 </div>
@@ -389,8 +389,8 @@ function ModeratorDashboard() {
                                                         <div className="flex items-center justify-end gap-2 pt-2">
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
-                                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs">
-                                                                        <Trash2 className="mr-1 h-3 w-3" />
+                                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
+                                                                        <Trash2 className="h-4 w-4" />
                                                                     </Button>
                                                                 </AlertDialogTrigger>
                                                                 <AlertDialogContent>
@@ -439,3 +439,5 @@ export default function ModeratorPage() {
         </AdminAuth>
     );
 }
+
+    
