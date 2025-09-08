@@ -13,7 +13,6 @@ type Participant = {
   name: string;
   avatar: string;
   winner?: boolean;
-  score?: number;
 };
 
 type Match = {
@@ -42,11 +41,12 @@ type DrawState = {
     activeTab: 'groups' | 'quarters';
     teams: { id: string, name: string, round: string | null }[];
     rounds: RoundData[];
+    isFinished?: boolean;
 }
 
 // CORE LOGIC
-const getWinnerOfMatch = (scores: ScoreData[], matchName: string): string | null => {
-    const matchScores = scores.filter(s => s.matchId === matchName);
+const getWinnerOfMatch = (scores: ScoreData[], roundName: string): Participant | null => {
+    const matchScores = scores.filter(s => s.matchId === roundName);
     if (matchScores.length === 0) return null;
 
     const teamTotals: Record<string, number> = {};
@@ -56,12 +56,13 @@ const getWinnerOfMatch = (scores: ScoreData[], matchName: string): string | null
             teamTotals[team.name] += team.total;
         });
     });
-
+    
     const entries = Object.entries(teamTotals);
     if (entries.length === 0) return null;
-    if (entries.length === 1) return entries[0][0];
 
-    return entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+    const winnerName = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+    
+    return { name: winnerName, avatar: `https://picsum.photos/seed/${encodeURIComponent(winnerName)}/200`, winner: true };
 };
 
 
@@ -116,7 +117,6 @@ export function TournamentBracket() {
             // --- Build Bracket Logic ---
             const newBracketData: Round[] = [];
             
-            // Only build bracket if the draw is for quarters and is finished
             if (drawData && drawData.activeTab === 'quarters' && drawData.teams.every(t => t.round)) {
                 
                 const quarterFinals: Round = { title: "Cuartos de Final", matches: [] };
@@ -128,12 +128,11 @@ export function TournamentBracket() {
                             avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`
                         }));
                     
-                    const winnerName = getWinnerOfMatch(allScores, roundInfo.name);
+                    const winner = getWinnerOfMatch(allScores, roundInfo.name);
 
                     const participantsWithStatus = participantsInDraw.map(p => ({
                         ...p,
-                        winner: winnerName ? p.name === winnerName : undefined,
-                        winner_is_defined: !!winnerName
+                        winner: winner ? p.name === winner.name : undefined,
                     }));
 
                     quarterFinals.matches.push({
@@ -143,21 +142,20 @@ export function TournamentBracket() {
                     });
                 });
                 newBracketData.push(quarterFinals);
-
+                
                 // Build Semifinals
-                if (quarterFinals.matches.every(m => m.participants.some(p => p.winner))) {
-                    const semiFinals: Round = { title: "Semifinal", matches: [] };
-                    const quarterWinners = quarterFinals.matches.map(m => m.participants.find(p => p.winner)!);
-                    
-                    for (let i = 0; i < quarterWinners.length / 2; i++) {
-                        const matchParticipants = quarterWinners.slice(i * 2, i * 2 + 2);
+                const semiFinals: Round = { title: "Semifinal", matches: [] };
+                const qfWinners = quarterFinals.matches.map(m => getWinnerOfMatch(allScores, m.roundName)).filter(Boolean) as Participant[];
+                
+                if(qfWinners.length > 0) {
+                    for (let i = 0; i < Math.ceil(qfWinners.length / 2); i++) {
+                        const matchParticipants = qfWinners.slice(i * 2, i * 2 + 2);
                         const matchRoundName = `Semifinal ${i + 1}`; // Placeholder name
                         
-                        const winnerName = getWinnerOfMatch(allScores, matchRoundName);
+                        const winner = getWinnerOfMatch(allScores, matchRoundName);
                         const participantsWithStatus = matchParticipants.map(p => ({
                             ...p,
-                            winner: winnerName ? p.name === winnerName : undefined,
-                            winner_is_defined: !!winnerName
+                            winner: winner ? p.name === winner.name : undefined,
                         }));
 
                         semiFinals.matches.push({
@@ -169,58 +167,43 @@ export function TournamentBracket() {
                     newBracketData.push(semiFinals);
 
                     // Build Final
-                    if (semiFinals.matches.every(m => m.participants.some(p => p.winner))) {
-                        const final: Round = { title: "Final", matches: [] };
-                        const semiWinners = semiFinals.matches.map(m => m.participants.find(p => p.winner)!);
-
-                        const matchRoundName = "Final"; // Placeholder name
-                        const winnerName = getWinnerOfMatch(allScores, matchRoundName);
-
-                        const participantsWithStatus = semiWinners.map(p => ({
-                            ...p,
-                            winner: winnerName ? p.name === winnerName : undefined,
-                            winner_is_defined: !!winnerName
-                        }));
-
-                        final.matches.push({
-                            id: 0,
-                            participants: participantsWithStatus,
-                            roundName: matchRoundName
-                        });
-                        newBracketData.push(final);
-
-                         // Grand Winner
-                        if (final.matches.every(m => m.participants.some(p => p.winner))) {
-                            const grandWinnerRound: Round = { title: "Ganador", matches: [] };
-                            const grandWinner = final.matches[0].participants.find(p => p.winner);
-                            if(grandWinner) {
-                                grandWinnerRound.matches.push({
-                                    id: 0,
-                                    participants: [grandWinner],
-                                    roundName: "Ganador"
-                                })
-                            }
+                    const final: Round = { title: "Final", matches: [] };
+                    const semiWinners = semiFinals.matches.map(m => getWinnerOfMatch(allScores, m.roundName)).filter(Boolean) as Participant[];
+                    if(semiWinners.length > 0) {
+                       const matchRoundName = "Final";
+                       const winner = getWinnerOfMatch(allScores, matchRoundName);
+                       const participantsWithStatus = semiWinners.map(p => ({
+                           ...p,
+                           winner: winner ? p.name === winner.name : undefined,
+                       }));
+                       final.matches.push({ id: 0, participants: participantsWithStatus, roundName: matchRoundName });
+                       newBracketData.push(final);
+                       
+                       // Grand Winner
+                       const grandWinnerRound: Round = { title: "Ganador", matches: [] };
+                       const grandWinner = getWinnerOfMatch(allScores, "Final");
+                       if(grandWinner) {
+                           grandWinnerRound.matches.push({
+                               id: 0,
+                               participants: [grandWinner],
+                               roundName: "Ganador"
+                           })
                            newBracketData.push(grandWinnerRound);
-                        }
+                       }
                     }
                 }
             }
 
-
-            // Post-process all participants to set loser status
             newBracketData.forEach(round => {
                 round.matches.forEach(match => {
                     const hasWinner = match.participants.some(p => p.winner === true);
                     if (hasWinner) {
                         match.participants.forEach(p => {
-                            if (p.winner !== true) {
-                                p.winner = false; // Explicitly mark as loser
-                            }
+                            if (p.winner !== true) p.winner = false;
                         });
                     }
                 });
             });
-
 
             setBracketData(newBracketData);
             setLoading(false);
@@ -286,7 +269,7 @@ export function TournamentBracket() {
                     </div>
                    
                     {/* Connecting Lines */}
-                    {roundIndex < bracketData.length -1 && match.participants.length > 1 && (
+                    {roundIndex < bracketData.length -1 && round.title !== 'Final' && match.participants.length > 1 && (
                       <>
                         {/* Vertical line connecting pairs */}
                          <div className={cn(
@@ -302,7 +285,7 @@ export function TournamentBracket() {
                         )}></div>
                       </>
                     )}
-                     {roundIndex === 2 && ( // Final round
+                     {round.title === 'Final' && (
                          <div className="absolute top-1/2 -translate-y-1/2 left-1/2 w-1/2 h-0.5 bg-gray-300 z-0"></div>
                      )}
                 </div>
@@ -314,3 +297,5 @@ export function TournamentBracket() {
     </div>
   );
 }
+
+    
