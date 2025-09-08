@@ -533,7 +533,7 @@ function AdminDashboard() {
             </div>
         </TabsContent>
         <TabsContent value="debate-control">
-          <DebateControlPanel registeredSchools={schools} />
+          <DebateControlPanel registeredSchools={schools} allScores={scores} />
         </TabsContent>
          <TabsContent value="results">
           <Card>

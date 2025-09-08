@@ -1,3 +1,4 @@
+
 "use client";
 
 import { ModeratorAuth } from "@/components/auth/moderator-auth";
@@ -10,18 +11,23 @@ interface SchoolData {
     id: string;
     schoolName: string;
     teamName: string;
-    participants: { name: string }[];
-    attendees: { name: string }[];
-    status: 'Verificado' | 'Pendiente';
+}
+
+interface ScoreData {
+    id: string;
+    matchId: string;
+    judgeName: string;
+    teams: { name: string; total: number }[];
 }
 
 function ModeratorDashboard() {
     const [schools, setSchools] = useState<SchoolData[]>([]);
+    const [scores, setScores] = useState<ScoreData[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const schoolsQuery = query(collection(db, "schools"), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(schoolsQuery, (querySnapshot) => {
+        const unsubscribeSchools = onSnapshot(schoolsQuery, (querySnapshot) => {
             const schoolsData: SchoolData[] = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
@@ -29,19 +35,29 @@ function ModeratorDashboard() {
                     id: doc.id,
                     schoolName: data.schoolName,
                     teamName: data.teamName,
-                    status: data.status,
-                    participants: data.participants || [],
-                    attendees: data.attendees || [],
                 });
             });
             setSchools(schoolsData);
-            setLoading(false);
+            if (loading) setLoading(false);
         }, (error) => {
             console.error("Error fetching schools:", error);
-            setLoading(false);
+            if (loading) setLoading(false);
         });
 
-        return () => unsubscribe();
+        const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
+        const unsubscribeScores = onSnapshot(scoresQuery, (querySnapshot) => {
+            const scoresData: ScoreData[] = [];
+            querySnapshot.forEach((doc) => {
+                scoresData.push({ id: doc.id, ...doc.data()} as ScoreData);
+            });
+            setScores(scoresData);
+            if (loading) setLoading(false);
+        });
+
+        return () => {
+          unsubscribeSchools();
+          unsubscribeScores();
+        }
     }, []);
 
     return (
@@ -54,7 +70,7 @@ function ModeratorDashboard() {
                     Gestione la ronda de debate actual.
                 </p>
             </div>
-            <DebateControlPanel registeredSchools={schools} />
+            <DebateControlPanel registeredSchools={schools} allScores={scores}/>
         </div>
     )
 }

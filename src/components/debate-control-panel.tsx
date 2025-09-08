@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,6 +39,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const DEBATE_STATE_DOC_ID = "current";
 
 const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Final"];
+const advancedRounds = ["Cuartos de Final", "Semifinal", "Final"];
+
 interface Question {
     id: string;
     text: string;
@@ -46,7 +48,7 @@ interface Question {
     videoUrl?: string;
 }
 interface Team {
-    id: number;
+    id: string;
     name: string;
 }
 interface SchoolData {
@@ -54,129 +56,66 @@ interface SchoolData {
     schoolName: string;
     teamName: string;
 }
-
-
-function CompetitionSettings({ registeredSchools }: { registeredSchools: SchoolData[] }) {
-    const { toast } = useToast();
-    const [currentRound, setCurrentRound] = useState('');
-    const [teams, setTeams] = useState<Team[]>([{ id: 1, name: '' }, { id: 2, name: '' }]);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setCurrentRound(data.currentRound || '');
-                 if (data.teams && data.teams.length > 0) {
-                    setTeams(data.teams);
-                } else {
-                    setTeams([{ id: 1, name: '' }, { id: 2, name: '' }]);
-                }
-            }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    const handleUpdateRound = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const validTeams = teams.filter(t => t.name.trim() !== '');
-
-        if (!currentRound || validTeams.length < 2) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y al menos dos equipos." });
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { 
-                currentRound,
-                teams: validTeams
-            }, { merge: true });
-            toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound}.` });
-        } catch (error) {
-            console.error("Error updating round:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la configuración." });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }
-    
-    const handleTeamNameChange = (id: number, name: string) => {
-        setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
-    };
-
-    const addTeam = () => {
-        setTeams([...teams, { id: Date.now(), name: '' }]);
-    };
-
-    const removeTeam = (id: number) => {
-        if (teams.length > 2) {
-            setTeams(teams.filter(team => team.id !== id));
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: 'Debe haber al menos dos equipos.'
-            });
-        }
-    };
-
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Ajustes de la Competencia</CardTitle>
-                <CardDescription>Configuración de la ronda activa y los equipos que se enfrentan.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
-                    <div className="space-y-2">
-                        <Label htmlFor="current-round">Ronda de Debate Activa</Label>
-                         <Select onValueChange={setCurrentRound} value={currentRound} disabled={isSubmitting}>
-                            <SelectTrigger id="current-round">
-                                <SelectValue placeholder="Seleccione la ronda actual" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {debateRounds.map(round => <SelectItem key={round} value={round}>{round}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="space-y-3">
-                        <Label>Equipos Participantes</Label>
-                        {teams.map((team, index) => (
-                            <div key={team.id} className="flex items-center gap-2">
-                                <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Seleccione Equipo ${index + 1}`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {registeredSchools.map(school => (
-                                            <SelectItem key={school.id} value={school.teamName}>
-                                                {school.teamName} ({school.schoolName})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting}>
-                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                </Button>
-                            </div>
-                        ))}
-                         <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting}>
-                            <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
-                        </Button>
-                    </div>
-                    <Button type="submit" disabled={isSubmitting || !currentRound}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Actualizar Configuración
-                    </Button>
-                </form>
-            </CardContent>
-        </Card>
-    );
+interface ScoreData {
+    id: string;
+    matchId: string;
+    teams: { name: string; total: number }[];
 }
+
+interface MatchResults {
+    matchId: string;
+    winner: string;
+}
+
+function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
+    const roundScores = scores.filter(s => s.matchId === roundName);
+    
+    // Group scores by judge to average them if needed, but for now, we sum them up across all judges.
+    const teamTotals: Record<string, number> = {};
+    
+    roundScores.forEach(score => {
+        score.teams.forEach(team => {
+            if (!teamTotals[team.name]) {
+                teamTotals[team.name] = 0;
+            }
+            teamTotals[team.name] += team.total;
+        });
+    });
+
+    // This logic is simplified. It assumes unique matches within a round that produce winners.
+    // Let's group scores by match to find individual winners.
+    const matches: Record<string, { name: string; total: number }[][]> = {};
+    roundScores.forEach(s => {
+        const key = s.teams.map(t => t.name).sort().join('-');
+        if (!matches[key]) matches[key] = [];
+        matches[key].push(s.teams);
+    });
+
+    const winners: string[] = [];
+    Object.values(matches).forEach(matchJudgements => {
+        const matchTotals: Record<string, number> = {};
+        matchJudgements.forEach(judgement => {
+            judgement.forEach(team => {
+                 if (!matchTotals[team.name]) matchTotals[team.name] = 0;
+                 matchTotals[team.name] += team.total;
+            });
+        });
+        
+        let winner = '';
+        let maxScore = -1;
+        for (const [teamName, total] of Object.entries(matchTotals)) {
+            if (total > maxScore) {
+                maxScore = total;
+                winner = teamName;
+            }
+        }
+        if (winner) winners.push(winner);
+    });
+    
+    return winners;
+}
+
+
 
 function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendVideo, onSendQuestion }: any) {
     const { toast } = useToast();
@@ -320,17 +259,22 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     );
 }
 
-export function DebateControlPanel({ registeredSchools = [] }: { registeredSchools?: SchoolData[] }) {
+export function DebateControlPanel({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
-    const [currentDebateRound, setCurrentDebateRound] = useState("Ronda 1");
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
     const [videoInputs, setVideoInputs] = useState<Record<string, string>>({});
     const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
+
+    // State for CompetitionSettings
+    const [currentRound, setCurrentRound] = useState('');
+    const [teams, setTeams] = useState<Team[]>([{ id: '1', name: '' }, { id: '2', name: '' }]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isAutoFilled, setIsAutoFilled] = useState(false);
 
 
     useEffect(() => {
@@ -341,7 +285,14 @@ export function DebateControlPanel({ registeredSchools = [] }: { registeredSchoo
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
                 if(data.timer) setMainTimer(prev => ({...prev, duration: data.timer.duration}));
-                if(data.currentRound) setCurrentDebateRound(data.currentRound);
+                
+                // Load saved state
+                setCurrentRound(data.currentRound || '');
+                if (data.teams && data.teams.length > 0) {
+                   setTeams(data.teams);
+               } else {
+                   setTeams([{ id: '1', name: '' }, { id: '2', name: '' }]);
+               }
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
@@ -367,6 +318,45 @@ export function DebateControlPanel({ registeredSchools = [] }: { registeredSchoo
             unsubscribeQuestions();
         };
     }, []);
+
+    const handleRoundChange = useCallback((round: string) => {
+        setCurrentRound(round);
+        if (advancedRounds.includes(round)) {
+            setIsAutoFilled(true);
+            let winners: string[] = [];
+            const roundDependencies: Record<string, string> = {
+                "Semifinal": "Cuartos de Final",
+                "Final": "Semifinal"
+            };
+
+            if (round === "Cuartos de Final") {
+                // This assumes initial rounds are structured e.g., "Ronda 1-A", "Ronda 1-B"
+                // For simplicity, we'll take winners from all "Ronda" matches
+                const ronda1Winners = getWinnersOfRound(allScores, "Ronda 1");
+                const ronda2Winners = getWinnersOfRound(allScores, "Ronda 2");
+                winners = [...new Set([...ronda1Winners, ...ronda2Winners])];
+
+            } else {
+                const previousRound = roundDependencies[round];
+                if (previousRound) {
+                    winners = getWinnersOfRound(allScores, previousRound);
+                }
+            }
+            
+            if (winners.length > 0) {
+                 setTeams(winners.map((name, index) => ({ id: `${Date.now()}-${index}`, name })));
+                 toast({ title: "Equipos Llenados Automáticamente", description: `Los ganadores de la ronda anterior han sido seleccionados para ${round}.`});
+            } else {
+                 setTeams([{ id: '1', name: '' }, { id: '2', name: '' }]);
+                 toast({ variant: "destructive", title: "No se encontraron ganadores", description: `No se pudieron determinar los ganadores de la ronda anterior.`});
+            }
+
+        } else {
+            setIsAutoFilled(false);
+            // Reset teams or load last manual config for this round
+            setTeams([{ id: '1', name: '' }, { id: '2', name: '' }]);
+        }
+    }, [allScores, toast]);
     
 
     const updateTimer = async (newDuration: number) => {
@@ -476,6 +466,52 @@ export function DebateControlPanel({ registeredSchools = [] }: { registeredSchoo
         }
     }
 
+    // CompetitionSettings Logic
+    const handleUpdateRound = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const validTeams = teams.filter(t => t.name.trim() !== '');
+
+        if (!currentRound || validTeams.length < 2) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y al menos dos equipos." });
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                currentRound,
+                teams: validTeams
+            }, { merge: true });
+            toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound}.` });
+        } catch (error) {
+            console.error("Error updating round:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la configuración." });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+    
+    const handleTeamNameChange = (id: string, name: string) => {
+        setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
+    };
+
+    const addTeam = () => {
+        setTeams([...teams, { id: `${Date.now()}`, name: '' }]);
+    };
+
+    const removeTeam = (id: string) => {
+        if (teams.length > 2) {
+            setTeams(teams.filter(team => team.id !== id));
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Debe haber al menos dos equipos.'
+            });
+        }
+    };
+
+
     const TimerSettings = () => {
         const [minutes, setMinutes] = useState(Math.floor(mainTimer.duration / 60));
         const [seconds, setSeconds] = useState(mainTimer.duration % 60);
@@ -549,12 +585,63 @@ export function DebateControlPanel({ registeredSchools = [] }: { registeredSchoo
                     </CardContent>
                 </Card>
                 
-                <CompetitionSettings registeredSchools={registeredSchools} />
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Ajustes de la Competencia</CardTitle>
+                        <CardDescription>Configuración de la ronda activa y los equipos que se enfrentan.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
+                            <div className="space-y-2">
+                                <Label htmlFor="current-round">Ronda de Debate Activa</Label>
+                                <Select onValueChange={handleRoundChange} value={currentRound} disabled={isSubmitting}>
+                                    <SelectTrigger id="current-round">
+                                        <SelectValue placeholder="Seleccione la ronda actual" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {debateRounds.map(round => <SelectItem key={round} value={round}>{round}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-3">
+                                <Label>Equipos Participantes</Label>
+                                {teams.map((team, index) => (
+                                    <div key={team.id} className="flex items-center gap-2">
+                                        <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting || isAutoFilled}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder={`Seleccione Equipo ${index + 1}`} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {registeredSchools.map(school => (
+                                                    <SelectItem key={school.id} value={school.teamName}>
+                                                        {school.teamName} ({school.schoolName})
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting || isAutoFilled}>
+                                            <Trash2 className="h-4 w-4 text-destructive"/>
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting || isAutoFilled}>
+                                    <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
+                                </Button>
+                                {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda.</p>}
+                            </div>
+                            <Button type="submit" disabled={isSubmitting || !currentRound}>
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                                Actualizar Configuración
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
 
                 <QuestionManagement 
                     preparedQuestions={preparedQuestions}
                     loadingQuestions={loadingQuestions}
-                    currentDebateRound={currentDebateRound}
+                    currentDebateRound={currentRound}
                     videoInputs={videoInputs}
                     setVideoInputs={setVideoInputs}
                     savingVideoId={savingVideoId}
