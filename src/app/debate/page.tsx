@@ -6,7 +6,8 @@ import { Timer } from "@/components/timer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Video } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -14,7 +15,8 @@ export default function DebatePage() {
     const [debateState, setDebateState] = useState({
         question: "Esperando la pregunta del moderador...",
         timer: { duration: 300, lastUpdated: Date.now() },
-        currentRound: "Ronda de Debate"
+        currentRound: "Ronda de Debate",
+        videoUrl: ""
     });
 
     useEffect(() => {
@@ -27,6 +29,7 @@ export default function DebatePage() {
                     question: data.question || prevState.question,
                     timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : prevState.timer,
                     currentRound: data.currentRound || prevState.currentRound,
+                    videoUrl: data.videoUrl || ""
                 }));
             } else {
                 console.log("No such document!");
@@ -36,6 +39,15 @@ export default function DebatePage() {
         return () => unsubscribe();
     }, []);
 
+    const isValidHttpUrl = (str: string) => {
+        try {
+            const url = new URL(str);
+            return url.protocol === "http:" || url.protocol === "https:";
+        } catch (_) {
+            return false;  
+        }
+    }
+    
     return (
         <>
             <div className="container mx-auto py-10 px-4 md:px-6 flex justify-center items-center min-h-[calc(100vh-200px)]">
@@ -45,23 +57,47 @@ export default function DebatePage() {
                             {debateState.currentRound}
                         </h1>
                         <p className="text-muted-foreground mt-2">
-                            Siga la pregunta y el tiempo asignado.
+                            Siga la pregunta, el video y el tiempo asignado.
                         </p>
                     </div>
 
-                    <Card className="shadow-lg">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-3 font-headline text-2xl">
-                                <MessageSquare className="h-7 w-7 text-primary" />
-                                Pregunta Actual
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-xl md:text-2xl text-center font-medium p-6 bg-secondary rounded-lg min-h-[150px] flex items-center justify-center">
-                                {debateState.question}
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <div className="grid md:grid-cols-2 gap-8 items-start">
+                        <Card className="shadow-lg h-full">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3 font-headline text-2xl">
+                                    <MessageSquare className="h-7 w-7 text-primary" />
+                                    Pregunta Actual
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-xl md:text-2xl text-center font-medium p-6 bg-secondary rounded-lg min-h-[200px] flex items-center justify-center">
+                                    {debateState.question}
+                                </p>
+                            </CardContent>
+                        </Card>
+                        
+                        <Card className="shadow-lg h-full">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3 font-headline text-2xl">
+                                    <Video className="h-7 w-7 text-primary" />
+                                    Video de la Ronda
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="aspect-video bg-secondary rounded-lg flex items-center justify-center text-center p-4">
+                                {isValidHttpUrl(debateState.videoUrl) ? (
+                                    <Button asChild size="lg">
+                                        <a href={debateState.videoUrl} target="_blank" rel="noopener noreferrer">
+                                            Ver Video en OneDrive
+                                        </a>
+                                    </Button>
+                                ) : (
+                                    <p className="text-muted-foreground">No hay video para esta ronda.</p>
+                                )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </div>
             
@@ -75,3 +111,5 @@ export default function DebatePage() {
         </>
     );
 }
+
+    
