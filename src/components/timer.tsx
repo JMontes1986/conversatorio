@@ -53,9 +53,11 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
     };
   }, [isActive, timeRemaining, showControls]);
 
-  const playSound = () => {
+  const playSound = async () => {
+     if (Tone.context.state !== 'running') {
+      await Tone.start();
+    }
     if (synth.current) {
-        Tone.start();
         synth.current.triggerAttackRelease("C5", "8n", Tone.now());
         synth.current.triggerAttackRelease("G5", "8n", Tone.now() + 0.2);
     }
@@ -118,19 +120,21 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
             </span>
           </div>
         </div>
-        {showControls && (
-            <div className="flex items-center gap-2">
-            <Button onClick={toggleTimer} size="icon" className="w-12 h-12 rounded-full">
-                {isActive ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-            </Button>
-            <Button onClick={resetTimer} variant="outline" size="icon" className="w-10 h-10">
-                <RotateCcw className="h-4 w-4" />
-            </Button>
+        <div className="flex items-center gap-2">
+            {showControls && (
+                <>
+                    <Button onClick={toggleTimer} size="icon" className="w-12 h-12 rounded-full">
+                        {isActive ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                    </Button>
+                    <Button onClick={resetTimer} variant="outline" size="icon" className="w-10 h-10">
+                        <RotateCcw className="h-4 w-4" />
+                    </Button>
+                </>
+            )}
             <Button onClick={playSound} variant="outline" size="icon" className="w-10 h-10">
                 <Bell className="h-4 w-4" />
             </Button>
-            </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );
