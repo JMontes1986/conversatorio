@@ -43,7 +43,7 @@ const bracketData: Round[] = [
 
 export function TournamentBracket() {
   return (
-    <div className="w-full bg-card p-4 md:p-8 rounded-lg shadow-lg overflow-x-auto">
+    <div className="w-full bg-card p-4 md:p-8 rounded-lg">
       <div className="flex justify-around items-stretch min-w-[1000px]">
         {bracketData.map((round, roundIndex) => (
           <div key={round.title} className="flex flex-col justify-around w-1/3">
