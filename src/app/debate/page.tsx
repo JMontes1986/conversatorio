@@ -18,6 +18,7 @@ export default function DebatePage() {
         currentRound: "Ronda de Debate",
         videoUrl: ""
     });
+    const [showVideoPrompt, setShowVideoPrompt] = useState(false);
 
     useEffect(() => {
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -25,14 +26,26 @@ export default function DebatePage() {
         const unsubscribe = onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
+                const questionText = data.question || "Esperando la pregunta del moderador...";
+                const videoUrl = data.videoUrl || "";
+                
                 setDebateState(prevState => ({
-                    question: data.question || prevState.question,
+                    question: questionText,
                     timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : prevState.timer,
                     currentRound: data.currentRound || prevState.currentRound,
-                    videoUrl: data.videoUrl || ""
+                    videoUrl: videoUrl
                 }));
+
+                // Logic to decide what to show
+                if(videoUrl && !data.question) {
+                     setShowVideoPrompt(true);
+                } else {
+                    setShowVideoPrompt(false);
+                }
+
             } else {
                 console.log("No such document!");
+                setShowVideoPrompt(false);
             }
         });
 
@@ -71,7 +84,7 @@ export default function DebatePage() {
                             </CardHeader>
                             <CardContent>
                                 <p className="text-xl md:text-2xl text-center font-medium p-6 bg-secondary rounded-lg min-h-[200px] flex items-center justify-center">
-                                    {debateState.question}
+                                    {showVideoPrompt ? "Por favor, observe el video presentado." : debateState.question}
                                 </p>
                             </CardContent>
                         </Card>

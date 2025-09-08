@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Timer } from "@/components/timer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Video, Settings, Send, Trash2, Plus, Loader2, Save } from "lucide-react";
+import { Video, Settings, Send, Trash2, Plus, Loader2, Save, MessageSquare, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -42,7 +42,8 @@ const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Fi
 function ModeratorDashboard() {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
-    const [currentQuestion, setCurrentQuestion] = useState("Esperando pregunta del moderador...");
+    const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
+    const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [currentDebateRound, setCurrentDebateRound] = useState("Ronda 1");
     
     const [newQuestionInput, setNewQuestionInput] = useState("");
@@ -59,7 +60,8 @@ function ModeratorDashboard() {
         const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                if(data.question) setCurrentQuestion(data.question);
+                setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
+                setPreviewVideoUrl(data.videoUrl || "");
                 if(data.timer) setMainTimer(prev => ({...prev, duration: data.timer.duration}));
                 if(data.currentRound) setCurrentDebateRound(data.currentRound);
             }
@@ -109,27 +111,48 @@ function ModeratorDashboard() {
         }
     };
     
+    const handleSendVideo = async (question: Question) => {
+         try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const videoUrlToSend = videoInputs[question.id] || "";
+            await setDoc(docRef, {
+                videoUrl: videoUrlToSend,
+                question: "" // Clear question when sending video
+            }, { merge: true });
+            toast({ title: "Video Enviado", description: "El video es ahora visible para los participantes." });
+        } catch (error) {
+            console.error("Error setting video: ", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
+        }
+    };
+
     const handleSendQuestion = async (question: Question) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            const videoUrlToSend = videoInputs[question.id] || "";
             await setDoc(docRef, { 
                 question: question.text,
-                videoUrl: videoUrlToSend
             }, { merge: true });
-            toast({
-                title: "Pregunta Enviada",
-                description: "La nueva pregunta y video son visibles para los participantes.",
-            });
+            toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
              console.error("Error setting question: ", error);
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "No se pudo enviar la pregunta.",
-            });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar la pregunta." });
+        }
+    };
+
+    const handleClearScreen = async () => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                question: "",
+                videoUrl: ""
+            }, { merge: true });
+            toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
+        } catch (error) {
+             console.error("Error clearing screen: ", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo limpiar la pantalla." });
         }
     }
+
 
     const handleAddQuestion = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -255,15 +278,17 @@ function ModeratorDashboard() {
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
-                             <CardTitle className="flex items-center gap-2"><Video className="h-6 w-6"/> Vista Previa del Debate</CardTitle>
+                             <CardTitle className="flex items-center justify-between"><span className="flex items-center gap-2"><Video className="h-6 w-6"/> Vista Previa del Debate</span></CardTitle>
                             <CardDescription>Esta es una vista previa de lo que los participantes ven en la página de debate.</CardDescription>
                         </CardHeader>
                         <CardContent>
                              <div className="space-y-4">
-                                <h3 className="font-medium text-lg">Pregunta Activa:</h3>
-                                <p className="text-xl p-4 bg-secondary rounded-md min-h-[100px] flex items-center justify-center text-center">
-                                    {currentQuestion}
-                                </p>
+                                <h3 className="font-medium text-lg">Pantalla Pública:</h3>
+                                <div className="text-xl p-4 bg-secondary rounded-md min-h-[100px] flex items-center justify-center text-center">
+                                    {!previewVideoUrl && !previewQuestion && "Pantalla Limpia"}
+                                    {previewVideoUrl && !previewQuestion && "Video en pantalla. Esperando pregunta."}
+                                    {previewQuestion}
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -274,13 +299,16 @@ function ModeratorDashboard() {
                         <CardHeader>
                             <CardTitle className="font-headline">Control del Debate</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="space-y-4">
                            <div>
                                 <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} />
                                 <div className="mt-2">
                                      <TimerSettings />
                                 </div>
                            </div>
+                            <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
+                                <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Pública
+                           </Button>
                         </CardContent>
                     </Card>
                     <Card>
@@ -361,8 +389,8 @@ function ModeratorDashboard() {
                                                         <div className="flex items-center justify-end gap-2 pt-2">
                                                             <AlertDialog>
                                                                 <AlertDialogTrigger asChild>
-                                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive">
-                                                                        <Trash2 className="mr-2 h-4 w-4" />Eliminar
+                                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs">
+                                                                        <Trash2 className="mr-1 h-3 w-3" />
                                                                     </Button>
                                                                 </AlertDialogTrigger>
                                                                 <AlertDialogContent>
@@ -378,8 +406,11 @@ function ModeratorDashboard() {
                                                                     </AlertDialogFooter>
                                                                 </AlertDialogContent>
                                                             </AlertDialog>
-                                                             <Button size="sm" onClick={() => handleSendQuestion(q)} title="Enviar Pregunta y Video al Debate">
-                                                                <Send className="mr-2 h-4 w-4" /> Enviar
+                                                            <Button size="sm" onClick={() => handleSendVideo(q)} variant="outline">
+                                                                <Video className="mr-2 h-4 w-4" /> Enviar Video
+                                                            </Button>
+                                                             <Button size="sm" onClick={() => handleSendQuestion(q)}>
+                                                                <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
                                                             </Button>
                                                         </div>
                                                     </div>
