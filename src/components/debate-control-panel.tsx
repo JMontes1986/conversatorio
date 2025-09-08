@@ -70,12 +70,25 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
     
     const roundsByPhase = useMemo(() => {
-        return debateRounds.reduce((acc: any, round: RoundData) => {
+        const grouped = debateRounds.reduce((acc: any, round: RoundData) => {
             const phase = round.phase || 'General';
             if (!acc[phase]) acc[phase] = [];
             acc[phase].push(round);
             return acc;
         }, {} as Record<string, RoundData[]>);
+
+        const sortedPhases = Object.keys(grouped).sort((a,b) => {
+            if (a === 'General') return -1;
+            if (b === 'General') return 1;
+            return a.localeCompare(b);
+        });
+        
+        const result: Record<string, RoundData[]> = {};
+        sortedPhases.forEach(phase => {
+            result[phase] = grouped[phase];
+        });
+        return result;
+
     }, [debateRounds]);
 
     const handleAddQuestionSubmit = async (e: React.FormEvent) => {
@@ -145,69 +158,71 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                     <h3 className="font-medium text-sm text-muted-foreground pt-2">Preguntas Preparadas</h3>
                     {loadingQuestions && <p className="text-center text-sm">Cargando preguntas...</p>}
                     <Accordion type="single" collapsible className="w-full" defaultValue={currentDebateRound}>
-                        {Object.keys(questionsByRound).length > 0 && debateRounds.map((round: RoundData) => (
-                            (questionsByRound[round.name]?.length > 0) && (
-                            <AccordionItem value={round.name} key={round.id}>
-                                <AccordionTrigger>{round.name}</AccordionTrigger>
-                                <AccordionContent className="space-y-4">
-                                    {questionsByRound[round.name].map((q: Question) => (
-                                        <div key={q.id} className="space-y-3 bg-background p-3 rounded-md border">
-                                            <p className="flex-grow text-sm font-medium">{q.text}</p>
-                                            
-                                            <div className="space-y-2">
-                                                <Label htmlFor={`video-url-${q.id}`} className="text-xs">Enlace del Video (OneDrive)</Label>
-                                                <div className="flex items-center gap-2">
-                                                    <Input 
-                                                        id={`video-url-${q.id}`}
-                                                        placeholder="Pegar enlace de OneDrive"
-                                                        value={videoInputs[q.id] || ''}
-                                                        onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
-                                                        disabled={savingVideoId === q.id}
-                                                    />
-                                                    <Button 
-                                                        size="icon" 
-                                                        variant="outline" 
-                                                        className="h-9 w-9 shrink-0" 
-                                                        onClick={() => onSaveVideoLink(q.id)}
-                                                        disabled={savingVideoId === q.id}
-                                                        title="Guardar Enlace">
-                                                        {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
+                        {Object.keys(questionsByRound).length > 0 && Object.keys(roundsByPhase).map((phase) => (
+                            Object.values(roundsByPhase[phase]).map((round : RoundData) => (
+                                (questionsByRound[round.name]?.length > 0) && (
+                                <AccordionItem value={round.name} key={round.id}>
+                                    <AccordionTrigger>{round.name}</AccordionTrigger>
+                                    <AccordionContent className="space-y-4">
+                                        {questionsByRound[round.name].map((q: Question) => (
+                                            <div key={q.id} className="space-y-3 bg-background p-3 rounded-md border">
+                                                <p className="flex-grow text-sm font-medium">{q.text}</p>
+                                                
+                                                <div className="space-y-2">
+                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs">Enlace del Video (OneDrive)</Label>
+                                                    <div className="flex items-center gap-2">
+                                                        <Input 
+                                                            id={`video-url-${q.id}`}
+                                                            placeholder="Pegar enlace de OneDrive"
+                                                            value={videoInputs[q.id] || ''}
+                                                            onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
+                                                            disabled={savingVideoId === q.id}
+                                                        />
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="outline" 
+                                                            className="h-9 w-9 shrink-0" 
+                                                            onClick={() => onSaveVideoLink(q.id)}
+                                                            disabled={savingVideoId === q.id}
+                                                            title="Guardar Enlace">
+                                                            {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-end gap-2 pt-2">
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Se eliminará la pregunta y su video asociado de la lista de preparación.
+                                                            </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => onDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                    <Button size="sm" onClick={() => onSendVideo(q)} variant="outline">
+                                                        <Video className="mr-2 h-4 w-4" /> Enviar Video
+                                                    </Button>
+                                                     <Button size="sm" onClick={() => onSendQuestion(q)}>
+                                                        <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
                                                     </Button>
                                                 </div>
                                             </div>
-
-                                            <div className="flex items-center justify-end gap-2 pt-2">
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Esta acción no se puede deshacer. Se eliminará la pregunta y su video asociado de la lista de preparación.
-                                                        </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => onDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                                <Button size="sm" onClick={() => onSendVideo(q)} variant="outline">
-                                                    <Video className="mr-2 h-4 w-4" /> Enviar Video
-                                                </Button>
-                                                 <Button size="sm" onClick={() => onSendQuestion(q)}>
-                                                    <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </AccordionContent>
-                            </AccordionItem>
-                            )
+                                        ))}
+                                    </AccordionContent>
+                                </AccordionItem>
+                                )
+                            ))
                         ))}
                     </Accordion>
                     {!loadingQuestions && Object.keys(questionsByRound).length === 0 && (
@@ -261,7 +276,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             setLoadingQuestions(false);
         });
         
-        const roundsQuery = query(collection(db, "rounds"), orderBy("phase"), orderBy("createdAt", "asc"));
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
         const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
             const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
             setDebateRounds(roundsData);
@@ -500,4 +515,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
 }
 
     
-

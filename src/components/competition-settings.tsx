@@ -100,7 +100,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
 
     useEffect(() => {
         setLoadingRounds(true);
-        const roundsQuery = query(collection(db, "rounds"), orderBy("phase"), orderBy("createdAt", "asc"));
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
         const unsubscribe = onSnapshot(roundsQuery, (snapshot) => {
             const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
             setDebateRounds(roundsData);
@@ -113,7 +113,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
     }, []);
     
     const roundsByPhase = useMemo(() => {
-        return debateRounds.reduce((acc, round) => {
+        const grouped = debateRounds.reduce((acc, round) => {
             const phase = round.phase || 'General';
             if (!acc[phase]) {
                 acc[phase] = [];
@@ -121,6 +121,19 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
             acc[phase].push(round);
             return acc;
         }, {} as Record<string, RoundData[]>);
+        
+        const sortedPhases = Object.keys(grouped).sort((a,b) => {
+            if (a === 'General') return -1;
+            if (b === 'General') return 1;
+            return a.localeCompare(b);
+        });
+        
+        const result: Record<string, RoundData[]> = {};
+        sortedPhases.forEach(phase => {
+            result[phase] = grouped[phase];
+        });
+        return result;
+
     }, [debateRounds]);
 
     const handleRoundChange = useCallback((round: string) => {

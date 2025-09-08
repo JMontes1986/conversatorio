@@ -35,7 +35,7 @@ export function RoundManagement() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        const roundsQuery = query(collection(db, "rounds"), orderBy("phase"), orderBy("createdAt", "asc"));
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
         const unsubscribe = onSnapshot(roundsQuery, (querySnapshot) => {
             const roundsData: RoundData[] = [];
             querySnapshot.forEach((doc) => {
@@ -59,6 +59,12 @@ export function RoundManagement() {
         acc[phase].push(round);
         return acc;
     }, {} as Record<string, RoundData[]>);
+    
+    const sortedPhases = Object.keys(roundsByPhase).sort((a,b) => {
+        if (a === 'General') return -1;
+        if (b === 'General') return 1;
+        return a.localeCompare(b);
+    });
 
 
     const handleAddRound = async (e: React.FormEvent) => {
@@ -154,8 +160,8 @@ export function RoundManagement() {
                                             <TableCell colSpan={2} className="text-center">Cargando rondas...</TableCell>
                                         </TableRow>
                                      </TableBody>
-                                ) : Object.keys(roundsByPhase).length > 0 ? (
-                                    Object.entries(roundsByPhase).map(([phase, rounds]) => (
+                                ) : sortedPhases.length > 0 ? (
+                                    sortedPhases.map((phase) => (
                                         <TableBody key={phase}>
                                             <TableRow className="bg-secondary hover:bg-secondary">
                                                 <TableCell colSpan={2} className="font-bold text-secondary-foreground">
@@ -164,7 +170,7 @@ export function RoundManagement() {
                                                    </div>
                                                 </TableCell>
                                             </TableRow>
-                                            {rounds.map((round) => (
+                                            {roundsByPhase[phase].map((round) => (
                                                 <TableRow key={round.id}>
                                                     <TableCell className="font-medium pl-8 flex items-center gap-2"><Swords className="h-4 w-4 text-muted-foreground" /> {round.name}</TableCell>
                                                     <TableCell className="text-right">
