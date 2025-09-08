@@ -10,9 +10,10 @@ import { Play, Pause, RotateCcw, Bell } from "lucide-react";
 interface TimerProps {
   initialTime: number; // in seconds
   title: string;
+  showControls?: boolean;
 }
 
-export function Timer({ initialTime, title }: TimerProps) {
+export function Timer({ initialTime, title, showControls = true }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [isActive, setIsActive] = useState(false);
   const synth = useRef<Tone.Synth | null>(null);
@@ -24,8 +25,14 @@ export function Timer({ initialTime, title }: TimerProps) {
 
   useEffect(() => {
     setTimeRemaining(initialTime);
-    setIsActive(false);
-  }, [initialTime]);
+    // Do not auto-start if controls are hidden, moderator will control it
+    if (showControls) {
+        setIsActive(false);
+    } else {
+        // For public view, we can assume it's active and syncing with moderator
+        setIsActive(true);
+    }
+  }, [initialTime, showControls]);
 
 
   useEffect(() => {
@@ -36,14 +43,15 @@ export function Timer({ initialTime, title }: TimerProps) {
       }, 1000);
     } else if (timeRemaining === 0 && isActive) {
       setIsActive(false);
-      playSound();
+      // Only the moderator's timer should make a sound
+      if(showControls) playSound();
     }
     return () => {
       if (interval) {
         clearInterval(interval);
       }
     };
-  }, [isActive, timeRemaining]);
+  }, [isActive, timeRemaining, showControls]);
 
   const playSound = () => {
     if (synth.current) {
@@ -110,17 +118,19 @@ export function Timer({ initialTime, title }: TimerProps) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={toggleTimer} size="icon" className="w-12 h-12 rounded-full">
-            {isActive ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </Button>
-          <Button onClick={resetTimer} variant="outline" size="icon" className="w-10 h-10">
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-           <Button onClick={playSound} variant="outline" size="icon" className="w-10 h-10">
-            <Bell className="h-4 w-4" />
-          </Button>
-        </div>
+        {showControls && (
+            <div className="flex items-center gap-2">
+            <Button onClick={toggleTimer} size="icon" className="w-12 h-12 rounded-full">
+                {isActive ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </Button>
+            <Button onClick={resetTimer} variant="outline" size="icon" className="w-10 h-10">
+                <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button onClick={playSound} variant="outline" size="icon" className="w-10 h-10">
+                <Bell className="h-4 w-4" />
+            </Button>
+            </div>
+        )}
       </CardContent>
     </Card>
   );

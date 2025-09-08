@@ -118,7 +118,8 @@ export default function DebatePage() {
                  <Timer 
                     key={debateState.timer.lastUpdated}
                     initialTime={debateState.timer.duration}
-                    title="Temporizador"
+                    title="Tiempo"
+                    showControls={false}
                 />
             </div>
         </>
