@@ -5,53 +5,75 @@ import { useState, useEffect } from "react";
 import { Timer } from "@/components/timer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, Video, Settings, Send } from "lucide-react";
+import { PlayCircle, Video, Settings, Send, Trash2, Plus, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, addDoc, query, orderBy, deleteDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from "@/components/auth/admin-auth";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const DEBATE_STATE_DOC_ID = "current";
+
+interface Question {
+    id: string;
+    text: string;
+}
 
 function ModeratorDashboard() {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
     const [currentQuestion, setCurrentQuestion] = useState("Esperando pregunta del moderador...");
-    const [questionInput, setQuestionInput] = useState("");
+    
+    // State for new question management
+    const [newQuestionInput, setNewQuestionInput] = useState("");
+    const [isAddingQuestion, setIsAddingQuestion] = useState(false);
+    const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
+    const [loadingQuestions, setLoadingQuestions] = useState(true);
+
 
     useEffect(() => {
-        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        // Listener for the main debate state (timer and current question)
+        const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+        const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                if(data.question) {
-                    setCurrentQuestion(data.question);
-                    if (!questionInput) { // Only set input if it's empty to avoid overwriting user edits
-                        setQuestionInput(data.question);
-                    }
-                }
-                if(data.timer) {
-                    setMainTimer(prev => ({...prev, duration: data.timer.duration}));
-                }
-            } else {
-                console.log("No such document! Initializing...");
-                // Optionally initialize the document here if it doesn't exist
+                if(data.question) setCurrentQuestion(data.question);
+                if(data.timer) setMainTimer(prev => ({...prev, duration: data.timer.duration}));
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
-             toast({
-                variant: "destructive",
-                title: "Error de Conexión",
-                description: "No se pudo sincronizar con la base de datos.",
-            });
         });
 
-        return () => unsubscribe();
-    }, [toast, questionInput]);
+        // Listener for the list of prepared questions
+        const questionsQuery = query(collection(db, "questions"), orderBy("createdAt", "asc"));
+        const unsubscribeQuestions = onSnapshot(questionsQuery, (querySnapshot) => {
+            const questionsData = querySnapshot.docs.map(doc => ({ id: doc.id, text: doc.data().text } as Question));
+            setPreparedQuestions(questionsData);
+            setLoadingQuestions(false);
+        }, (error) => {
+            console.error("Error fetching questions:", error);
+            setLoadingQuestions(false);
+        });
+
+        return () => {
+            unsubscribeDebateState();
+            unsubscribeQuestions();
+        };
+    }, []);
     
 
     const updateTimer = async (newDuration: number) => {
@@ -74,12 +96,10 @@ function ModeratorDashboard() {
         }
     };
     
-    const handleSetQuestion = async () => {
-        if(!questionInput.trim()) return;
-        setCurrentQuestion(questionInput);
+    const handleSendQuestion = async (questionText: string) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { question: questionInput }, { merge: true });
+            await setDoc(docRef, { question: questionText }, { merge: true });
             toast({
                 title: "Pregunta Enviada",
                 description: "La nueva pregunta es visible para los participantes.",
@@ -91,6 +111,34 @@ function ModeratorDashboard() {
                 title: "Error",
                 description: "No se pudo enviar la pregunta.",
             });
+        }
+    }
+
+    const handleAddQuestion = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newQuestionInput.trim()) return;
+        setIsAddingQuestion(true);
+        try {
+            await addDoc(collection(db, "questions"), {
+                text: newQuestionInput,
+                createdAt: new Date()
+            });
+            setNewQuestionInput("");
+        } catch(error) {
+             console.error("Error adding question:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo añadir la pregunta." });
+        } finally {
+            setIsAddingQuestion(false);
+        }
+    };
+
+    const handleDeleteQuestion = async (questionId: string) => {
+        try {
+            await deleteDoc(doc(db, "questions", questionId));
+            toast({ title: "Pregunta Eliminada" });
+        } catch(error) {
+            console.error("Error deleting question:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar la pregunta." });
         }
     }
 
@@ -187,7 +235,7 @@ function ModeratorDashboard() {
                                     <p>Esperando video</p>
                                 </div>
                             </CardContent>
-                            <Button size="sm" className="absolute top-4 right-4 gap-2">
+                             <Button size="sm" className="absolute top-4 right-4 gap-2">
                                 <PlayCircle className="h-4 w-4" />
                                 Iniciar
                             </Button>
@@ -213,32 +261,68 @@ function ModeratorDashboard() {
                         <CardHeader>
                             <CardTitle>Gestión de Preguntas</CardTitle>
                              <CardDescription>
-                                Envíe la pregunta que los equipos debatirán.
+                                Prepare, envíe y gestione las preguntas del debate.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                <div>
-                                    <h3 className="font-medium mb-2">Pregunta Actual:</h3>
-                                    <p className="text-sm p-3 bg-secondary rounded-md min-h-[60px]">
-                                        {currentQuestion}
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="question-input">Nueva Pregunta</Label>
-                                    <Textarea 
-                                        id="question-input"
-                                        placeholder="Escriba la nueva pregunta aquí..."
-                                        value={questionInput}
-                                        onChange={(e) => setQuestionInput(e.target.value)}
-                                        rows={4}
-                                    />
-                                </div>
-                                <Button onClick={handleSetQuestion} className="w-full">
-                                    <Send className="mr-2 h-4 w-4"/>
-                                    Enviar Pregunta
-                                </Button>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <h3 className="font-medium mb-2">Pregunta Activa:</h3>
+                                <p className="text-sm p-3 bg-secondary rounded-md min-h-[60px]">
+                                    {currentQuestion}
+                                </p>
                             </div>
+                           
+                            <form onSubmit={handleAddQuestion} className="space-y-2">
+                                <Label htmlFor="new-question-input">Añadir Pregunta a la Lista</Label>
+                                <Textarea 
+                                    id="new-question-input"
+                                    placeholder="Escriba una nueva pregunta para tenerla lista..."
+                                    value={newQuestionInput}
+                                    onChange={(e) => setNewQuestionInput(e.target.value)}
+                                    rows={3}
+                                    disabled={isAddingQuestion}
+                                />
+                                <Button type="submit" className="w-full" disabled={isAddingQuestion || !newQuestionInput.trim()}>
+                                    {isAddingQuestion ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4"/>}
+                                    Añadir a la lista
+                                </Button>
+                            </form>
+                           
+                           <div className="space-y-2">
+                                <h3 className="font-medium text-sm text-muted-foreground">Preguntas Preparadas</h3>
+                                {loadingQuestions && <p>Cargando preguntas...</p>}
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                                    {preparedQuestions.length > 0 ? preparedQuestions.map(q => (
+                                        <div key={q.id} className="flex items-center gap-2 bg-background p-2 rounded-md border">
+                                            <p className="flex-grow text-sm">{q.text}</p>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleSendQuestion(q.text)}>
+                                                <Send className="h-4 w-4" />
+                                            </Button>
+                                             <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive hover:text-destructive">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. Se eliminará la pregunta de la lista de preparación.
+                                                    </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+                                    )) : (
+                                       !loadingQuestions && <p className="text-xs text-center text-muted-foreground py-4">No hay preguntas preparadas.</p>
+                                    )}
+                                </div>
+                           </div>
                         </CardContent>
                     </Card>
                 </div>
