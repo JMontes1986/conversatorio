@@ -6,11 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Users,
   Shuffle,
-  UploadCloud,
   Gavel,
   ClipboardCheck,
   Trophy,
-  Shield,
 } from "lucide-react";
 
 const features = [
@@ -19,6 +17,12 @@ const features = [
     title: "Registro de Colegios",
     description: "Inscriba a su colegio en la competencia de manera rápida y sencilla.",
     link: "/register",
+  },
+  {
+    icon: <Shuffle className="h-8 w-8 text-primary" />,
+    title: "Sorteo de Grupos",
+    description: "Vea en tiempo real cómo se definen los enfrentamientos de las rondas.",
+    link: "/draw",
   },
   {
     icon: <Gavel className="h-8 w-8 text-primary" />,
@@ -128,5 +132,3 @@ export default function Home() {
     </div>
   );
 }
-
-    

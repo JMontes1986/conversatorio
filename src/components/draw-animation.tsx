@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+
+
+const DRAW_STATE_DOC_ID = "liveDraw";
 
 type Team = {
   id: string;
@@ -61,6 +65,7 @@ function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData
 
 
 export function DrawAnimation() {
+  const { toast } = useToast();
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [allRounds, setAllRounds] = useState<RoundData[]>([]);
@@ -82,14 +87,12 @@ export function DrawAnimation() {
             round: null
         }));
         setAllTeams(fetchedTeams);
-        setLoading(false);
     });
 
     const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
     const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
         const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
         setAllRounds(roundsData);
-        setLoading(false);
     });
 
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
@@ -100,67 +103,121 @@ export function DrawAnimation() {
         });
         setAllScores(scoresData);
     });
+    
+    // Check for existing live draw
+    const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+    const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if(data.activeTab === activeTab) {
+              setTeams(data.teams || []);
+              setRounds(data.rounds || []);
+              setIsDrawing(data.isDrawing || false);
+              setIsFinished(data.isFinished || false);
+            }
+        }
+        setLoading(false);
+    });
 
 
     return () => {
         unsubscribeSchools();
         unsubscribeRounds();
         unsubscribeScores();
+        unsubscribeDrawState();
     };
   }, []);
 
+  // Recalculate teams and rounds when tab changes
   useEffect(() => {
-    resetDraw();
-    if (activeTab === "groups") {
-        let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        setRounds(groupRounds);
-        setTeams(allTeams);
-    } else if (activeTab === "quarters") {
-        const quarterRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
-        setRounds(quarterRounds);
-        
-        let groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        
-        const qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
+      resetDraw(true); // Soft reset
+  }, [activeTab, allTeams, allRounds]);
 
-        const winnerTeams = allTeams
-            .filter(t => qualifiedTeams.includes(t.name))
-            .map(t => ({...t, round: null})); // Reset round assignment
-        
-        setTeams(winnerTeams);
-    }
-  }, [activeTab, allRounds, allTeams, allScores]);
 
-  const startDraw = () => {
+  const updateLiveDrawState = async (state: any) => {
+      try {
+        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+        await setDoc(drawStateRef, { ...state, lastUpdated: new Date() }, { merge: true });
+      } catch (error) {
+        console.error("Failed to update live draw state:", error);
+        toast({
+          variant: "destructive",
+          title: "Error de Sincronización",
+          description: "No se pudo actualizar el estado del sorteo en vivo."
+        });
+      }
+  }
+
+  const startDraw = async () => {
     if (teams.length === 0 || rounds.length === 0) return;
+
+    const initialState = {
+        teams: teams.map(t => ({...t, round: null })),
+        rounds,
+        isDrawing: true,
+        isFinished: false,
+        activeTab
+    };
+    await updateLiveDrawState(initialState);
     setIsDrawing(true);
     setIsFinished(false);
+
     const shuffledTeams = shuffleArray([...teams]);
     
     shuffledTeams.forEach((team, index) => {
-      setTimeout(() => {
-        setTeams(prevTeams =>
-          prevTeams.map(t =>
-            t.id === team.id ? { ...t, round: rounds[index % rounds.length].name } : t
-          )
-        );
+      setTimeout(async () => {
+        const currentTeams = teams.map(t => t.id === team.id ? { ...t, round: rounds[index % rounds.length].name } : t);
+        setTeams(currentTeams);
+        await updateLiveDrawState({ teams: currentTeams });
+
         if (index === shuffledTeams.length - 1) {
           setIsDrawing(false);
           setIsFinished(true);
+          await updateLiveDrawState({ isDrawing: false, isFinished: true });
         }
       }, index * 200);
     });
   };
 
-  const resetDraw = () => {
-    setTeams(prev => prev.map(t => ({...t, round: null})));
-    setIsDrawing(false);
-    setIsFinished(false);
+  const resetDraw = (isTabChange = false) => {
+    let currentTeams: Team[] = [];
+    let currentRounds: RoundData[] = [];
+
+    if (activeTab === "groups") {
+        currentRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        currentTeams = allTeams;
+    } else if (activeTab === "quarters") {
+        currentRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
+        const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
+        currentTeams = allTeams
+            .filter(t => qualifiedTeamNames.includes(t.name))
+            .map(t => ({...t, round: null}));
+    }
+    
+    const resetState = {
+        teams: currentTeams.map(t => ({...t, round: null})),
+        rounds: currentRounds,
+        isDrawing: false,
+        isFinished: false,
+        activeTab
+    };
+    
+    setTeams(resetState.teams);
+    setRounds(resetState.rounds);
+    setIsDrawing(resetState.isDrawing);
+    setIsFinished(resetState.isFinished);
     setIsFixing(false);
+    
+    if(!isTabChange) updateLiveDrawState(resetState);
   };
   
   const fixToBlockchain = () => {
     setIsFixing(true);
+    toast({
+        title: "¡Sorteo Confirmado!",
+        description: "El resultado del sorteo ha sido fijado y es visible para todos."
+    })
     setTimeout(() => {
       setIsFixing(false);
     }, 2000);
@@ -189,7 +246,7 @@ export function DrawAnimation() {
     <div className="w-full max-w-6xl mx-auto">
         <div className="space-y-1 mb-8">
             <h1 className="font-headline text-3xl font-bold">Sorteo Automático</h1>
-            <p className="text-muted-foreground">Seleccione la fase y realice el sorteo de los equipos.</p>
+            <p className="text-muted-foreground">Seleccione la fase, realice el sorteo y se reflejará para el público.</p>
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-4">
@@ -211,7 +268,7 @@ export function DrawAnimation() {
                         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
                         {loading ? "Cargando..." : "Iniciar Sorteo"}
                     </Button>
-                    <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
+                    <Button onClick={() => resetDraw(false)} variant="outline" disabled={isDrawing}>
                         Reiniciar
                     </Button>
                 </div>
@@ -284,15 +341,17 @@ export function DrawAnimation() {
       {isFinished && (
         <div className="mt-8 text-center flex flex-col items-center gap-4 animate-in fade-in-50">
             <h2 className="font-headline text-2xl font-bold">¡Sorteo Completado!</h2>
-            <p className="text-muted-foreground">Los grupos han sido definidos. El resultado puede ser fijado para asegurar su integridad.</p>
+            <p className="text-muted-foreground">Los grupos han sido definidos. El resultado es ahora visible para el público.</p>
              <Button onClick={fixToBlockchain} disabled={isFixing} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
                 {isFixing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                {isFixing ? "Fijando en Blockchain..." : "Fijar Resultado en Blockchain"}
+                {isFixing ? "Fijando..." : "Confirmar Resultado"}
             </Button>
         </div>
       )}
       
-      <style jsx>{animationStyles}</style>
+      <style jsx>{`
+        ${animationStyles}
+      `}</style>
     </div>
   );
 }

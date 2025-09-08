@@ -13,6 +13,7 @@ import {
   LogOut,
   KeyRound,
   ClipboardCheck,
+  Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +30,7 @@ import { useModeratorAuth } from "@/context/moderator-auth-context";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
+  { href: "/draw", label: "Sorteo", icon: Shuffle },
   { href: "/debate", label: "Debate", icon: MessageSquare },
   { href: "/scoring", label: "Puntuación", icon: ClipboardCheck, judge: true },
   { href: "/register", label: "Registro", icon: Users, admin: true },
@@ -184,5 +186,3 @@ export function Header() {
     </header>
   );
 }
-
-    
