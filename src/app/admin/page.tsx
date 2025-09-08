@@ -354,93 +354,94 @@ function AdminDashboard() {
                             <TableCell colSpan={6} className="text-center">Cargando colegios...</TableCell>
                         </TableRow>
                     ) : schools.map(school => (
-                        <Collapsible asChild key={school.id} >
+                        <Collapsible asChild key={school.id}>
                             <>
-                                <TableRow>
-                                    <TableCell>
-                                        <CollapsibleTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                <ChevronDown className="h-4 w-4 transition-transform [&[data-state=open]]:rotate-180" />
-                                            </Button>
-                                        </CollapsibleTrigger>
-                                    </TableCell>
-                                    <TableCell className="font-medium">
-                                        <div>{school.schoolName}</div>
-                                        <div className="text-xs text-muted-foreground">{school.teamName}</div>
-                                    </TableCell>
-                                    <TableCell className="text-center">{school.participants.length}</TableCell>
-                                    <TableCell className="text-center hidden md:table-cell">{school.attendees?.length || 0}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={school.status === 'Verificado' ? 'default' : 'secondary'}>{school.status}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                            <Button
-                                                aria-haspopup="true"
-                                                size="icon"
-                                                variant="ghost"
-                                            >
-                                                <MoreHorizontal className="h-4 w-4" />
-                                                <span className="sr-only">Toggle menu</span>
-                                            </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                            <DropdownMenuItem onClick={() => openEditDialog(school)}>
-                                                <FilePen className="mr-2 h-4 w-4"/>Editar
+                            <TableRow>
+                                <TableCell>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <ChevronDown className="h-4 w-4 transition-transform [&[data-state=open]]:-rotate-180" />
+                                            <span className="sr-only">Toggle details</span>
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                    <div>{school.schoolName}</div>
+                                    <div className="text-xs text-muted-foreground">{school.teamName}</div>
+                                </TableCell>
+                                <TableCell className="text-center">{school.participants.length}</TableCell>
+                                <TableCell className="text-center hidden md:table-cell">{school.attendees?.length || 0}</TableCell>
+                                <TableCell>
+                                    <Badge variant={school.status === 'Verificado' ? 'default' : 'secondary'}>{school.status}</Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                        <Button
+                                            aria-haspopup="true"
+                                            size="icon"
+                                            variant="ghost"
+                                        >
+                                            <MoreHorizontal className="h-4 w-4" />
+                                            <span className="sr-only">Toggle menu</span>
+                                        </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                        <DropdownMenuItem onClick={() => openEditDialog(school)}>
+                                            <FilePen className="mr-2 h-4 w-4"/>Editar
+                                        </DropdownMenuItem>
+                                        <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                <Trash2 className="mr-2 h-4 w-4"/>Eliminar
                                             </DropdownMenuItem>
-                                            <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                    <Trash2 className="mr-2 h-4 w-4"/>Eliminar
-                                                </DropdownMenuItem>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                    Esta acción no se puede deshacer. Se eliminará el colegio y todos sus datos asociados permanentemente.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => handleDeleteSchool(school.id)} className="bg-destructive hover:bg-destructive/90">
-                                                    Eliminar
-                                                    </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                            </AlertDialog>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                                <CollapsibleContent asChild>
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="p-0">
-                                            <div className="bg-secondary/50 p-4">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <h4 className="font-semibold flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary"/> Participantes del Debate</h4>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                Esta acción no se puede deshacer. Se eliminará el colegio y todos sus datos asociados permanentemente.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleDeleteSchool(school.id)} className="bg-destructive hover:bg-destructive/90">
+                                                Eliminar
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                        </AlertDialog>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                            <CollapsibleContent asChild>
+                                <TableRow>
+                                    <TableCell colSpan={6} className="p-0">
+                                        <div className="bg-secondary/50 p-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <h4 className="font-semibold flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary"/> Participantes del Debate</h4>
+                                                    <ul className="list-disc pl-5 text-sm">
+                                                        {school.participants.map((p, i) => <li key={i}>{p.name}</li>)}
+                                                    </ul>
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-semibold flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary"/> Asistentes</h4>
+                                                    {school.attendees && school.attendees.length > 0 ? (
                                                         <ul className="list-disc pl-5 text-sm">
-                                                            {school.participants.map((p, i) => <li key={i}>{p.name}</li>)}
+                                                            {school.attendees.map((a, i) => <li key={i}>{a.name}</li>)}
                                                         </ul>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-semibold flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary"/> Asistentes</h4>
-                                                        {school.attendees && school.attendees.length > 0 ? (
-                                                            <ul className="list-disc pl-5 text-sm">
-                                                                {school.attendees.map((a, i) => <li key={i}>{a.name}</li>)}
-                                                            </ul>
-                                                        ) : (
-                                                            <p className="text-sm text-muted-foreground">No hay asistentes registrados.</p>
-                                                        )}
-                                                    </div>
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground">No hay asistentes registrados.</p>
+                                                    )}
                                                 </div>
                                             </div>
-                                        </TableCell>
-                                    </TableRow>
-                                </CollapsibleContent>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            </CollapsibleContent>
                             </>
                         </Collapsible>
                     ))}
