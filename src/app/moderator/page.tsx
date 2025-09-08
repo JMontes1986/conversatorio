@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot, collection, addDoc, query, orderBy, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, addDoc, query, orderBy, deleteDoc, where } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from "@/components/auth/admin-auth";
 import {
@@ -24,35 +24,43 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const DEBATE_STATE_DOC_ID = "current";
 
 interface Question {
     id: string;
     text: string;
+    round: string;
 }
+
+const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Final"];
 
 function ModeratorDashboard() {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
     const [currentQuestion, setCurrentQuestion] = useState("Esperando pregunta del moderador...");
+    const [currentDebateRound, setCurrentDebateRound] = useState("Ronda 1");
     
     // State for new question management
     const [newQuestionInput, setNewQuestionInput] = useState("");
+    const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
 
 
     useEffect(() => {
-        // Listener for the main debate state (timer and current question)
+        // Listener for the main debate state
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
         const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if(data.question) setCurrentQuestion(data.question);
                 if(data.timer) setMainTimer(prev => ({...prev, duration: data.timer.duration}));
+                if(data.currentRound) setCurrentDebateRound(data.currentRound);
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
@@ -61,7 +69,7 @@ function ModeratorDashboard() {
         // Listener for the list of prepared questions
         const questionsQuery = query(collection(db, "questions"), orderBy("createdAt", "asc"));
         const unsubscribeQuestions = onSnapshot(questionsQuery, (querySnapshot) => {
-            const questionsData = querySnapshot.docs.map(doc => ({ id: doc.id, text: doc.data().text } as Question));
+            const questionsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
             setPreparedQuestions(questionsData);
             setLoadingQuestions(false);
         }, (error) => {
@@ -116,14 +124,20 @@ function ModeratorDashboard() {
 
     const handleAddQuestion = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newQuestionInput.trim()) return;
+        if (!newQuestionInput.trim() || !newQuestionRound) {
+             toast({ variant: "destructive", title: "Error", description: "Debe escribir una pregunta y seleccionar una ronda." });
+            return;
+        }
         setIsAddingQuestion(true);
         try {
             await addDoc(collection(db, "questions"), {
                 text: newQuestionInput,
+                round: newQuestionRound,
                 createdAt: new Date()
             });
             setNewQuestionInput("");
+            setNewQuestionRound("");
+             toast({ title: "Pregunta Añadida", description: "La pregunta está lista en la sección correspondiente." });
         } catch(error) {
              console.error("Error adding question:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo añadir la pregunta." });
@@ -194,6 +208,11 @@ function ModeratorDashboard() {
             </Popover>
         )
     };
+    
+    const questionsByRound = preparedQuestions.reduce((acc, q) => {
+        (acc[q.round] = acc[q.round] || []).push(q);
+        return acc;
+    }, {} as Record<string, Question[]>);
 
 
     return (
@@ -203,7 +222,7 @@ function ModeratorDashboard() {
                     Panel de Moderador
                 </h1>
                 <p className="text-muted-foreground mt-2">
-                    Gestione la ronda de debate actual en tiempo real.
+                    Gestione la ronda de debate actual en tiempo real. Ronda activa: <span className="font-bold text-foreground">{currentDebateRound}</span>
                 </p>
             </div>
 
@@ -261,7 +280,7 @@ function ModeratorDashboard() {
                         <CardHeader>
                             <CardTitle>Gestión de Preguntas</CardTitle>
                              <CardDescription>
-                                Prepare, envíe y gestione las preguntas del debate.
+                                Prepare, envíe y gestione las preguntas del debate por ronda.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -272,56 +291,84 @@ function ModeratorDashboard() {
                                 </p>
                             </div>
                            
-                            <form onSubmit={handleAddQuestion} className="space-y-2">
-                                <Label htmlFor="new-question-input">Añadir Pregunta a la Lista</Label>
-                                <Textarea 
-                                    id="new-question-input"
-                                    placeholder="Escriba una nueva pregunta para tenerla lista..."
-                                    value={newQuestionInput}
-                                    onChange={(e) => setNewQuestionInput(e.target.value)}
-                                    rows={3}
-                                    disabled={isAddingQuestion}
-                                />
-                                <Button type="submit" className="w-full" disabled={isAddingQuestion || !newQuestionInput.trim()}>
+                            <form onSubmit={handleAddQuestion} className="space-y-3 p-3 border rounded-lg">
+                                <h3 className="font-medium">Añadir Pregunta a la Lista</h3>
+                                <div className="space-y-2">
+                                    <Label htmlFor="new-question-input">Texto de la pregunta</Label>
+                                    <Textarea 
+                                        id="new-question-input"
+                                        placeholder="Escriba la pregunta..."
+                                        value={newQuestionInput}
+                                        onChange={(e) => setNewQuestionInput(e.target.value)}
+                                        rows={3}
+                                        disabled={isAddingQuestion}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                     <Label htmlFor="new-question-round">Asignar a Ronda</Label>
+                                     <Select onValueChange={setNewQuestionRound} value={newQuestionRound} disabled={isAddingQuestion}>
+                                        <SelectTrigger id="new-question-round">
+                                            <SelectValue placeholder="Seleccione una ronda" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {debateRounds.map(round => (
+                                                <SelectItem key={round} value={round}>{round}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button type="submit" className="w-full" disabled={isAddingQuestion || !newQuestionInput.trim() || !newQuestionRound}>
                                     {isAddingQuestion ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4"/>}
                                     Añadir a la lista
                                 </Button>
                             </form>
                            
                            <div className="space-y-2">
-                                <h3 className="font-medium text-sm text-muted-foreground">Preguntas Preparadas</h3>
-                                {loadingQuestions && <p>Cargando preguntas...</p>}
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                                    {preparedQuestions.length > 0 ? preparedQuestions.map(q => (
-                                        <div key={q.id} className="flex items-center gap-2 bg-background p-2 rounded-md border">
-                                            <p className="flex-grow text-sm">{q.text}</p>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleSendQuestion(q.text)}>
-                                                <Send className="h-4 w-4" />
-                                            </Button>
-                                             <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive hover:text-destructive">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                    <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        Esta acción no se puede deshacer. Se eliminará la pregunta de la lista de preparación.
-                                                    </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => handleDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        </div>
-                                    )) : (
-                                       !loadingQuestions && <p className="text-xs text-center text-muted-foreground py-4">No hay preguntas preparadas.</p>
-                                    )}
-                                </div>
+                                <h3 className="font-medium text-sm text-muted-foreground pt-2">Preguntas Preparadas</h3>
+                                {loadingQuestions && <p className="text-center text-sm">Cargando preguntas...</p>}
+                                <Accordion type="single" collapsible className="w-full" defaultValue={currentDebateRound}>
+                                    {debateRounds.map(round => (
+                                        (questionsByRound[round]?.length > 0) && (
+                                        <AccordionItem value={round} key={round}>
+                                            <AccordionTrigger>{round}</AccordionTrigger>
+                                            <AccordionContent>
+                                                 <div className="space-y-2">
+                                                    {questionsByRound[round].map(q => (
+                                                        <div key={q.id} className="flex items-center gap-2 bg-background p-2 rounded-md border">
+                                                            <p className="flex-grow text-sm">{q.text}</p>
+                                                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleSendQuestion(q.text)} title="Enviar Pregunta">
+                                                                <Send className="h-4 w-4" />
+                                                            </Button>
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive hover:text-destructive" title="Eliminar Pregunta">
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                    <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Esta acción no se puede deshacer. Se eliminará la pregunta de la lista de preparación.
+                                                                    </AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </div>
+                                                    ))}
+                                                 </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                        )
+                                    ))}
+                                </Accordion>
+                                {!loadingQuestions && Object.keys(questionsByRound).length === 0 && (
+                                     <p className="text-xs text-center text-muted-foreground py-4">No hay preguntas preparadas.</p>
+                                )}
                            </div>
                         </CardContent>
                     </Card>
@@ -338,3 +385,5 @@ export default function ModeratorPage() {
         </AdminAuth>
     );
 }
+
+    
