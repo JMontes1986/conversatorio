@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -12,12 +13,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import Link from 'next/link';
 import { Timer } from "@/components/timer";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CompetitionSettings } from '@/components/competition-settings';
+import { Trash2 } from 'lucide-react';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -56,9 +57,13 @@ interface ScoreData {
     teams: { name: string; total: number }[];
 }
 
+interface RoundData {
+    id: string;
+    name: string;
+}
+
 
 function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendVideo, onSendQuestion }: any) {
-    const { toast } = useToast();
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
@@ -109,8 +114,8 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                 <SelectValue placeholder="Seleccione una ronda" />
                             </SelectTrigger>
                             <SelectContent>
-                                {debateRounds.map((round: string) => (
-                                    <SelectItem key={round} value={round}>{round}</SelectItem>
+                                {debateRounds.map((round: RoundData) => (
+                                    <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -125,12 +130,12 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                     <h3 className="font-medium text-sm text-muted-foreground pt-2">Preguntas Preparadas</h3>
                     {loadingQuestions && <p className="text-center text-sm">Cargando preguntas...</p>}
                     <Accordion type="single" collapsible className="w-full" defaultValue={currentDebateRound}>
-                        {Object.keys(questionsByRound).length > 0 && debateRounds.map((round: string) => (
-                            (questionsByRound[round]?.length > 0) && (
-                            <AccordionItem value={round} key={round}>
-                                <AccordionTrigger>{round}</AccordionTrigger>
+                        {Object.keys(questionsByRound).length > 0 && debateRounds.map((round: RoundData) => (
+                            (questionsByRound[round.name]?.length > 0) && (
+                            <AccordionItem value={round.name} key={round.id}>
+                                <AccordionTrigger>{round.name}</AccordionTrigger>
                                 <AccordionContent className="space-y-4">
-                                    {questionsByRound[round].map((q: Question) => (
+                                    {questionsByRound[round.name].map((q: Question) => (
                                         <div key={q.id} className="space-y-3 bg-background p-3 rounded-md border">
                                             <p className="flex-grow text-sm font-medium">{q.text}</p>
                                             
@@ -210,14 +215,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [videoInputs, setVideoInputs] = useState<Record<string, string>>({});
     const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
     const [currentRound, setCurrentRound] = useState('');
-
-    const debateRounds = useMemo(() => {
-        const numTeams = registeredSchools.length;
-        if (numTeams === 0) return ["Cuartos de Final", "Semifinal", "Final"];
-        const groupRoundsCount = Math.ceil(numTeams / 2);
-        const groupRounds = Array.from({ length: groupRoundsCount }, (_, i) => `Ronda ${i + 1}`);
-        return [...groupRounds, "Cuartos de Final", "Semifinal", "Final"];
-    }, [registeredSchools]);
+    const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
 
     useEffect(() => {
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -247,10 +245,20 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             console.error("Error fetching questions:", error);
             setLoadingQuestions(false);
         });
+        
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            setDebateRounds(roundsData);
+        }, (error) => {
+            console.error("Error fetching rounds:", error);
+        });
+
 
         return () => {
             unsubscribeDebateState();
             unsubscribeQuestions();
+            unsubscribeRounds();
         };
     }, []);
     

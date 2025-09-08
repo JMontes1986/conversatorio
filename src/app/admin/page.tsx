@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -38,6 +38,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import Link from 'next/link';
 import { nanoid } from 'nanoid';
 import { DebateControlPanel } from '@/components/debate-control-panel';
+import { RoundManagement } from '@/components/round-management';
 
 
 interface SchoolData {
@@ -289,12 +290,13 @@ function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="schools" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 md:w-[800px]">
-          <TabsTrigger value="schools"><School className="h-4 w-4 mr-2" />Colegios</TabsTrigger>
-          <TabsTrigger value="judges"><User className="h-4 w-4 mr-2" />Jurados</TabsTrigger>
-          <TabsTrigger value="moderators"><KeyRound className="h-4 w-4 mr-2" />Moderadores</TabsTrigger>
-          <TabsTrigger value="debate-control"><Gavel className="h-4 w-4 mr-2" />Control del Debate</TabsTrigger>
-          <TabsTrigger value="results"><Trophy className="h-4 w-4 mr-2"/>Resultados</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-1 md:grid-cols-6">
+          <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
+          <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Rondas</TabsTrigger>
+          <TabsTrigger value="judges"><User className="mr-2 h-4 w-4" />Jurados</TabsTrigger>
+          <TabsTrigger value="moderators"><KeyRound className="mr-2 h-4 w-4" />Moderadores</TabsTrigger>
+          <TabsTrigger value="debate-control"><Gavel className="mr-2 h-4 w-4" />Control del Debate</TabsTrigger>
+          <TabsTrigger value="results"><Trophy className="mr-2 h-4 w-4"/>Resultados</TabsTrigger>
         </TabsList>
         <TabsContent value="schools">
           <Card>
@@ -366,6 +368,9 @@ function AdminDashboard() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="rounds">
+            <RoundManagement />
         </TabsContent>
         <TabsContent value="judges">
             <div className="grid md:grid-cols-3 gap-6">

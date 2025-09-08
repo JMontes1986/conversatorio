@@ -3,8 +3,11 @@
 
 import { ModeratorAuth } from "@/components/auth/moderator-auth";
 import { DebateControlPanel } from "@/components/debate-control-panel";
+import { RoundManagement } from "@/components/round-management";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { Gavel, Swords } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface SchoolData {
@@ -67,10 +70,21 @@ function ModeratorDashboard() {
                     Panel de Moderador
                 </h1>
                 <p className="text-muted-foreground mt-2">
-                    Gestione la ronda de debate actual.
+                    Gestione la estructura y el flujo de la competencia.
                 </p>
             </div>
-            <DebateControlPanel registeredSchools={schools} allScores={scores}/>
+            <Tabs defaultValue="debate-control" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Gestión de Rondas</TabsTrigger>
+                    <TabsTrigger value="debate-control"><Gavel className="mr-2 h-4 w-4" />Control del Debate</TabsTrigger>
+                </TabsList>
+                <TabsContent value="rounds">
+                    <RoundManagement />
+                </TabsContent>
+                <TabsContent value="debate-control">
+                    <DebateControlPanel registeredSchools={schools} allScores={scores}/>
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

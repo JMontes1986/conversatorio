@@ -13,7 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Loader2, Send, Plus, Trash2 } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { nanoid } from 'nanoid';
@@ -35,6 +35,10 @@ interface ScoreData {
     id: string;
     matchId: string;
     teams: { name: string; total: number }[];
+}
+interface RoundData {
+    id: string;
+    name: string;
 }
 
 
@@ -90,29 +94,22 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
     const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isAutoFilled, setIsAutoFilled] = useState(false);
-    
-    const debateRounds = useMemo(() => {
-        const numTeams = registeredSchools.length;
-        if (numTeams === 0) return [...advancedRounds];
+    const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
+    const [loadingRounds, setLoadingRounds] = useState(true);
 
-        // Let's create a more structured group stage. For example, 4 initial rounds.
-        const groupRoundsCount = Math.min(4, Math.ceil(numTeams / 2));
-        const groupRounds = Array.from({ length: groupRoundsCount }, (_, i) => `Ronda ${i + 1}`);
-        
-        let finalRounds = [];
-        // Only add elimination rounds if there are enough teams
-        if (numTeams >= 8) {
-            finalRounds.push("Cuartos de Final");
-        }
-        if (numTeams >= 4) {
-             finalRounds.push("Semifinal");
-        }
-        if (numTeams >= 2) {
-             finalRounds.push("Final");
-        }
-        
-        return [...groupRounds, ...finalRounds];
-    }, [registeredSchools]);
+    useEffect(() => {
+        setLoadingRounds(true);
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const unsubscribe = onSnapshot(roundsQuery, (snapshot) => {
+            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            setDebateRounds(roundsData);
+            setLoadingRounds(false);
+        }, (error) => {
+            console.error("Error fetching rounds:", error);
+            setLoadingRounds(false);
+        });
+        return () => unsubscribe();
+    }, []);
 
     const handleRoundChange = useCallback((round: string) => {
         setCurrentRound(round);
@@ -121,7 +118,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
             let winners: string[] = [];
             
             if (round === "Cuartos de Final") {
-                 const groupStageRounds = debateRounds.filter(r => r.startsWith("Ronda"));
+                 const groupStageRounds = debateRounds.filter(r => r.name.startsWith("Ronda")).map(r => r.name);
                  const allWinners = groupStageRounds.flatMap(r => getWinnersOfRound(allScores, r));
                  winners = [...new Set(allWinners)];
 
@@ -204,12 +201,12 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                 <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
                     <div className="space-y-2">
                         <Label htmlFor="current-round">Ronda de Debate Activa</Label>
-                        <Select onValueChange={handleRoundChange} value={currentRound} disabled={isSubmitting}>
+                        <Select onValueChange={handleRoundChange} value={currentRound} disabled={isSubmitting || loadingRounds}>
                             <SelectTrigger id="current-round">
-                                <SelectValue placeholder="Seleccione la ronda actual" />
+                                <SelectValue placeholder={loadingRounds ? "Cargando rondas..." : "Seleccione la ronda actual"} />
                             </SelectTrigger>
                             <SelectContent>
-                                {debateRounds.map(round => <SelectItem key={round} value={round}>{round}</SelectItem>)}
+                                {debateRounds.map(round => <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
