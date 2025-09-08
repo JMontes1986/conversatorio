@@ -416,8 +416,8 @@ function AdminDashboard() {
                                     </TableCell>
                                 </TableRow>
                                 <CollapsibleContent asChild>
-                                    <tr>
-                                        <td colSpan={6} className="p-0">
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="p-0">
                                             <div className="bg-secondary/50 p-4">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div>
@@ -438,8 +438,8 @@ function AdminDashboard() {
                                                     </div>
                                                 </div>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 </CollapsibleContent>
                             </>
                         </Collapsible>
