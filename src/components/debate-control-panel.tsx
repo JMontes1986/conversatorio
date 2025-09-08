@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -48,8 +49,14 @@ interface Team {
     id: number;
     name: string;
 }
+interface SchoolData {
+    id: string;
+    schoolName: string;
+    teamName: string;
+}
 
-function CompetitionSettings() {
+
+function CompetitionSettings({ registeredSchools }: { registeredSchools: SchoolData[] }) {
     const { toast } = useToast();
     const [currentRound, setCurrentRound] = useState('');
     const [teams, setTeams] = useState<Team[]>([{ id: 1, name: '' }, { id: 2, name: '' }]);
@@ -76,7 +83,7 @@ function CompetitionSettings() {
         const validTeams = teams.filter(t => t.name.trim() !== '');
 
         if (!currentRound || validTeams.length < 2) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y añada al menos dos equipos." });
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y al menos dos equipos." });
             return;
         }
         setIsSubmitting(true);
@@ -139,12 +146,19 @@ function CompetitionSettings() {
                         <Label>Equipos Participantes</Label>
                         {teams.map((team, index) => (
                             <div key={team.id} className="flex items-center gap-2">
-                                <Input 
-                                    value={team.name}
-                                    onChange={(e) => handleTeamNameChange(team.id, e.target.value)}
-                                    placeholder={`Nombre del Equipo ${index + 1}`}
-                                    disabled={isSubmitting}
-                                />
+                                <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={`Seleccione Equipo ${index + 1}`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {registeredSchools.map(school => (
+                                            <SelectItem key={school.id} value={school.teamName}>
+                                                {school.teamName} ({school.schoolName})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
                                 <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting}>
                                     <Trash2 className="h-4 w-4 text-destructive"/>
                                 </Button>
@@ -306,7 +320,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     );
 }
 
-export function DebateControlPanel() {
+export function DebateControlPanel({ registeredSchools = [] }: { registeredSchools?: SchoolData[] }) {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
@@ -535,7 +549,7 @@ export function DebateControlPanel() {
                     </CardContent>
                 </Card>
                 
-                <CompetitionSettings />
+                <CompetitionSettings registeredSchools={registeredSchools} />
 
                 <QuestionManagement 
                     preparedQuestions={preparedQuestions}
@@ -573,5 +587,3 @@ export function DebateControlPanel() {
         </div>
     );
 }
-
-    

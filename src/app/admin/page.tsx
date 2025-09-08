@@ -533,7 +533,7 @@ function AdminDashboard() {
             </div>
         </TabsContent>
         <TabsContent value="debate-control">
-          <DebateControlPanel />
+          <DebateControlPanel registeredSchools={schools} />
         </TabsContent>
          <TabsContent value="results">
           <Card>
@@ -606,5 +606,3 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
-
-    
