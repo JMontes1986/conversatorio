@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -256,6 +256,21 @@ function AdminDashboard() {
     }
   }
 
+  const handleToggleSchoolStatus = async (school: SchoolData) => {
+    const newStatus = school.status === 'Verificado' ? 'Pendiente' : 'Verificado';
+     try {
+        const schoolRef = doc(db, "schools", school.id);
+        await updateDoc(schoolRef, { status: newStatus });
+        toast({
+            title: "Estado del Colegio Actualizado",
+            description: `El estado de ${school.schoolName} es ahora ${newStatus}.`
+        });
+    } catch (error) {
+         console.error("Error toggling school status:", error);
+         toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar el estado del colegio." });
+    }
+  }
+
   const copyToken = (token: string, id: string) => {
     navigator.clipboard.writeText(token);
     setCopiedTokenId(id);
@@ -390,31 +405,36 @@ function AdminDashboard() {
                                                 </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => openEditDialog(school)}>
-                                                    <FilePen className="mr-2 h-4 w-4"/>Editar
-                                                </DropdownMenuItem>
-                                                <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                        <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleToggleSchoolStatus(school)}>
+                                                        <CheckCircle2 className="mr-2 h-4 w-4"/>
+                                                        {school.status === 'Verificado' ? 'Marcar como Pendiente' : 'Marcar como Verificado'}
                                                     </DropdownMenuItem>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                        Esta acción no se puede deshacer. Se eliminará el colegio y todos sus datos asociados permanentemente.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDeleteSchool(school.id)} className="bg-destructive hover:bg-destructive/90">
-                                                        Eliminar
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                                </AlertDialog>
+                                                    <DropdownMenuItem onClick={() => openEditDialog(school)}>
+                                                        <FilePen className="mr-2 h-4 w-4"/>Editar
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                                <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                            </DropdownMenuItem>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Se eliminará el colegio y todos sus datos asociados permanentemente.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDeleteSchool(school.id)} className="bg-destructive hover:bg-destructive/90">
+                                                                Eliminar
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
