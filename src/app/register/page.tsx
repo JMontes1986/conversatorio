@@ -15,7 +15,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { School } from "lucide-react";
+import { School, Loader2 } from "lucide-react";
+import { db } from "@/lib/firebase";
+import { collection, addDoc } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
+import React from "react";
 
 const formSchema = z.object({
   schoolName: z.string().min(3, "El nombre de la escuela debe tener al menos 3 caracteres."),
@@ -25,6 +30,10 @@ const formSchema = z.object({
 });
 
 export default function RegisterPage() {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -35,9 +44,30 @@ export default function RegisterPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    // Here you would handle form submission, e.g., API call
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, "schools"), {
+        ...values,
+        status: "Pendiente",
+        createdAt: new Date(),
+      });
+      toast({
+        title: "¡Registro Exitoso!",
+        description: "La escuela ha sido registrada y está pendiente de verificación.",
+      });
+      form.reset();
+      router.push("/");
+    } catch (error) {
+      console.error("Error adding document: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error en el registro",
+        description: "Hubo un problema al guardar los datos. Por favor, inténtelo de nuevo.",
+      });
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   return (
@@ -111,8 +141,9 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Enviar Registro
+              <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? "Enviando..." : "Enviar Registro"}
               </Button>
             </form>
           </Form>
