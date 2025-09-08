@@ -32,6 +32,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
+import { AdminAuth } from '@/components/auth/admin-auth';
 
 interface Participant {
     name: string;
@@ -50,7 +51,7 @@ interface JudgeData {
     cedula: string;
 }
 
-export default function AdminPage() {
+function AdminDashboard() {
   const { toast } = useToast();
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [judges, setJudges] = useState<JudgeData[]>([]);
@@ -303,4 +304,12 @@ export default function AdminPage() {
       </Tabs>
     </div>
   );
+}
+
+export default function AdminPage() {
+    return (
+        <AdminAuth>
+            <AdminDashboard />
+        </AdminAuth>
+    );
 }

@@ -13,10 +13,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
+import { AdminAuth } from "@/components/auth/admin-auth";
 
 const DEBATE_STATE_DOC_ID = "current";
 
-export default function ModeratorPage() {
+function ModeratorDashboard() {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
     const [currentQuestion, setCurrentQuestion] = useState("Esperando pregunta del moderador...");
@@ -50,7 +51,7 @@ export default function ModeratorPage() {
         });
 
         return () => unsubscribe();
-    }, [questionInput]);
+    }, [toast, questionInput]);
     
 
     const updateTimer = async (newDuration: number) => {
@@ -243,5 +244,13 @@ export default function ModeratorPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ModeratorPage() {
+    return (
+        <AdminAuth>
+            <ModeratorDashboard />
+        </AdminAuth>
     );
 }

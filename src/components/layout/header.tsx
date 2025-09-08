@@ -9,7 +9,8 @@ import {
   Users,
   Shield,
   Gavel,
-  MessageSquare
+  MessageSquare,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,17 +21,21 @@ import {
 } from "@/components/ui/sheet";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/auth-context";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/debate", label: "Debate", icon: MessageSquare },
   { href: "/register", label: "Registro", icon: Users },
-  { href: "/moderator", label: "Moderar", icon: Gavel },
-  { href: "/admin", label: "Admin", icon: Shield },
+  { href: "/moderator", label: "Moderar", icon: Gavel, private: true },
+  { href: "/admin", label: "Admin", icon: Shield, private: true },
 ];
 
 export function Header() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+
+  const filteredNavLinks = navLinks.filter(link => !link.private || (link.private && user));
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -43,7 +48,7 @@ export function Header() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-          {navLinks.map((link) => (
+          {filteredNavLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -55,6 +60,12 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+           {user && (
+            <Button variant="ghost" size="sm" onClick={logout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Salir
+            </Button>
+          )}
         </nav>
 
         <div className="md:hidden">
@@ -73,7 +84,7 @@ export function Header() {
                     Colgemelli
                   </span>
                 </Link>
-                {navLinks.map((link) => (
+                {filteredNavLinks.map((link) => (
                    <SheetClose asChild key={link.href}>
                     <Link
                       href={link.href}
@@ -87,6 +98,14 @@ export function Header() {
                     </Link>
                   </SheetClose>
                 ))}
+                {user && (
+                  <SheetClose asChild>
+                    <Button variant="ghost" onClick={logout} className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
+                       <LogOut className="h-5 w-5" />
+                       Salir
+                    </Button>
+                  </SheetClose>
+                )}
               </div>
             </SheetContent>
           </Sheet>
