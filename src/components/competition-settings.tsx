@@ -34,6 +34,7 @@ interface SchoolData {
 interface ScoreData {
     id: string;
     matchId: string;
+    judgeName: string; // Keep for context, though not directly used in this logic
     teams: { name: string; total: number }[];
 }
 interface RoundData {
@@ -43,38 +44,37 @@ interface RoundData {
 }
 
 function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
-    const roundScores = scores.filter(s => s.matchId === roundName);
+    const roundScores = scores.filter(score => score.matchId.startsWith(roundName));
+
+    // Group scores by match (assuming a match is defined by the teams playing)
+    const matches: Record<string, { teamTotals: Record<string, number> }> = {};
+
+    roundScores.forEach(score => {
+        const teamNames = score.teams.map(t => t.name).sort().join(' vs ');
+        if (!matches[teamNames]) {
+            matches[teamNames] = { teamTotals: {} };
+        }
+        score.teams.forEach(team => {
+            if (!matches[teamNames].teamTotals[team.name]) {
+                matches[teamNames].teamTotals[team.name] = 0;
+            }
+            matches[teamNames].teamTotals[team.name] += team.total;
+        });
+    });
     
-    const matches: Record<string, { name: string; total: number }[][]> = {};
-    roundScores.forEach(s => {
-        const key = s.teams.map(t => t.name).sort().join('-');
-        if (!matches[key]) matches[key] = [];
-        matches[key].push(s.teams);
+    // Determine the winner for each match
+    const winners: string[] = [];
+    Object.values(matches).forEach(match => {
+        const entries = Object.entries(match.teamTotals);
+        if (entries.length > 0) {
+            const winner = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+            winners.push(winner);
+        }
     });
 
-    const winners: string[] = [];
-    Object.values(matches).forEach(matchJudgements => {
-        const matchTotals: Record<string, number> = {};
-        matchJudgements.forEach(judgement => {
-            judgement.forEach(team => {
-                 if (!matchTotals[team.name]) matchTotals[team.name] = 0;
-                 matchTotals[team.name] += team.total;
-            });
-        });
-        
-        let winner = '';
-        let maxScore = -1;
-        for (const [teamName, total] of Object.entries(matchTotals)) {
-            if (total > maxScore) {
-                maxScore = total;
-                winner = teamName;
-            }
-        }
-        if (winner) winners.push(winner);
-    });
-    
     return winners;
 }
+
 
 function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
     const phaseRoundNames = phaseRounds.map(r => r.name);
@@ -145,9 +145,9 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
 
     }, [debateRounds]);
 
-    const handleRoundChange = useCallback((round: string) => {
-        setCurrentRound(round);
-        const selectedRoundData = debateRounds.find(r => r.name === round);
+    const handleRoundChange = useCallback((roundName: string) => {
+        setCurrentRound(roundName);
+        const selectedRoundData = debateRounds.find(r => r.name === roundName);
         
         if (selectedRoundData && advancedRounds.includes(selectedRoundData.phase)) {
             setIsAutoFilled(true);
@@ -163,17 +163,17 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                 };
                 const previousRoundPhase = roundDependencies[selectedRoundData.phase];
                 if (previousRoundPhase) {
-                    const previousRounds = debateRounds.filter(r => r.phase === previousRoundPhase).map(r => r.name);
-                    qualifiedTeams = previousRounds.flatMap(r => getWinnersOfRound(allScores, r));
+                    const previousRounds = debateRounds.filter(r => r.phase === previousRoundPhase);
+                    qualifiedTeams = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
                 }
             }
             
-            if (qualifiedTeams.length > 0) {
+            if (qualifiedTeams.length >= 2) {
                  setTeams(qualifiedTeams.map((name) => ({ id: nanoid(), name })));
-                 toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos clasificados han sido seleccionados para ${round}.`});
+                 toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos clasificados han sido seleccionados para ${roundName}.`});
             } else {
                  setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
-                 toast({ variant: "destructive", title: "No se encontraron equipos", description: `No se pudieron determinar los equipos clasificados para esta fase.`});
+                 toast({ variant: "destructive", title: "No se encontraron equipos", description: `No se pudieron determinar suficientes equipos clasificados para esta fase.`});
             }
 
         } else {
@@ -187,7 +187,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         const validTeams = teams.filter(t => t.name.trim() !== '');
 
         if (!currentRound || validTeams.length < 2) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y al menos dos equipos." });
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y asegúrese de que haya al menos dos equipos." });
             return;
         }
         setIsSubmitting(true);
@@ -195,7 +195,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 currentRound,
-                teams: validTeams
+                teams: validTeams.map(t => ({ name: t.name })) // Store only name
             }, { merge: true });
             toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound}.` });
         } catch (error) {
@@ -258,7 +258,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                             <div key={team.id} className="flex items-center gap-2">
                                 <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting || isAutoFilled}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder={`Seleccione Equipo ${index + 1}`} />
+                                        <SelectValue placeholder={`Equipo ${index + 1}`} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {registeredSchools.map(school => (
@@ -277,7 +277,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                         <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting || isAutoFilled}>
                             <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
                         </Button>
-                        {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda.</p>}
+                        {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda. Puede reordenarlos si es necesario.</p>}
                     </div>
                     <Button type="submit" disabled={isSubmitting || !currentRound}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -288,3 +288,5 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         </Card>
     );
 }
+
+    
