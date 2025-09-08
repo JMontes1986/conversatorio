@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, doc } from "firebase/firestore";
 
 // TYPES
 type Participant = {
@@ -26,11 +26,6 @@ type Round = {
   matches: Match[];
 };
 
-type SchoolData = {
-  id: string;
-  teamName: string;
-}
-
 type RoundData = {
   id: string;
   name: string;
@@ -42,6 +37,19 @@ type ScoreData = {
   teams: { name: string; total: number }[];
 }
 
+type DrawStateTeam = {
+    id: string;
+    name: string;
+    round: string | null;
+}
+
+type DrawState = {
+    teams: DrawStateTeam[];
+    rounds: RoundData[];
+    activeTab: 'groups' | 'quarters';
+}
+
+
 // UI COMPONENTS
 const ParticipantCard = ({ participant }: { participant: Participant }) => {
     if (!participant.name) {
@@ -51,7 +59,7 @@ const ParticipantCard = ({ participant }: { participant: Participant }) => {
                    <p className="text-xs text-muted-foreground">?</p>
                 </div>
                 <div className="w-full py-1.5 rounded-md text-sm bg-secondary text-secondary-foreground">
-                    <p className="truncate px-1">???</p>
+                    <p className="truncate px-1">Por definir</p>
                 </div>
             </div>
         );
@@ -77,25 +85,6 @@ const ParticipantCard = ({ participant }: { participant: Participant }) => {
 
 
 // CORE LOGIC
-const getTopScoringTeamsFromPhase = (scores: ScoreData[], phaseRounds: RoundData[], limit: number): {name: string, score: number}[] => {
-    const phaseRoundNames = phaseRounds.map(r => r.name);
-    const phaseScores = scores.filter(s => phaseRoundNames.includes(s.matchId));
-
-    const teamTotals: Record<string, number> = {};
-
-    phaseScores.forEach(score => {
-        score.teams.forEach(team => {
-            if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-            teamTotals[team.name] += team.total;
-        });
-    });
-
-    return Object.entries(teamTotals)
-        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
-        .slice(0, limit)
-        .map(([name, score]) => ({ name, score }));
-}
-
 const getWinnerOfMatch = (scores: ScoreData[], matchId: string): string | null => {
     const matchScores = scores.filter(s => s.matchId === matchId);
     if (matchScores.length === 0) return null;
@@ -110,6 +99,7 @@ const getWinnerOfMatch = (scores: ScoreData[], matchId: string): string | null =
 
     const entries = Object.entries(teamTotals);
     if (entries.length === 0) return null;
+    if (entries.length === 1) return entries[0][0];
 
     return entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
 }
@@ -122,7 +112,7 @@ export function TournamentBracket() {
   useEffect(() => {
     const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
-    const schoolsQuery = query(collection(db, "schools"));
+    const drawStateRef = doc(db, "drawState", "liveDraw");
 
     const unsubRounds = onSnapshot(roundsQuery, roundsSnap => {
         const allRounds = roundsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
@@ -130,37 +120,35 @@ export function TournamentBracket() {
         const unsubScores = onSnapshot(scoresQuery, scoresSnap => {
             const allScores = scoresSnap.docs.map(doc => doc.data() as ScoreData);
 
-            const unsubSchools = onSnapshot(schoolsQuery, schoolsSnap => {
-                const allSchools = schoolsSnap.docs.map(doc => doc.data() as SchoolData);
+            const unsubDraw = onSnapshot(drawStateRef, drawSnap => {
+                const drawState = drawSnap.exists() ? drawSnap.data() as DrawState : null;
                 
                 // --- Build Bracket Logic ---
                 const newBracketData: Round[] = [];
                 const phases = ["Cuartos de Final", "Semifinal", "Final", "Ganador"];
                 let previousPhaseWinners: Participant[] = [];
 
-                phases.forEach((phaseName, index) => {
-                    const phaseRounds = allRounds.filter(r => r.phase === phaseName);
-                    if (phaseRounds.length === 0 && phaseName !== "Ganador") return;
+                phases.forEach((phaseName) => {
+                    const phaseRoundsData = allRounds.filter(r => r.phase === phaseName);
+                    if (phaseRoundsData.length === 0 && phaseName !== "Ganador") return;
 
                     const round: Round = { title: phaseName, matches: [] };
                     
                     if (phaseName === "Cuartos de Final") {
-                         const groupStageRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-                         const qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
+                         const quarterFinalsDrawTeams = drawState?.activeTab === 'quarters' ? drawState.teams : [];
                          
-                         // Create pairs for matches
-                         for(let i = 0; i < phaseRounds.length; i++) {
-                            const matchTeams = qualifiedTeams.slice(i * 2, i * 2 + 2);
-                             const participants: Participant[] = matchTeams.map((team, idx) => ({
+                         for(let i = 0; i < phaseRoundsData.length; i++) {
+                             const roundName = phaseRoundsData[i].name;
+                             const matchTeams = quarterFinalsDrawTeams.filter(t => t.round === roundName);
+                             
+                             const participants: Participant[] = matchTeams.map(team => ({
                                  name: team.name,
-                                 avatar: `https://picsum.photos/seed/${team.name}/200`,
-                                 score: team.score,
+                                 avatar: `https://picsum.photos/seed/${encodeURIComponent(team.name)}/200`
                              }));
 
-                            // Ensure there are always 2 participants for rendering
                             while(participants.length < 2) participants.push({name: '', avatar: ''});
                             
-                            const winnerName = getWinnerOfMatch(allScores, phaseRounds[i].name);
+                            const winnerName = getWinnerOfMatch(allScores, roundName);
                             if(winnerName) {
                                 participants.forEach(p => { if (p.name === winnerName) p.winner = true; });
                             }
@@ -168,10 +156,12 @@ export function TournamentBracket() {
                              round.matches.push({ id: i, participants });
                          }
                          previousPhaseWinners = round.matches.flatMap(m => m.participants.filter(p => p.winner));
+
                     } else if (phaseName !== "Ganador") {
-                        // For Semis and Finals
-                         for (let i = 0; i < phaseRounds.length; i++) {
+                         for (let i = 0; i < phaseRoundsData.length; i++) {
+                             const roundName = phaseRoundsData[i].name;
                              const matchTeams = previousPhaseWinners.slice(i * 2, i * 2 + 2);
+                             
                              const participants: Participant[] = matchTeams.map(team => ({
                                  name: team.name,
                                  avatar: team.avatar
@@ -179,7 +169,7 @@ export function TournamentBracket() {
 
                              while(participants.length < 2) participants.push({name: '', avatar: ''});
 
-                             const winnerName = getWinnerOfMatch(allScores, phaseRounds[i].name);
+                             const winnerName = getWinnerOfMatch(allScores, roundName);
                              if(winnerName) {
                                  participants.forEach(p => { if (p.name === winnerName) p.winner = true; });
                              }
@@ -200,11 +190,11 @@ export function TournamentBracket() {
                 setBracketData(newBracketData);
                 setLoading(false);
 
-            }); // unsubSchools
-            return () => unsubSchools();
-        }); // unsubScores
+            }); 
+            return () => unsubDraw();
+        });
         return () => unsubScores();
-    }); // unsubRounds
+    }); 
     return () => unsubRounds();
 
   }, []);
@@ -277,5 +267,3 @@ export function TournamentBracket() {
     </div>
   );
 }
-
-    
