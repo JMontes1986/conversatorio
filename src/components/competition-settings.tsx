@@ -15,7 +15,7 @@ import { Loader2, Send, Plus, Trash2 } from "lucide-react";
 import { db } from '@/lib/firebase';
 import { doc, setDoc, collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from "@/components/ui/select";
 import { nanoid } from 'nanoid';
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -39,6 +39,7 @@ interface ScoreData {
 interface RoundData {
     id: string;
     name: string;
+    phase: string;
 }
 
 
@@ -99,7 +100,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
 
     useEffect(() => {
         setLoadingRounds(true);
-        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const roundsQuery = query(collection(db, "rounds"), orderBy("phase"), orderBy("createdAt", "asc"));
         const unsubscribe = onSnapshot(roundsQuery, (snapshot) => {
             const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
             setDebateRounds(roundsData);
@@ -110,6 +111,17 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         });
         return () => unsubscribe();
     }, []);
+    
+    const roundsByPhase = useMemo(() => {
+        return debateRounds.reduce((acc, round) => {
+            const phase = round.phase || 'General';
+            if (!acc[phase]) {
+                acc[phase] = [];
+            }
+            acc[phase].push(round);
+            return acc;
+        }, {} as Record<string, RoundData[]>);
+    }, [debateRounds]);
 
     const handleRoundChange = useCallback((round: string) => {
         setCurrentRound(round);
@@ -206,7 +218,14 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                                 <SelectValue placeholder={loadingRounds ? "Cargando rondas..." : "Seleccione la ronda actual"} />
                             </SelectTrigger>
                             <SelectContent>
-                                {debateRounds.map(round => <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>)}
+                                {Object.entries(roundsByPhase).map(([phase, rounds]) => (
+                                    <SelectGroup key={phase}>
+                                        <Label className="px-2 py-1.5 text-xs font-semibold">{phase}</Label>
+                                        {rounds.map(round => (
+                                            <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -246,3 +265,4 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         </Card>
     );
 }
+

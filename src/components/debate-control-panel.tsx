@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from "@/components/ui/select";
 import { CompetitionSettings } from '@/components/competition-settings';
 import { Trash2 } from 'lucide-react';
 
@@ -60,6 +60,7 @@ interface ScoreData {
 interface RoundData {
     id: string;
     name: string;
+    phase: string;
 }
 
 
@@ -67,6 +68,15 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
+    
+    const roundsByPhase = useMemo(() => {
+        return debateRounds.reduce((acc: any, round: RoundData) => {
+            const phase = round.phase || 'General';
+            if (!acc[phase]) acc[phase] = [];
+            acc[phase].push(round);
+            return acc;
+        }, {} as Record<string, RoundData[]>);
+    }, [debateRounds]);
 
     const handleAddQuestionSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -114,8 +124,13 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                 <SelectValue placeholder="Seleccione una ronda" />
                             </SelectTrigger>
                             <SelectContent>
-                                {debateRounds.map((round: RoundData) => (
-                                    <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>
+                                {Object.entries(roundsByPhase).map(([phase, rounds]: [string, RoundData[]]) => (
+                                    <SelectGroup key={phase}>
+                                        <Label className="px-2 py-1.5 text-xs font-semibold">{phase}</Label>
+                                        {rounds.map((round: RoundData) => (
+                                            <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>
+                                        ))}
+                                    </SelectGroup>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -246,7 +261,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             setLoadingQuestions(false);
         });
         
-        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const roundsQuery = query(collection(db, "rounds"), orderBy("phase"), orderBy("createdAt", "asc"));
         const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
             const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
             setDebateRounds(roundsData);
@@ -485,3 +500,4 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
 }
 
     
+
