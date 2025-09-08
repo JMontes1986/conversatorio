@@ -3,12 +3,12 @@
 
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { Loader2, Swords, Trophy } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { Loader2, Trophy } from "lucide-react";
+import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy, doc } from "firebase/firestore";
 
-// TYPES
+// --- TYPES ---
 type Participant = {
   name: string;
   avatar: string;
@@ -17,7 +17,7 @@ type Participant = {
 };
 
 type Match = {
-  id: string; // Use round name as ID
+  id: string;
   participants: Participant[];
 };
 
@@ -40,58 +40,25 @@ type ScoreData = {
 type DrawState = {
     teams: { id: string, name: string, round: string | null }[];
     rounds: RoundData[];
+    activeTab?: string;
 }
 
-// CORE LOGIC
-const getMatchResult = (scores: ScoreData[], matchId: string): { winner: Participant | null, participants: Participant[] } => {
-    const matchScores = scores.filter(s => s.matchId === matchId);
-    if (matchScores.length === 0) return { winner: null, participants: [] };
 
-    const teamTotals: Record<string, number> = {};
-    matchScores.forEach(score => {
-        score.teams.forEach(team => {
-            if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-            teamTotals[team.name] += team.total;
-        });
-    });
-    
-    const entries = Object.entries(teamTotals);
-    if (entries.length === 0) return { winner: null, participants: [] };
-
-    const winnerEntry = entries.reduce((a, b) => a[1] > b[1] ? a : b);
-    const winnerName = winnerEntry[0];
-    
-    const participants = entries.map(([name, total]) => ({
-        name: name,
-        avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`,
-        score: total,
-        winner: name === winnerName
-    }));
-
-    const winner = participants.find(p => p.winner);
-
-    // Mark loser
-    participants.forEach(p => {
-      if (p.name !== winnerName) p.winner = false;
-    });
-
-    return { winner: winner || null, participants };
-};
-
-
-// UI COMPONENTS
+// --- UI COMPONENTS ---
 const ParticipantCard = ({ participant, showScore }: { participant: Participant, showScore: boolean }) => {
     if (!participant.name) {
         return (
-            <div className="flex items-center gap-2 w-40 text-sm h-10 px-2 bg-secondary rounded-md">
-                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs">?</div>
-                <p className="truncate text-muted-foreground">Por definir</p>
+            <div className="flex items-center gap-2 w-40 text-sm h-10 px-2 bg-secondary rounded-md text-muted-foreground">
+                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs shrink-0">?</div>
+                <p className="truncate">Por definir</p>
             </div>
         );
     }
 
     return (
-        <div className={cn("flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md", participant.winner ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-secondary-foreground", participant.winner === false && "opacity-50")}>
+        <div className={cn("flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md", 
+            participant.winner ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-secondary-foreground", 
+            participant.winner === false && "opacity-50")}>
             <div className="relative h-6 w-6 rounded-full overflow-hidden bg-muted shrink-0">
                 <Image
                     src={participant.avatar}
@@ -109,133 +76,149 @@ const ParticipantCard = ({ participant, showScore }: { participant: Participant,
     );
 };
 
-const MatchConnector = ({ numMatches }: { numMatches: number }) => {
-    return (
-        <div className="flex-1 flex flex-col items-center justify-around">
+const MatchCard = ({ match, showScore }: { match: Match, showScore: boolean }) => (
+    <div className="flex flex-col gap-2">
+        {match.participants.map((p, pIndex) => (
+            <ParticipantCard key={p.name || `p-${pIndex}`} participant={p} showScore={showScore} />
+        ))}
+         {match.participants.length < 2 && (
+            <ParticipantCard participant={{ name: '', avatar: '' }} showScore={false} />
+        )}
+    </div>
+);
+
+const RoundColumn = ({ round }: { round: BracketRound }) => (
+    <div className="flex flex-col justify-around flex-shrink-0 w-48">
+        <h3 className="text-center font-headline text-lg font-bold mb-8 text-primary uppercase h-10 flex items-center justify-center">{round.title}</h3>
+        <div className="flex flex-col justify-around gap-y-12 h-full">
+            {round.matches.map((match, index) => (
+                <MatchCard key={match.id || `m-${index}`} match={match} showScore={round.title !== 'Ganador'} />
+            ))}
+        </div>
+    </div>
+);
+
+const ConnectorColumn = ({ numMatches }: { numMatches: number }) => (
+    <div className="flex flex-col justify-around w-12 flex-shrink-0">
+         <div className="h-10 mb-8"></div>
+         <div className="flex flex-col justify-around h-full">
             {Array.from({ length: numMatches / 2 }).map((_, i) => (
-                <div key={i} className="w-full flex-1 flex items-center justify-center">
-                    <div className="w-full h-full relative">
-                        <div className="absolute top-1/4 left-0 h-1/2 w-1/2 border-r border-b border-gray-300 rounded-br-lg"></div>
-                        <div className="absolute bottom-1/4 left-0 h-1/2 w-1/2 border-r border-t border-gray-300 rounded-tr-lg"></div>
-                        <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-gray-300"></div>
-                    </div>
+                <div key={i} className="relative h-[116px] flex-grow">
+                    <div className="absolute top-1/4 left-0 w-1/2 h-px bg-border"></div>
+                    <div className="absolute bottom-1/4 left-0 w-1/2 h-px bg-border"></div>
+                    <div className="absolute top-1/4 left-1/2 w-px h-1/2 bg-border"></div>
+                    <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-border"></div>
                 </div>
             ))}
         </div>
-    );
-};
+    </div>
+);
+
 
 export function TournamentBracket() {
   const [bracketData, setBracketData] = useState<BracketRound[]>([]);
   const [loading, setLoading] = useState(true);
+  const [champion, setChampion] = useState<Participant | null>(null);
 
   useEffect(() => {
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
-    const drawStateQuery = query(collection(db, "drawState"));
+    const drawStateRef = doc(db, "drawState", "liveDraw");
 
-    const unsubDraw = onSnapshot(drawStateQuery, drawSnap => {
-        const drawData = !drawSnap.empty ? drawSnap.docs.find(d => d.id === 'liveDraw')?.data() as DrawState : null;
+    const unsubScores = onSnapshot(scoresQuery, scoresSnap => {
+        const allScores = scoresSnap.docs.map(doc => doc.data() as ScoreData);
 
-        const unsubScores = onSnapshot(scoresQuery, scoresSnap => {
-            const allScores = scoresSnap.docs.map(doc => doc.data() as ScoreData);
+        const getMatchResult = (matchId: string): { winner: Participant | null, participants: Participant[] } => {
+            const matchScores = allScores.filter(s => s.matchId === matchId);
+            if (matchScores.length === 0) return { winner: null, participants: [] };
 
-            const newBracketData: BracketRound[] = [];
+            const teamTotals: Record<string, number> = {};
+            matchScores.forEach(score => {
+                score.teams.forEach(team => {
+                    if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                    teamTotals[team.name] += team.total;
+                });
+            });
             
-            // --- Build Bracket Logic ---
-            if (drawData && drawData.rounds.length > 0) {
+            const entries = Object.entries(teamTotals);
+            if (entries.length === 0) return { winner: null, participants: [] };
 
-                // PHASE 1: Group Stage
-                const groupStageMatches: Match[] = [];
-                const groupRounds = drawData.rounds;
+            const winnerEntry = entries.reduce((a, b) => a[1] > b[1] ? a : b);
+            const winnerName = winnerEntry[0];
+            
+            const participants = entries.map(([name, total]) => ({
+                name: name,
+                avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`,
+                score: total,
+                winner: name === winnerName
+            }));
 
-                groupRounds.forEach(round => {
-                    const participantsInDraw = drawData.teams
-                        .filter(t => t.round === round.name)
-                        .map(t => ({ 
-                            name: t.name, 
-                            avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`
-                        }));
+            const winner = participants.find(p => p.winner);
 
-                    const { winner, participants: scoredParticipants } = getMatchResult(allScores, round.name);
+            participants.forEach(p => { if (p.name !== winnerName) p.winner = false; });
 
-                    if (scoredParticipants.length > 0) {
-                         groupStageMatches.push({ id: round.name, participants: scoredParticipants });
+            return { winner: winner || null, participants };
+        };
+
+        const unsubDraw = onSnapshot(drawStateRef, drawSnap => {
+            const drawData = drawSnap.exists() ? drawSnap.data() as DrawState : null;
+            
+            const finalBracketData: BracketRound[] = [];
+
+            // --- Fase de Grupos / Octavos ---
+            const groupStage: BracketRound = { title: "Fase de Grupos", matches: [] };
+            const groupRounds = drawData?.rounds?.filter(r => r.phase === "Fase de Grupos") || [];
+            
+            groupRounds.forEach(round => {
+                const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
+                const { participants } = getMatchResult(round.name);
+
+                if (participants.length > 0) {
+                    groupStage.matches.push({ id: round.name, participants });
+                } else {
+                    groupStage.matches.push({
+                        id: round.name,
+                        participants: teamsInDraw.map(t => ({ name: t.name, avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200` }))
+                    });
+                }
+            });
+            if (groupStage.matches.length > 0) finalBracketData.push(groupStage);
+
+            let lastRoundWinners = groupStage.matches.map(m => getMatchResult(m.id).winner).filter(Boolean) as Participant[];
+            
+            // --- Fases de Eliminación ---
+            const phaseTitles = ["Cuartos de Final", "Semifinal", "Final"];
+            
+            for (const title of phaseTitles) {
+                if (lastRoundWinners.length === 0) break;
+
+                const currentRound: BracketRound = { title, matches: [] };
+                
+                for (let i = 0; i < lastRoundWinners.length; i += 2) {
+                    const matchParticipants = lastRoundWinners.slice(i, i + 2);
+                    const matchId = `${title.replace(/ /g, '-').toLowerCase()}-${(i/2)+1}`;
+                    const { participants: resultParticipants, winner } = getMatchResult(matchId);
+                    
+                    if (resultParticipants.length > 0) {
+                         currentRound.matches.push({ id: matchId, participants: resultParticipants });
                     } else {
-                         groupStageMatches.push({ id: round.name, participants: participantsInDraw });
+                         currentRound.matches.push({ id: matchId, participants: matchParticipants });
                     }
-                });
-                
-                if (groupStageMatches.length > 0) {
-                  newBracketData.push({ title: "Fase de Grupos", matches: groupStageMatches });
                 }
-                
-                // PHASE 2: Quarter Finals
-                const qfWinners = groupStageMatches
-                    .map(m => getMatchResult(allScores, m.id).winner)
-                    .filter(Boolean) as Participant[];
-                
-                if (qfWinners.length > 0) {
-                    const quarterFinals: BracketRound = { title: "Cuartos de Final", matches: [] };
-                    for (let i = 0; i < Math.ceil(qfWinners.length / 2); i++) {
-                        const matchParticipants = qfWinners.slice(i * 2, i * 2 + 2);
-                        if (matchParticipants.length > 0) {
-                            const matchRoundName = `Cuartos de Final ${i + 1}`;
-                            const { winner, participants: scoredParticipants } = getMatchResult(allScores, matchRoundName);
-                            if (scoredParticipants.length > 0) {
-                                quarterFinals.matches.push({ id: matchRoundName, participants: scoredParticipants });
-                            } else {
-                                quarterFinals.matches.push({ id: matchRoundName, participants: matchParticipants });
-                            }
-                        }
-                    }
-                     if(quarterFinals.matches.length > 0) newBracketData.push(quarterFinals);
-                }
-                
-                // PHASE 3 & 4: Semifinals & Final
-                let previousRoundWinners = qfWinners;
-                const roundTitles = ["Semifinal", "Final"];
-                
-                roundTitles.forEach(title => {
-                    const currentRoundWinners = newBracketData.find(r => r.title === title)?.matches
-                        .map(m => getMatchResult(allScores, m.id).winner)
-                        .filter(Boolean) as Participant[];
-                        
-                    if (currentRoundWinners && currentRoundWinners.length > 0) {
-                        previousRoundWinners = currentRoundWinners;
-                    } else if (previousRoundWinners.length > 0) {
-                         const currentRound: BracketRound = { title, matches: [] };
-                         for (let i = 0; i < Math.ceil(previousRoundWinners.length / 2); i++) {
-                            const matchParticipants = previousRoundWinners.slice(i * 2, i * 2 + 2);
-                            if(matchParticipants.length > 0) {
-                                const matchRoundName = `${title} ${i + 1}`.replace(' 1','');
-                                const { winner, participants: scoredParticipants } = getMatchResult(allScores, matchRoundName);
-                                if (scoredParticipants.length > 0) {
-                                    currentRound.matches.push({ id: matchRoundName, participants: scoredParticipants });
-                                } else {
-                                    currentRound.matches.push({ id: matchRoundName, participants: matchParticipants });
-                                }
-                            }
-                        }
-                        if (currentRound.matches.length > 0) {
-                            newBracketData.push(currentRound);
-                            previousRoundWinners = currentRound.matches.map(m => getMatchResult(allScores, m.id).winner).filter(Boolean) as Participant[];
-                        }
-                    }
-                });
-                
-                // PHASE 5: Winner
-                const finalWinner = getMatchResult(allScores, "Final").winner;
-                if(finalWinner) {
-                    newBracketData.push({ title: "Ganador", matches: [{id: "Ganador", participants: [finalWinner]}]});
-                }
+                finalBracketData.push(currentRound);
+                lastRoundWinners = currentRound.matches.map(m => getMatchResult(m.id).winner).filter(Boolean) as Participant[];
             }
+            
+            const finalWinner = getMatchResult("Final-1").winner;
+            setChampion(finalWinner || null);
 
-            setBracketData(newBracketData);
+            setBracketData(finalBracketData);
             setLoading(false);
         });
-        return () => unsubScores();
+
+        return () => unsubDraw();
     });
-    return () => unsubDraw();
+
+    return () => unsubScores();
   }, []);
 
 
@@ -259,32 +242,6 @@ export function TournamentBracket() {
       )
   }
 
-  const getRoundColumn = (round: BracketRound) => {
-    let justify = 'justify-around';
-    // Dynamically adjust justification based on the number of matches
-    if(round.matches.length > 4) justify = 'justify-between';
-
-    return (
-      <div key={round.title} className="flex flex-col flex-1">
-        <h3 className="text-center font-headline text-lg font-bold mb-8 text-primary uppercase h-10 flex items-center justify-center">{round.title}</h3>
-        <div className={cn("flex flex-col flex-grow gap-y-6", justify)}>
-          {round.matches.map(match => (
-            <div key={match.id} className="flex flex-col items-center justify-center gap-2">
-              {match.participants.map((p, pIndex) => (
-                <ParticipantCard key={p.name || pIndex} participant={p} showScore={true} />
-              ))}
-              {match.participants.length < 2 && round.title !== 'Ganador' && (
-                <ParticipantCard participant={{name: '', avatar: ''}} showScore={false} />
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const grandWinner = bracketData.find(r => r.title === 'Ganador')?.matches[0]?.participants[0];
-
   return (
     <div className="bg-card p-4 md:p-8 rounded-lg w-full">
         <div className="text-center mb-12">
@@ -292,28 +249,22 @@ export function TournamentBracket() {
             <p className="text-lg text-muted-foreground">Debate Intercolegial</p>
         </div>
         
-        {grandWinner && (
+        {champion && (
           <div className="flex flex-col items-center mb-12 animate-in fade-in-50 duration-500">
             <Trophy className="h-16 w-16 text-amber-400"/>
             <h3 className="font-headline text-2xl font-bold mt-2">GANADOR</h3>
-            <p className="text-xl font-semibold text-primary">{grandWinner.name}</p>
+            <p className="text-xl font-semibold text-primary">{champion.name}</p>
           </div>
         )}
 
-      <div className="flex justify-center items-stretch min-w-[1200px] overflow-x-auto pb-4">
-        {bracketData.map((round, roundIndex) => {
-          if (round.title === 'Ganador') return null;
-          const nextRound = bracketData[roundIndex + 1];
-          return (
-            <div key={round.title} className="flex">
-              {getRoundColumn(round)}
-              {nextRound && nextRound.matches.length > 0 && <MatchConnector numMatches={round.matches.length} />}
+      <div className="flex items-start min-w-max">
+        {bracketData.map((round, roundIndex) => (
+            <div key={round.title} className="flex items-start">
+               <RoundColumn round={round} />
+               {roundIndex < bracketData.length -1 && <ConnectorColumn numMatches={round.matches.length} />}
             </div>
-          )
-        })}
+        ))}
       </div>
     </div>
   );
 }
-
-    
