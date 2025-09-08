@@ -1,4 +1,4 @@
-
+"use client";
 
 import { ModeratorAuth } from "@/components/auth/moderator-auth";
 import { DebateControlPanel } from "@/components/debate-control-panel";
