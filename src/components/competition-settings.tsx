@@ -95,11 +95,23 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         const numTeams = registeredSchools.length;
         if (numTeams === 0) return [...advancedRounds];
 
-        // Assuming 2 teams per match in group stage
-        const groupRoundsCount = Math.ceil(numTeams / 2);
+        // Let's create a more structured group stage. For example, 4 initial rounds.
+        const groupRoundsCount = Math.min(4, Math.ceil(numTeams / 2));
         const groupRounds = Array.from({ length: groupRoundsCount }, (_, i) => `Ronda ${i + 1}`);
-
-        return [...groupRounds, ...advancedRounds];
+        
+        let finalRounds = [];
+        // Only add elimination rounds if there are enough teams
+        if (numTeams >= 8) {
+            finalRounds.push("Cuartos de Final");
+        }
+        if (numTeams >= 4) {
+             finalRounds.push("Semifinal");
+        }
+        if (numTeams >= 2) {
+             finalRounds.push("Final");
+        }
+        
+        return [...groupRounds, ...finalRounds];
     }, [registeredSchools]);
 
     const handleRoundChange = useCallback((round: string) => {
@@ -129,7 +141,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                  toast({ title: "Equipos Llenados Automáticamente", description: `Los ganadores de la ronda anterior han sido seleccionados para ${round}.`});
             } else {
                  setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
-                 toast({ variant: "destructive", title: "No se encontraron ganadores", description: `No se pudieron determinar los ganadores de la ronda anterior.`});
+                 toast({ variant: "destructive", title: "No se encontraron ganadores", description: `No se pudieron determinar los ganadores de la ronda anterior para autocompletar.`});
             }
 
         } else {
