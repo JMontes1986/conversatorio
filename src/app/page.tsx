@@ -21,12 +21,6 @@ const features = [
     link: "/register",
   },
   {
-    icon: <Shuffle className="h-8 w-8 text-primary" />,
-    title: "Sorteo Automático",
-    description: "Visualice el sorteo de grupos y eliminatorias con animaciones y aleatoriedad verificable.",
-    link: "/draw",
-  },
-  {
     icon: <UploadCloud className="h-8 w-8 text-primary" />,
     title: "Envío de Video",
     description: "Suba de forma segura las presentaciones de video de su equipo para cada ronda.",
