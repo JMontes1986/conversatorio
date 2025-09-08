@@ -354,7 +354,7 @@ function AdminDashboard() {
                             <TableCell colSpan={6} className="text-center">Cargando colegios...</TableCell>
                         </TableRow>
                     ) : schools.map(school => (
-                        <Collapsible asChild key={school.id}>
+                        <Collapsible asChild key={school.id} >
                             <>
                             <TableRow>
                                 <TableCell>
