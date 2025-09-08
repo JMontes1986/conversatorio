@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
 
 interface Judge {
+  id: string;
   name: string;
   cedula: string;
 }
@@ -52,6 +53,7 @@ export function JudgeProvider({ children }: { children: ReactNode }) {
       if (!querySnapshot.empty) {
         const judgeDoc = querySnapshot.docs[0];
         const judgeData: Judge = { 
+            id: judgeDoc.id,
             cedula: judgeDoc.data().cedula,
             name: judgeDoc.data().name
         };
@@ -95,5 +97,3 @@ export function useJudgeAuth() {
   }
   return context;
 }
-
-    

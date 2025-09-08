@@ -43,23 +43,41 @@ const debateRounds = ["Ronda 1", "Ronda 2", "Cuartos de Final", "Semifinal", "Fi
 function CompetitionSettings() {
     const { toast } = useToast();
     const [currentRound, setCurrentRound] = useState('');
+    const [teamAName, setTeamAName] = useState('');
+    const [teamBName, setTeamBName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const DEBATE_STATE_DOC_ID = "current";
+
+    useEffect(() => {
+        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setCurrentRound(data.currentRound || '');
+                setTeamAName(data.teamAName || '');
+                setTeamBName(data.teamBName || '');
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!currentRound) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor seleccione una ronda." });
+        if (!currentRound || !teamAName.trim() || !teamBName.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor, complete todos los campos: ronda y nombres de equipos." });
             return;
         }
         setIsSubmitting(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { currentRound: currentRound }, { merge: true });
-            toast({ title: "Ronda Actualizada", description: `La ronda activa ahora es: ${currentRound}.` });
+            await setDoc(docRef, { 
+                currentRound,
+                teamAName,
+                teamBName
+            }, { merge: true });
+            toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound} con los equipos ${teamAName} vs ${teamBName}.` });
         } catch (error) {
             console.error("Error updating round:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la ronda." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la configuración." });
         } finally {
             setIsSubmitting(false);
         }
@@ -69,7 +87,7 @@ function CompetitionSettings() {
         <Card>
             <CardHeader>
                 <CardTitle>Ajustes de la Competencia</CardTitle>
-                <CardDescription>Configuración general de la competencia.</CardDescription>
+                <CardDescription>Configuración de la ronda activa y los equipos que se enfrentan.</CardDescription>
             </CardHeader>
             <CardContent>
                 <form onSubmit={handleUpdateRound} className="space-y-4 max-w-sm">
@@ -80,18 +98,21 @@ function CompetitionSettings() {
                                 <SelectValue placeholder="Seleccione la ronda actual" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Ronda 1">Ronda 1</SelectItem>
-                                <SelectItem value="Ronda 2">Ronda 2</SelectItem>
-                                <SelectItem value="Cuartos de Final">Cuartos de Final</SelectItem>
-                                <SelectItem value="Semifinal">Semifinal</SelectItem>
-                                <SelectItem value="Final">Final</SelectItem>
+                                {debateRounds.map(round => <SelectItem key={round} value={round}>{round}</SelectItem>)}
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Esta será la ronda que se mostrará públicamente en la página de Debate.</p>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="team-a-name">Nombre del Equipo A</Label>
+                        <Input id="team-a-name" value={teamAName} onChange={(e) => setTeamAName(e.target.value)} placeholder="Ej: Águilas Doradas" disabled={isSubmitting}/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="team-b-name">Nombre del Equipo B</Label>
+                        <Input id="team-b-name" value={teamBName} onChange={(e) => setTeamBName(e.target.value)} placeholder="Ej: Búhos Sabios" disabled={isSubmitting}/>
                     </div>
                     <Button type="submit" disabled={isSubmitting || !currentRound}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Actualizar Ronda
+                        Actualizar Configuración
                     </Button>
                 </form>
             </CardContent>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -13,13 +13,14 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash, Loader2 } from 'lucide-react';
+import { Swords, Check, Hash, Loader2, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { JudgeAuth } from '@/components/auth/judge-auth';
 import { useJudgeAuth } from '@/context/judge-auth-context';
 import { cn } from '@/lib/utils';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const rubricCriteria = [
     { id: 'arg', name: 'Argumentación', description: 'Calidad y solidez de los argumentos.' },
@@ -29,12 +30,24 @@ const rubricCriteria = [
     { id: 'resp', name: 'Respeto y Ética', description: 'Conducta hacia el equipo contrario y moderador.' },
 ];
 
-// MOCK DATA - This would come from the router or a state management solution
-const MOCK_MATCH_DATA = {
-    matchId: 'semifinal-1',
-    teamAName: 'Águilas Doradas',
-    teamBName: 'Búhos Sabios',
-};
+const DEBATE_STATE_DOC_ID = "current";
+
+interface DebateState {
+    currentRound: string;
+    teamAName: string;
+    teamBName: string;
+}
+
+interface ScoreData {
+    id: string;
+    matchId: string;
+    teamAName: string;
+    teamBName: string;
+    teamA_total: number;
+    teamB_total: number;
+    createdAt: any;
+}
+
 
 function ScoringPanel() {
   const { toast } = useToast();
@@ -44,6 +57,58 @@ function ScoringPanel() {
     teamA: {},
     teamB: {}
   });
+  const [debateState, setDebateState] = useState<DebateState>({
+      currentRound: 'N/A',
+      teamAName: 'Equipo A',
+      teamBName: 'Equipo B',
+  });
+  const [loadingDebateState, setLoadingDebateState] = useState(true);
+  const [pastScores, setPastScores] = useState<ScoreData[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  useEffect(() => {
+    const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+    const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setDebateState({
+                currentRound: data.currentRound || 'N/A',
+                teamAName: data.teamAName || 'Equipo A',
+                teamBName: data.teamBName || 'Equipo B',
+            });
+        }
+        setLoadingDebateState(false);
+    });
+
+    return () => unsubscribeDebateState();
+  }, []);
+
+  useEffect(() => {
+      if (!judge?.id) return;
+      
+      setLoadingHistory(true);
+      const scoresQuery = query(
+          collection(db, "scores"),
+          where("judgeId", "==", judge.id),
+          orderBy("createdAt", "desc")
+      );
+
+      const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
+          const scoresData: ScoreData[] = [];
+          querySnapshot.forEach(doc => {
+              scoresData.push({ id: doc.id, ...doc.data() } as ScoreData);
+          });
+          setPastScores(scoresData);
+          setLoadingHistory(false);
+      }, (error) => {
+        console.error("Error fetching score history:", error);
+        setLoadingHistory(false);
+      });
+
+      return () => unsubscribeHistory();
+
+  }, [judge]);
+
 
   const handleScoreChange = (team: 'teamA' | 'teamB', criteriaId: string, value: number) => {
     setScores(prev => ({
@@ -86,11 +151,12 @@ function ScoringPanel() {
     const totalTeamB = calculateTotal('teamB');
 
     const scoreData = {
-        matchId: MOCK_MATCH_DATA.matchId,
+        matchId: debateState.currentRound,
+        judgeId: judge?.id || '',
         judgeName: judge?.name || 'Jurado Anónimo',
         judgeCedula: judge?.cedula || '',
-        teamAName: MOCK_MATCH_DATA.teamAName,
-        teamBName: MOCK_MATCH_DATA.teamBName,
+        teamAName: debateState.teamAName,
+        teamBName: debateState.teamBName,
         scoresTeamA: scores.teamA,
         scoresTeamB: scores.teamB,
         teamA_total: totalTeamA,
@@ -106,7 +172,8 @@ function ScoringPanel() {
             title: "Puntuación Enviada",
             description: "Sus calificaciones han sido registradas exitosamente.",
         });
-        // Optionally reset the form or redirect
+        // Reset scores after submission
+        setScores({ teamA: {}, teamB: {} });
     } catch(error) {
         console.error("Error submitting score: ", error);
         toast({
@@ -136,6 +203,10 @@ function ScoringPanel() {
     </div>
   );
 
+  if (loadingDebateState) {
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
+  }
+
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8 text-center">
@@ -143,14 +214,14 @@ function ScoringPanel() {
           Panel de Puntuación del Juez
         </h1>
         <p className="text-muted-foreground mt-2 capitalize">
-            Juez: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda: {MOCK_MATCH_DATA.matchId.replace('-', ' ')}
+            Juez: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
         </p>
       </div>
 
       <div className="flex justify-center items-center mb-8 space-x-4">
-        <h2 className="font-headline text-2xl text-center">{MOCK_MATCH_DATA.teamAName}</h2>
+        <h2 className="font-headline text-2xl text-center">{debateState.teamAName}</h2>
         <Swords className="h-8 w-8 text-primary shrink-0" />
-        <h2 className="font-headline text-2xl text-center">{MOCK_MATCH_DATA.teamBName}</h2>
+        <h2 className="font-headline text-2xl text-center">{debateState.teamBName}</h2>
       </div>
 
       <Card>
@@ -164,8 +235,8 @@ function ScoringPanel() {
                 <TableHeader>
                 <TableRow>
                     <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
-                    <TableHead className="w-1/3 text-center min-w-[200px]">{MOCK_MATCH_DATA.teamAName}</TableHead>
-                    <TableHead className="w-1/3 text-center min-w-[200px]">{MOCK_MATCH_DATA.teamBName}</TableHead>
+                    <TableHead className="w-1/3 text-center min-w-[200px]">{debateState.teamAName}</TableHead>
+                    <TableHead className="w-1/3 text-center min-w-[200px]">{debateState.teamBName}</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -208,6 +279,37 @@ function ScoringPanel() {
               {isSubmitting ? 'Enviando...' : 'Enviar Puntuación'}
           </Button>
       </div>
+
+       <Card className="mt-12">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><History className="h-6 w-6"/>Historial de Puntuaciones</CardTitle>
+                <CardDescription>Revise las puntuaciones que ha enviado en rondas anteriores.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loadingHistory && <p>Cargando historial...</p>}
+                {!loadingHistory && pastScores.length === 0 && <p className="text-muted-foreground text-sm">Aún no ha enviado ninguna puntuación.</p>}
+                <Accordion type="single" collapsible className="w-full">
+                    {pastScores.map(score => (
+                        <AccordionItem value={score.id} key={score.id}>
+                            <AccordionTrigger>
+                                <div className="flex justify-between items-center w-full pr-4">
+                                    <span className="font-bold capitalize">{score.matchId}</span>
+                                    <div className="text-right">
+                                        <p className="text-sm">{score.teamAName} vs {score.teamBName}</p>
+                                        <p className="text-xs text-muted-foreground">{score.teamA_total} vs {score.teamB_total}</p>
+                                    </div>
+                                </div>
+                            </AccordionTrigger>
+                             <AccordionContent>
+                                <p className="text-sm">Puntuación final para <span className="font-semibold">{score.teamAName}</span>: <span className="font-bold text-primary">{score.teamA_total}</span></p>
+                                <p className="text-sm">Puntuación final para <span className="font-semibold">{score.teamBName}</span>: <span className="font-bold text-primary">{score.teamB_total}</span></p>
+                                <p className="text-xs text-muted-foreground mt-2">Enviado el: {new Date(score.createdAt.seconds * 1000).toLocaleString()}</p>
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
+            </CardContent>
+        </Card>
     </div>
   );
 }
