@@ -213,9 +213,9 @@ function ScoringPanel() {
         <h1 className="font-headline text-3xl md:text-4xl font-bold">
           Panel de Puntuación del Juez
         </h1>
-        <p className="text-muted-foreground mt-2 capitalize">
+        <div className="text-muted-foreground mt-2 capitalize">
             Juez: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
-        </p>
+        </div>
       </div>
 
       <div className="flex justify-center items-center mb-8 space-x-4">
