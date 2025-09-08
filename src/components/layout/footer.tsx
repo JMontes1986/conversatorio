@@ -15,14 +15,6 @@ export function Footer() {
           <p className="text-sm text-muted-foreground mt-4 md:mt-0">
             &copy; {currentYear} Colgemelli. Todos los derechos reservados.
           </p>
-          <div className="flex gap-4 mt-4 md:mt-0">
-            <Link href="#" className="text-sm text-muted-foreground hover:text-primary">
-              Términos de Servicio
-            </Link>
-            <Link href="#" className="text-sm text-muted-foreground hover:text-primary">
-              Política de Privacidad
-            </Link>
-          </div>
         </div>
       </div>
     </footer>
