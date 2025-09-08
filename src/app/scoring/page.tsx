@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -13,7 +14,10 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash } from 'lucide-react';
+import { Swords, Check, Hash, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { db } from '@/lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 const rubricCriteria = [
     { id: 'arg', name: 'Argumentación', description: 'Calidad y solidez de los argumentos.' },
@@ -23,7 +27,18 @@ const rubricCriteria = [
     { id: 'resp', name: 'Respeto y Ética', description: 'Conducta hacia el equipo contrario y moderador.' },
 ];
 
+// MOCK DATA - This would come from the router or a state management solution
+const MOCK_MATCH_DATA = {
+    matchId: 'semifinal-1',
+    teamAName: 'Águilas Doradas',
+    teamBName: 'Búhos Sabios',
+    judgeName: 'Jurado Anónimo' // In a real app, this would be the logged in judge's name
+};
+
+
 export default function ScoringPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({
     teamA: {},
     teamB: {}
@@ -54,21 +69,69 @@ export default function ScoringPage() {
     return hash.toString(16).toUpperCase();
   }
 
+  const handleSubmit = async () => {
+     if (Object.keys(scores.teamA).length < rubricCriteria.length || Object.keys(scores.teamB).length < rubricCriteria.length) {
+        toast({
+            variant: "destructive",
+            title: "Error de Validación",
+            description: "Por favor, asigne una puntuación a todos los criterios para ambos equipos.",
+        });
+        return;
+    }
+
+    setIsSubmitting(true);
+    
+    const totalTeamA = calculateTotal('teamA');
+    const totalTeamB = calculateTotal('teamB');
+
+    const scoreData = {
+        matchId: MOCK_MATCH_DATA.matchId,
+        judgeName: MOCK_MATCH_DATA.judgeName,
+        teamAName: MOCK_MATCH_DATA.teamAName,
+        teamBName: MOCK_MATCH_DATA.teamBName,
+        scoresTeamA: scores.teamA,
+        scoresTeamB: scores.teamB,
+        teamA_total: totalTeamA,
+        teamB_total: totalTeamB,
+        checksumA: calculateChecksum('teamA'),
+        checksumB: calculateChecksum('teamB'),
+        createdAt: new Date(),
+    };
+
+    try {
+        await addDoc(collection(db, "scores"), scoreData);
+        toast({
+            title: "Puntuación Enviada",
+            description: "Sus calificaciones han sido registradas exitosamente.",
+        });
+        // Optionally reset the form or redirect
+    } catch(error) {
+        console.error("Error submitting score: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error al Enviar",
+            description: "No se pudo guardar la puntuación. Por favor, inténtelo de nuevo.",
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8 text-center">
         <h1 className="font-headline text-3xl md:text-4xl font-bold">
           Panel de Puntuación del Juez
         </h1>
-        <p className="text-muted-foreground mt-2">
-          Ronda: Semifinales - Partida SF-1
+        <p className="text-muted-foreground mt-2 capitalize">
+          Ronda: {MOCK_MATCH_DATA.matchId.replace('-', ' ')}
         </p>
       </div>
 
       <div className="flex justify-center items-center mb-8 space-x-4">
-        <h2 className="font-headline text-2xl">Águilas Doradas</h2>
+        <h2 className="font-headline text-2xl">{MOCK_MATCH_DATA.teamAName}</h2>
         <Swords className="h-8 w-8 text-primary" />
-        <h2 className="font-headline text-2xl">Búhos Sabios</h2>
+        <h2 className="font-headline text-2xl">{MOCK_MATCH_DATA.teamBName}</h2>
       </div>
 
       <Card>
@@ -81,8 +144,8 @@ export default function ScoringPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-1/4">Criterio</TableHead>
-                <TableHead className="w-1/3 text-center">Águilas Doradas</TableHead>
-                <TableHead className="w-1/3 text-center">Búhos Sabios</TableHead>
+                <TableHead className="w-1/3 text-center">{MOCK_MATCH_DATA.teamAName}</TableHead>
+                <TableHead className="w-1/3 text-center">{MOCK_MATCH_DATA.teamBName}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -100,6 +163,7 @@ export default function ScoringPage() {
                             min={1}
                             step={1}
                             onValueChange={(value) => handleScoreChange('teamA', criterion.id, value[0])}
+                            disabled={isSubmitting}
                         />
                         <Badge className="w-12 justify-center" variant="secondary">{scores.teamA[criterion.id] || '-'}</Badge>
                     </div>
@@ -112,6 +176,7 @@ export default function ScoringPage() {
                             min={1}
                             step={1}
                             onValueChange={(value) => handleScoreChange('teamB', criterion.id, value[0])}
+                            disabled={isSubmitting}
                         />
                         <Badge className="w-12 justify-center" variant="secondary">{scores.teamB[criterion.id] || '-'}</Badge>
                     </div>
@@ -133,9 +198,13 @@ export default function ScoringPage() {
         </CardContent>
       </Card>
       <div className="mt-8 flex justify-end">
-          <Button size="lg">
-              <Check className="mr-2 h-4 w-4" />
-              Enviar Puntuación
+          <Button size="lg" onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              {isSubmitting ? 'Enviando...' : 'Enviar Puntuación'}
           </Button>
       </div>
     </div>

@@ -27,12 +27,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2 } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, where } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface Participant {
     name: string;
@@ -50,13 +51,29 @@ interface JudgeData {
     name: string;
     cedula: string;
 }
+interface ScoreData {
+    id: string;
+    matchId: string;
+    judgeName: string;
+    teamA_total: number;
+    teamB_total: number;
+}
+interface MatchResults {
+    matchId: string;
+    scores: ScoreData[];
+    totalTeamA: number;
+    totalTeamB: number;
+    winner: 'teamA' | 'teamB' | 'Tie';
+}
 
 function AdminDashboard() {
   const { toast } = useToast();
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [judges, setJudges] = useState<JudgeData[]>([]);
+  const [scores, setScores] = useState<ScoreData[]>([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [loadingJudges, setLoadingJudges] = useState(true);
+  const [loadingScores, setLoadingScores] = useState(true);
   
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeCedula, setNewJudgeCedula] = useState("");
@@ -97,11 +114,22 @@ function AdminDashboard() {
         setLoadingJudges(false);
     });
 
+    const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
+    const unsubscribeScores = onSnapshot(scoresQuery, (querySnapshot) => {
+        const scoresData: ScoreData[] = [];
+        querySnapshot.forEach((doc) => {
+            scoresData.push({ id: doc.id, ...doc.data()} as ScoreData);
+        });
+        setScores(scoresData);
+        setLoadingScores(false);
+    });
+
     return () => {
         unsubscribeSchools();
         unsubscribeJudges();
+        unsubscribeScores();
     };
-}, []);
+  }, []);
 
  const handleAddJudge = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +154,23 @@ function AdminDashboard() {
         setIsSubmittingJudge(false);
     }
  };
+ 
+  const processedResults: MatchResults[] = scores.reduce((acc, score) => {
+    let match = acc.find(m => m.matchId === score.matchId);
+    if (!match) {
+        match = { matchId: score.matchId, scores: [], totalTeamA: 0, totalTeamB: 0, winner: 'Tie' };
+        acc.push(match);
+    }
+    match.scores.push(score);
+    match.totalTeamA += score.teamA_total;
+    match.totalTeamB += score.teamB_total;
+    
+    if (match.totalTeamA > match.totalTeamB) match.winner = 'teamA';
+    else if (match.totalTeamB > match.totalTeamA) match.winner = 'teamB';
+    else match.winner = 'Tie';
+
+    return acc;
+  }, [] as MatchResults[]);
 
 
   return (
@@ -140,9 +185,10 @@ function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="schools" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
+        <TabsList className="grid w-full grid-cols-4 md:w-[600px]">
           <TabsTrigger value="schools"><School className="h-4 w-4 mr-2" />Colegios</TabsTrigger>
           <TabsTrigger value="judges"><User className="h-4 w-4 mr-2" />Jurados</TabsTrigger>
+          <TabsTrigger value="results"><Trophy className="h-4 w-4 mr-2"/>Resultados</TabsTrigger>
           <TabsTrigger value="settings"><Settings className="h-4 w-4 mr-2" />Ajustes</TabsTrigger>
         </TabsList>
         <TabsContent value="schools">
@@ -289,6 +335,60 @@ function AdminDashboard() {
                     </Card>
                 </div>
             </div>
+        </TabsContent>
+         <TabsContent value="results">
+          <Card>
+            <CardHeader>
+              <CardTitle>Resultados de las Rondas</CardTitle>
+              <CardDescription>
+                Resultados detallados de cada partida, jurado por jurado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loadingScores && <p className="text-center">Cargando resultados...</p>}
+                {!loadingScores && processedResults.length === 0 && <p className="text-center text-muted-foreground">Aún no hay resultados para mostrar.</p>}
+                <Accordion type="single" collapsible className="w-full">
+                    {processedResults.map(result => (
+                        <AccordionItem value={result.matchId} key={result.matchId}>
+                            <AccordionTrigger>
+                                <div className="flex justify-between items-center w-full pr-4">
+                                    <span className="font-bold text-lg capitalize">Ronda: {result.matchId.replace('-', ' ')}</span>
+                                    <div className="text-right">
+                                        <p className="text-sm">Ganador: <Badge variant={result.winner === 'teamA' ? 'default' : 'secondary'}>{result.winner === 'teamA' ? 'Equipo A' : result.winner === 'teamB' ? 'Equipo B' : 'Empate'}</Badge></p>
+                                        <p className="text-xs text-muted-foreground">A: {result.totalTeamA} vs B: {result.totalTeamB}</p>
+                                    </div>
+                                </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                               <Table>
+                                 <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Jurado</TableHead>
+                                        <TableHead className="text-center">Puntaje Equipo A</TableHead>
+                                        <TableHead className="text-center">Puntaje Equipo B</TableHead>
+                                    </TableRow>
+                                 </TableHeader>
+                                 <TableBody>
+                                    {result.scores.map(score => (
+                                         <TableRow key={score.id}>
+                                            <TableCell>{score.judgeName}</TableCell>
+                                            <TableCell className="text-center">{score.teamA_total}</TableCell>
+                                            <TableCell className="text-center">{score.teamB_total}</TableCell>
+                                         </TableRow>
+                                    ))}
+                                     <TableRow className="bg-secondary font-bold">
+                                        <TableCell>Total</TableCell>
+                                        <TableCell className="text-center text-lg">{result.totalTeamA}</TableCell>
+                                        <TableCell className="text-center text-lg">{result.totalTeamB}</TableCell>
+                                     </TableRow>
+                                 </TableBody>
+                               </Table>
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="settings">
         <Card>
