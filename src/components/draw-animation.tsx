@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -109,6 +109,7 @@ export function DrawAnimation() {
     const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            // only apply state if the tab matches, to avoid overwriting the current view with old data
             if(data.activeTab === activeTab) {
               setTeams(data.teams || []);
               setRounds(data.rounds || []);
@@ -128,64 +129,13 @@ export function DrawAnimation() {
     };
   }, []);
 
-  // Recalculate teams and rounds when tab changes
-  useEffect(() => {
-      resetDraw(true); // Soft reset
-  }, [activeTab, allTeams, allRounds]);
-
-
-  const updateLiveDrawState = async (state: any) => {
-      try {
-        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-        await setDoc(drawStateRef, { ...state, lastUpdated: new Date() }, { merge: true });
-      } catch (error) {
-        console.error("Failed to update live draw state:", error);
-        toast({
-          variant: "destructive",
-          title: "Error de Sincronización",
-          description: "No se pudo actualizar el estado del sorteo en vivo."
-        });
-      }
-  }
-
-  const startDraw = async () => {
-    if (teams.length === 0 || rounds.length === 0) return;
-
-    const initialState = {
-        teams: teams.map(t => ({...t, round: null })),
-        rounds,
-        isDrawing: true,
-        isFinished: false,
-        activeTab
-    };
-    await updateLiveDrawState(initialState);
-    setIsDrawing(true);
-    setIsFinished(false);
-
-    const shuffledTeams = shuffleArray([...teams]);
-    
-    shuffledTeams.forEach((team, index) => {
-      setTimeout(async () => {
-        const currentTeams = teams.map(t => t.id === team.id ? { ...t, round: rounds[index % rounds.length].name } : t);
-        setTeams(currentTeams);
-        await updateLiveDrawState({ teams: currentTeams });
-
-        if (index === shuffledTeams.length - 1) {
-          setIsDrawing(false);
-          setIsFinished(true);
-          await updateLiveDrawState({ isDrawing: false, isFinished: true });
-        }
-      }, index * 200);
-    });
-  };
-
-  const resetDraw = (isTabChange = false) => {
+  const resetDraw = useCallback((isTabChange = false) => {
     let currentTeams: Team[] = [];
     let currentRounds: RoundData[] = [];
 
     if (activeTab === "groups") {
         currentRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        currentTeams = allTeams;
+        currentTeams = allTeams.map(t => ({...t, round: null}));;
     } else if (activeTab === "quarters") {
         currentRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
         const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
@@ -209,7 +159,70 @@ export function DrawAnimation() {
     setIsFinished(resetState.isFinished);
     setIsFixing(false);
     
-    if(!isTabChange) updateLiveDrawState(resetState);
+    // Only update firestore if it's a manual reset, not just a tab change
+    if(!isTabChange) {
+      updateLiveDrawState(resetState);
+    }
+  }, [activeTab, allRounds, allTeams, allScores]);
+  
+  // Recalculate teams and rounds when tab changes
+  useEffect(() => {
+      resetDraw(true); // Soft reset on tab change
+  }, [activeTab, allTeams, allRounds, resetDraw]);
+
+
+  const updateLiveDrawState = async (state: any) => {
+      try {
+        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+        await setDoc(drawStateRef, { ...state, lastUpdated: new Date() }, { merge: true });
+      } catch (error) {
+        console.error("Failed to update live draw state:", error);
+        toast({
+          variant: "destructive",
+          title: "Error de Sincronización",
+          description: "No se pudo actualizar el estado del sorteo en vivo."
+        });
+      }
+  }
+
+  const startDraw = async () => {
+    if (teams.length === 0 || rounds.length === 0) return;
+
+    setIsDrawing(true);
+    setIsFinished(false);
+
+    const shuffledTeams = shuffleArray([...teams]);
+    let assignedTeams = teams.map(t => ({...t, round: null}));
+    setTeams(assignedTeams);
+
+    const initialState = {
+        teams: assignedTeams,
+        rounds,
+        isDrawing: true,
+        isFinished: false,
+        activeTab
+    };
+    await updateLiveDrawState(initialState);
+    
+    const teamUpdatePromises: Promise<void>[] = [];
+
+    for (let i = 0; i < shuffledTeams.length; i++) {
+        const team = shuffledTeams[i];
+        await new Promise(resolve => setTimeout(resolve, i * 200));
+
+        assignedTeams = assignedTeams.map(t => 
+            t.id === team.id ? { ...t, round: rounds[i % rounds.length].name } : t
+        );
+
+        setTeams([...assignedTeams]);
+        teamUpdatePromises.push(updateLiveDrawState({ teams: [...assignedTeams] }));
+    }
+
+    await Promise.all(teamUpdatePromises);
+
+    setIsDrawing(false);
+    setIsFinished(true);
+    await updateLiveDrawState({ isDrawing: false, isFinished: true });
   };
   
   const fixToBlockchain = () => {
