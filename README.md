@@ -1,4 +1,3 @@
-
 # Plataforma de Debate Intercolegial - Conversatorio Colgemelli
 
 Esta es una aplicación web full-stack construida con Next.js y Firebase, diseñada para gestionar de manera integral una competencia de debate intercolegial. La plataforma ofrece una experiencia completa tanto para los organizadores y participantes como para el público general.
