@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, where, doc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc } from "firebase/firestore";
 import { Loader2, Trophy, EyeOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
@@ -63,7 +63,7 @@ export function GroupStageResults() {
         });
         
         const checkPublicationStatus = async () => {
-             const settingsSnap = await doc(db, "settings", "competition").get();
+             const settingsSnap = await getDoc(doc(db, "settings", "competition"));
              if(settingsSnap.exists()){
                 setResultsPublished(settingsSnap.data().resultsPublished || false);
              }
@@ -147,7 +147,7 @@ export function GroupStageResults() {
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:col-span-3 gap-6">
            {resultsByRound.map(result => (
                 <Card key={result.id}>
                     <CardHeader>
