@@ -138,7 +138,8 @@ function ScoringPanel() {
     return pastScores.some(score => score.matchId === debateState.currentRound || score.matchId.startsWith(debateState.currentRound + '-bye'));
   }, [pastScores, debateState.currentRound, judge]);
   
-  const isByeRound = debateState.teams.length === 1;
+  const isByeRound = debateState.currentRound.includes('-bye-') || debateState.teams.length === 1;
+
 
   const handleScoreChange = (teamName: string, criteriaId: string, value: number) => {
     setScores(prev => ({
@@ -259,10 +260,10 @@ function ScoringPanel() {
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8 text-center">
         <h1 className="font-headline text-3xl md:text-4xl font-bold">
-          Panel de Puntuación del Juez
+          Panel de Puntuación del Jurado
         </h1>
         <div className="text-muted-foreground mt-2 capitalize">
-            Juez: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
+            Jurado: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
         </div>
       </div>
       
