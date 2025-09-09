@@ -293,16 +293,24 @@ export function TournamentBracket() {
                              }
                          });
                      } else if (teamsForThisPhase.length === 3) {
-                         // Special case for 3 teams: they all play in one match
-                         const matchId = `${phase}-1`;
-                         const result = getMatchResult(matchId);
-
-                         if (result.participants.length > 0) {
-                            currentRound.matches.push({ id: matchId, participants: result.participants });
-                            if (result.winner) nextRoundWinners.push(result.winner);
-                         } else {
-                            currentRound.matches.push({ id: matchId, participants: teamsForThisPhase });
-                         }
+                        // Special case for 3 teams: create three "matches" with one participant each to spread them out.
+                        teamsForThisPhase.forEach((team, index) => {
+                            const matchId = `${phase}-trio-${index + 1}`;
+                            const result = getMatchResult(matchId); // Check if there's a score for a 3-way match
+                             if (result.participants.length > 0) {
+                                if (!currentRound.matches.find(m => m.id === result.matchId)) {
+                                    currentRound.matches.push({ id: result.matchId, participants: result.participants });
+                                }
+                                if(result.winner) nextRoundWinners.push(result.winner);
+                            } else {
+                                currentRound.matches.push({ id: matchId, participants: [team] });
+                            }
+                        });
+                        // If a 3-way match has already been scored, its winner should be found.
+                        const trioMatchResult = getMatchResult(`${phase}-1`);
+                        if(trioMatchResult.winner) {
+                           nextRoundWinners = [trioMatchResult.winner];
+                        }
                      } else {
                          for (let i = 0; i < teamsForThisPhase.length; i += 2) {
                              const matchId = `${phase}-${(i/2) + 1}`;
