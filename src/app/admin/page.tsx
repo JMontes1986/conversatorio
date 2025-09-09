@@ -102,7 +102,7 @@ function AdminDashboard() {
   const [isSubmittingModerator, setIsSubmittingModerator] = useState(false);
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
 
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSchoolEditDialogOpen, setIsSchoolEditDialogOpen] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
 
   useEffect(() => {
@@ -310,7 +310,7 @@ function AdminDashboard() {
 
   const openEditDialog = (school: SchoolData) => {
     setSelectedSchool(school);
-    setIsEditDialogOpen(true);
+    setIsSchoolEditDialogOpen(true);
   }
 
 
@@ -325,7 +325,7 @@ function AdminDashboard() {
         </p>
       </div>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
         <Tabs defaultValue="schools" className="w-full">
             <TabsList className="grid w-full grid-cols-1 md:grid-cols-8">
             <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
@@ -719,7 +719,7 @@ function AdminDashboard() {
             <DialogHeader>
                 <DialogTitle>Editar Colegio</DialogTitle>
             </DialogHeader>
-            {selectedSchool && <EditSchoolForm school={selectedSchool} onFinished={() => setIsEditDialogOpen(false)} />}
+            {selectedSchool && <EditSchoolForm school={selectedSchool} onFinished={() => setIsSchoolEditDialogOpen(false)} />}
         </DialogContent>
       </Dialog>
     </div>

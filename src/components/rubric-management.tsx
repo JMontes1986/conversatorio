@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Trash2, MoreHorizontal, ListChecks } from "lucide-react";
+import { Loader2, Trash2, MoreHorizontal, FilePen } from "lucide-react";
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from './ui/dropdown-menu';
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from './ui/alert-dialog';
 import { Textarea } from './ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { EditCriterionForm } from './edit-criterion-form';
 
 interface RubricCriterion {
     id: string;
@@ -34,6 +36,9 @@ export function RubricManagement() {
     const [newCriterionName, setNewCriterionName] = useState("");
     const [newCriterionDescription, setNewCriterionDescription] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [selectedCriterion, setSelectedCriterion] = useState<RubricCriterion | null>(null);
 
     useEffect(() => {
         const criteriaQuery = query(collection(db, "rubric"), orderBy("createdAt", "asc"));
@@ -86,116 +91,132 @@ export function RubricManagement() {
         }
     };
 
+    const openEditDialog = (criterion: RubricCriterion) => {
+        setSelectedCriterion(criterion);
+        setIsEditDialogOpen(true);
+    };
+
     return (
-        <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-1">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Añadir Criterio</CardTitle>
-                        <CardDescription>Añada un nuevo criterio a la rúbrica de evaluación.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleAddCriterion} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="criterion-name">Nombre del Criterio</Label>
-                                <Input 
-                                    id="criterion-name" 
-                                    value={newCriterionName} 
-                                    onChange={(e) => setNewCriterionName(e.target.value)} 
-                                    placeholder="Ej: Argumentación" 
-                                    disabled={isSubmitting}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="criterion-description">Descripción del Criterio</Label>
-                                <Textarea
-                                    id="criterion-description" 
-                                    value={newCriterionDescription} 
-                                    onChange={(e) => setNewCriterionDescription(e.target.value)} 
-                                    placeholder="Ej: Calidad y solidez de los argumentos." 
-                                    disabled={isSubmitting}
-                                    rows={3}
-                                />
-                            </div>
-                            <Button type="submit" className="w-full" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Crear Criterio
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
-            </div>
-            <div className="md:col-span-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Rúbrica de Evaluación</CardTitle>
-                        <CardDescription>Lista de criterios que los jueces usarán para calificar.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Criterio</TableHead>
-                                    <TableHead>Descripción</TableHead>
-                                    <TableHead className="text-right">Acciones</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-1">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Añadir Criterio</CardTitle>
+                            <CardDescription>Añada un nuevo criterio a la rúbrica de evaluación.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleAddCriterion} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="criterion-name">Nombre del Criterio</Label>
+                                    <Input 
+                                        id="criterion-name" 
+                                        value={newCriterionName} 
+                                        onChange={(e) => setNewCriterionName(e.target.value)} 
+                                        placeholder="Ej: Argumentación" 
+                                        disabled={isSubmitting}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="criterion-description">Descripción del Criterio</Label>
+                                    <Textarea
+                                        id="criterion-description" 
+                                        value={newCriterionDescription} 
+                                        onChange={(e) => setNewCriterionDescription(e.target.value)} 
+                                        placeholder="Ej: Calidad y solidez de los argumentos." 
+                                        disabled={isSubmitting}
+                                        rows={3}
+                                    />
+                                </div>
+                                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Crear Criterio
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+                <div className="md:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Rúbrica de Evaluación</CardTitle>
+                            <CardDescription>Lista de criterios que los jueces usarán para calificar.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center">Cargando criterios...</TableCell>
+                                        <TableHead>Criterio</TableHead>
+                                        <TableHead>Descripción</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
-                                ) : criteria.length > 0 ? (
-                                    criteria.map((criterion) => (
-                                        <TableRow key={criterion.id}>
-                                            <TableCell className="font-medium">{criterion.name}</TableCell>
-                                            <TableCell className="text-muted-foreground">{criterion.description}</TableCell>
-                                            <TableCell className="text-right">
-                                                <AlertDialog>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">Toggle menu</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                            <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                                    <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                </TableHeader>
+                                <TableBody>
+                                    {loading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="text-center">Cargando criterios...</TableCell>
+                                        </TableRow>
+                                    ) : criteria.length > 0 ? (
+                                        criteria.map((criterion) => (
+                                            <TableRow key={criterion.id}>
+                                                <TableCell className="font-medium">{criterion.name}</TableCell>
+                                                <TableCell className="text-muted-foreground">{criterion.description}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <AlertDialog>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                    <MoreHorizontal className="h-4 w-4" />
+                                                                    <span className="sr-only">Toggle menu</span>
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                                <DropdownMenuItem onClick={() => openEditDialog(criterion)}>
+                                                                    <FilePen className="mr-2 h-4 w-4"/>Editar
                                                                 </DropdownMenuItem>
-                                                            </AlertDialogTrigger>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Esta acción no se puede deshacer. Se eliminará el criterio permanentemente de la rúbrica.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDeleteCriterion(criterion.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                                        <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                                    </DropdownMenuItem>
+                                                                </AlertDialogTrigger>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer. Se eliminará el criterio permanentemente de la rúbrica.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDeleteCriterion(criterion.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="text-center h-24 text-muted-foreground">
+                                                No hay criterios definidos.
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={3} className="text-center h-24 text-muted-foreground">
-                                            No hay criterios definidos.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
-        </div>
+             <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Criterio</DialogTitle>
+                </DialogHeader>
+                {selectedCriterion && <EditCriterionForm criterion={selectedCriterion} onFinished={() => setIsEditDialogOpen(false)} />}
+            </DialogContent>
+        </Dialog>
     );
 }
