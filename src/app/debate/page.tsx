@@ -116,7 +116,7 @@ export default function DebatePage() {
                             <p className={cn(
                                 "font-medium leading-tight",
                                 isFullscreen
-                                  ? "text-5xl md:text-7xl lg:text-8xl"
+                                  ? "text-4xl md:text-6xl lg:text-7xl"
                                   : "text-4xl md:text-5xl lg:text-6xl"
                               )}>
                                 {debateState.question}
