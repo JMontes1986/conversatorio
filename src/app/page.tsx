@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -42,6 +41,7 @@ interface HomePageContent {
     title: string;
     paragraph1: string;
     paragraph2: string;
+    imageUrl?: string;
   };
 }
 
@@ -77,7 +77,7 @@ export default function Home() {
                 setContent({
                     hero: { title: "Conversatorio Colgemelli", subtitle: "La plataforma definitiva para competencias de debate escolar." },
                     features: [],
-                    promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva.", paragraph2: "Garantizamos una competencia equitativa."}
+                    promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva.", paragraph2: "Garantizamos una competencia equitativa.", imageUrl: "https://picsum.photos/600/500" }
                 })
             }
             setLoading(false);
@@ -172,7 +172,7 @@ export default function Home() {
           </div>
           <div className="relative h-[300px] w-full md:h-[400px] lg:h-[500px]">
              <Image
-              src="https://picsum.photos/600/500"
+              src={content.promoSection.imageUrl || "https://picsum.photos/600/500"}
               alt="Estudiantes debatiendo"
               data-ai-hint="students debating"
               fill
