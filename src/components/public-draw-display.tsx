@@ -138,7 +138,7 @@ export function PublicDrawDisplay() {
                        return (
                         <Tooltip key={team.id}>
                             <TooltipTrigger asChild>
-                                <div className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500 cursor-help">
+                                <div className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500 cursor-pointer">
                                     {team.name}
                                 </div>
                             </TooltipTrigger>
