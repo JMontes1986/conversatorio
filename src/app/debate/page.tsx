@@ -113,7 +113,12 @@ export default function DebatePage() {
                    <div className="space-y-6 w-full">
                         {showVideo && <VideoEmbed url={debateState.videoUrl} />}
                         {showQuestion && (
-                            <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
+                            <p className={cn(
+                                "font-medium leading-tight",
+                                isFullscreen
+                                  ? "text-5xl md:text-7xl lg:text-8xl"
+                                  : "text-4xl md:text-5xl lg:text-6xl"
+                              )}>
                                 {debateState.question}
                             </p>
                         )}
