@@ -46,6 +46,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DrawAnimation } from '@/components/draw-animation';
 import { RubricManagement } from '@/components/rubric-management';
 import { HomePageEditor } from '@/components/home-page-editor';
+import { CompetitionSettings } from '@/components/competition-settings';
 
 
 interface SchoolData {
@@ -338,12 +339,13 @@ function AdminDashboard() {
 
       <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
         <Tabs defaultValue="home" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-9">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-10">
             <TabsTrigger value="home"><Home className="mr-2 h-4 w-4" />Home</TabsTrigger>
             <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
             <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Rondas</TabsTrigger>
             <TabsTrigger value="rubric"><ListChecks className="mr-2 h-4 w-4" />Rúbrica</TabsTrigger>
             <TabsTrigger value="draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
+            <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Ajustes</TabsTrigger>
             <TabsTrigger value="judges"><User className="mr-2 h-4 w-4" />Jurados</TabsTrigger>
             <TabsTrigger value="moderators"><KeyRound className="mr-2 h-4 w-4" />Moderadores</TabsTrigger>
             <TabsTrigger value="debate-control"><Gavel className="mr-2 h-4 w-4" />Control del Debate</TabsTrigger>
@@ -500,6 +502,9 @@ function AdminDashboard() {
             </TabsContent>
             <TabsContent value="draw">
                 <DrawAnimation />
+            </TabsContent>
+            <TabsContent value="settings">
+                <CompetitionSettings allScores={scores} />
             </TabsContent>
             <TabsContent value="judges">
                 <div className="grid md:grid-cols-3 gap-6">
@@ -767,5 +772,3 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
-
-    

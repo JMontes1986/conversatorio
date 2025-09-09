@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -11,8 +12,8 @@ import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
-
 const DRAW_STATE_DOC_ID = "liveDraw";
+const SETTINGS_DOC_ID = "competition";
 
 type Team = {
   id: string;
@@ -80,14 +81,35 @@ export function DrawAnimation() {
 
   useEffect(() => {
     setLoading(true);
-    const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-    const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
-        const fetchedTeams = snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().teamName,
-            round: null
-        }));
-        setAllTeams(fetchedTeams);
+    
+    const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
+    const unsubscribeSettings = onSnapshot(settingsRef, async (settingsSnap) => {
+        const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
+        
+        let teamsToFetchQuery;
+        if (settingsData.registrationsClosed && settingsData.lockedInTeams) {
+            // If registrations are closed, use the locked-in list of team IDs
+            const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
+            if (lockedInTeamIds.length > 0) {
+                teamsToFetchQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
+            } else {
+                setAllTeams([]); // No teams locked in
+            }
+        } else {
+            // Otherwise, fetch all verified schools
+            teamsToFetchQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+        }
+
+        if (teamsToFetchQuery) {
+            onSnapshot(teamsToFetchQuery, (snapshot) => {
+                const fetchedTeams = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    name: doc.data().teamName,
+                    round: null
+                }));
+                setAllTeams(fetchedTeams);
+            });
+        }
     });
 
     const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
@@ -111,7 +133,6 @@ export function DrawAnimation() {
             const data = docSnap.data();
             const currentTabInDb = data.activeTab || 'groups';
             
-            // If the database tab matches the current tab, update the state
             if (currentTabInDb === activeTab) {
                 setTeams(data.teams || []);
                 setRounds(data.rounds || []);
@@ -124,7 +145,7 @@ export function DrawAnimation() {
 
 
     return () => {
-        unsubscribeSchools();
+        unsubscribeSettings();
         unsubscribeRounds();
         unsubscribeScores();
         unsubscribeDrawState();
@@ -152,7 +173,6 @@ export function DrawAnimation() {
     const docSnap = await getDoc(drawStateRef);
 
     if (isTabChange && docSnap.exists() && docSnap.data().activeTab === activeTab) {
-        // If tab is just changing, load existing data for that tab
         const data = docSnap.data();
         stateToSet = {
             teams: data.teams || currentTeams.map(t => ({...t, round: null})),
@@ -162,7 +182,6 @@ export function DrawAnimation() {
             activeTab
         };
     } else {
-        // Otherwise, reset to a clean state for the current tab
         stateToSet = {
             teams: currentTeams.map(t => ({...t, round: null})),
             rounds: currentRounds,
@@ -170,7 +189,6 @@ export function DrawAnimation() {
             isFinished: false,
             activeTab
         };
-        // Update Firestore only on a manual reset, not a tab change that loads existing data.
          await updateLiveDrawState(stateToSet);
     }
     

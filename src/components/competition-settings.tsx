@@ -9,311 +9,176 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Loader2, Send, Plus, Trash2 } from "lucide-react";
+import { Loader2, AlertTriangle, Lock } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from "@/components/ui/select";
-import { nanoid } from 'nanoid';
+import { Switch } from './ui/switch';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
-const DEBATE_STATE_DOC_ID = "current";
-const DRAW_STATE_DOC_ID = "liveDraw";
 
-interface Team {
-    id: string;
-    name: string;
-}
+const SETTINGS_DOC_ID = "competition";
+
 interface SchoolData {
     id: string;
     schoolName: string;
     teamName: string;
+    status: 'Verificado' | 'Pendiente';
 }
 interface ScoreData {
     id: string;
     matchId: string;
-    judgeName: string;
     teams: { name: string; total: number }[];
 }
-interface RoundData {
-    id: string;
-    name: string;
-    phase: string;
-}
-type DrawTeam = {
-  id: string;
-  name: string;
-  round: string | null;
-};
-type DrawState = {
-    teams: DrawTeam[];
-    rounds: RoundData[];
-    activeTab?: string;
-};
 
 
-function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
-    const roundScores = scores.filter(score => score.matchId.startsWith(roundName));
-
-    const matches: Record<string, { teamTotals: Record<string, number> }> = {};
-
-    roundScores.forEach(score => {
-        const teamNames = score.teams.map(t => t.name).sort().join(' vs ');
-        if (!matches[teamNames]) {
-            matches[teamNames] = { teamTotals: {} };
-        }
-        score.teams.forEach(team => {
-            if (!matches[teamNames].teamTotals[team.name]) {
-                matches[teamNames].teamTotals[team.name] = 0;
-            }
-            matches[teamNames].teamTotals[team.name] += team.total;
-        });
-    });
-    
-    const winners: string[] = [];
-    Object.values(matches).forEach(match => {
-        const entries = Object.entries(match.teamTotals);
-        if (entries.length > 0) {
-            const winner = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
-            winners.push(winner);
-        }
-    });
-
-    return winners;
-}
-
-
-function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
-    const phaseRoundNames = phaseRounds.map(r => r.name);
-    const phaseScores = scores.filter(s => phaseRoundNames.includes(s.matchId));
-
-    const teamTotals: Record<string, number> = {};
-
-    phaseScores.forEach(score => {
-        score.teams.forEach(team => {
-            if (!teamTotals[team.name]) {
-                teamTotals[team.name] = 0;
-            }
-            teamTotals[team.name] += team.total;
-        });
-    });
-
-    return Object.entries(teamTotals)
-        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
-        .slice(0, limit)
-        .map(([teamName]) => teamName);
-}
-
-
-export function CompetitionSettings({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
+export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[] }) {
     const { toast } = useToast();
-    const [currentRound, setCurrentRound] = useState('');
-    const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
+    const [registrationsClosed, setRegistrationsClosed] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isAutoFilled, setIsAutoFilled] = useState(false);
-    const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
-    const [loadingRounds, setLoadingRounds] = useState(true);
-    const [drawState, setDrawState] = useState<DrawState | null>(null);
-
+    const [loading, setLoading] = useState(true);
+    const [verifiedSchools, setVerifiedSchools] = useState<SchoolData[]>([]);
 
     useEffect(() => {
-        setLoadingRounds(true);
-        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
-            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-            setDebateRounds(roundsData);
-            setLoadingRounds(false);
-        }, (error) => {
-            console.error("Error fetching rounds:", error);
-            setLoadingRounds(false);
+        const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
+        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setRegistrationsClosed(data.registrationsClosed || false);
+            }
+            setLoading(false);
+        });
+        
+        const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+        const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
+            const schools = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as SchoolData));
+            setVerifiedSchools(schools);
         });
 
-        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-        const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setDrawState(docSnap.data() as DrawState);
-            }
-        });
 
         return () => {
-            unsubscribeRounds();
-            unsubscribeDrawState();
-        };
+            unsubscribeSettings();
+            unsubscribeSchools();
+        }
     }, []);
-    
-    const roundsByPhase = useMemo(() => {
-        const grouped = debateRounds.reduce((acc, round) => {
-            const phase = round.phase || 'General';
-            if (!acc[phase]) {
-                acc[phase] = [];
-            }
-            acc[phase].push(round);
-            return acc;
-        }, {} as Record<string, RoundData[]>);
-        
-        const sortedPhases = Object.keys(grouped).sort((a,b) => {
-            if (a === 'General') return -1;
-            if (b === 'General') return 1;
-            return a.localeCompare(b);
-        });
-        
-        const result: Record<string, RoundData[]> = {};
-        sortedPhases.forEach(phase => {
-            result[phase] = grouped[phase];
-        });
-        return result;
 
-    }, [debateRounds]);
-
-    const handleRoundChange = useCallback((roundName: string) => {
-        setCurrentRound(roundName);
-        const selectedRoundData = debateRounds.find(r => r.name === roundName);
-        
-        let qualifiedTeams: string[] = [];
-
-        // Check draw state first
-        if (drawState && drawState.teams) {
-            const teamsFromDraw = drawState.teams.filter(t => t.round === roundName).map(t => t.name);
-            if (teamsFromDraw.length > 0) {
-                qualifiedTeams = teamsFromDraw;
-            }
-        }
-
-        // If not found in draw, check advanced rounds logic
-        if (qualifiedTeams.length === 0 && selectedRoundData) {
-            if (selectedRoundData.phase === "Cuartos de Final") {
-                 const groupStageRounds = debateRounds.filter(r => r.phase === "Fase de Grupos");
-                 qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
-            } else {
-                 const roundDependencies: Record<string, string> = {
-                    "Semifinal": "Cuartos de Final",
-                    "Final": "Semifinal"
-                };
-                const previousRoundPhase = roundDependencies[selectedRoundData.phase];
-                if (previousRoundPhase) {
-                    const previousRounds = debateRounds.filter(r => r.phase === previousRoundPhase);
-                    qualifiedTeams = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
-                }
-            }
-        }
-        
-        if (qualifiedTeams.length > 0) {
-             setIsAutoFilled(true);
-             setTeams(qualifiedTeams.map(name => ({ id: nanoid(), name })));
-             toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos para ${roundName} han sido cargados.` });
-        } else {
-            setIsAutoFilled(false);
-            setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
-        }
-
-    }, [allScores, toast, debateRounds, drawState]);
-
-     const handleUpdateRound = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const validTeams = teams.filter(t => t.name.trim() !== '');
-
-        if (!currentRound || validTeams.length < 2) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y asegúrese de que haya al menos dos equipos." });
-            return;
-        }
+    const handleToggleRegistration = async (closed: boolean) => {
         setIsSubmitting(true);
         try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { 
-                currentRound,
-                teams: validTeams.map(t => ({ name: t.name })) // Store only name
-            }, { merge: true });
-            toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound}.` });
+            const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
+            
+            const dataToSet: any = { registrationsClosed: closed };
+            if (closed) {
+                // If closing, store the current list of verified schools
+                dataToSet.lockedInTeams = verifiedSchools.map(school => ({
+                    id: school.id,
+                    teamName: school.teamName
+                }));
+            }
+
+            await setDoc(settingsRef, dataToSet, { merge: true });
+            
+            setRegistrationsClosed(closed);
+            toast({
+                title: "Ajustes Actualizados",
+                description: `Las inscripciones ahora están ${closed ? 'cerradas' : 'abiertas'}.`
+            });
         } catch (error) {
-            console.error("Error updating round:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar la configuración." });
+            console.error("Error updating settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los ajustes." });
         } finally {
             setIsSubmitting(false);
         }
     }
-    
-    const handleTeamNameChange = (id: string, name: string) => {
-        setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
-    };
 
-    const addTeam = () => {
-        setTeams([...teams, { id: nanoid(), name: '' }]);
-    };
-
-    const removeTeam = (id: string) => {
-        if (teams.length > 2) {
-            setTeams(teams.filter(team => team.id !== id));
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: 'Debe haber al menos dos equipos.'
-            });
-        }
-    };
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        )
+    }
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Ajustes de la Competencia</CardTitle>
-                <CardDescription>Configuración de la ronda activa y los equipos que se enfrentan.</CardDescription>
+                <CardTitle>Ajustes Generales de la Competencia</CardTitle>
+                <CardDescription>
+                    Controle aspectos clave del torneo, como el cierre de inscripciones.
+                </CardDescription>
             </CardHeader>
             <CardContent>
-                <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
-                    <div className="space-y-2">
-                        <Label htmlFor="current-round">Ronda de Debate Activa</Label>
-                        <Select onValueChange={handleRoundChange} value={currentRound} disabled={isSubmitting || loadingRounds}>
-                            <SelectTrigger id="current-round">
-                                <SelectValue placeholder={loadingRounds ? "Cargando rondas..." : "Seleccione la ronda actual"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(roundsByPhase).map(([phase, rounds]) => (
-                                    <SelectGroup key={phase}>
-                                        <Label className="px-2 py-1.5 text-xs font-semibold">{phase}</Label>
-                                        {rounds.map(round => (
-                                            <SelectItem key={round.id} value={round.name}>{round.name}</SelectItem>
-                                        ))}
-                                    </SelectGroup>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                        <Label htmlFor="registrations-switch" className="font-bold">
+                            Inscripciones de Equipos
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            {registrationsClosed 
+                                ? "Cerradas. Solo los equipos ya verificados participarán en el sorteo."
+                                : "Abiertas. Nuevos colegios verificados pueden entrar al sorteo."
+                            }
+                        </p>
                     </div>
-                    <div className="space-y-3">
-                        <Label>Equipos Participantes</Label>
-                        {teams.map((team, index) => (
-                            <div key={team.id} className="flex items-center gap-2">
-                                <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting || isAutoFilled}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Equipo ${index + 1}`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {registeredSchools.map(school => (
-                                            <SelectItem key={school.id} value={school.teamName}>
-                                                {school.teamName} ({school.schoolName})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
 
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting || isAutoFilled}>
-                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                </Button>
-                            </div>
-                        ))}
-                        <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting || isAutoFilled}>
-                            <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
-                        </Button>
-                        {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda.</p>}
-                    </div>
-                    <Button type="submit" disabled={isSubmitting || !currentRound}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Actualizar Configuración
-                    </Button>
-                </form>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Switch
+                                id="registrations-switch"
+                                checked={registrationsClosed}
+                                disabled={isSubmitting}
+                                // We trigger the dialog but don't change the switch state directly
+                                onCheckedChange={() => {}} 
+                            />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Está seguro que desea {registrationsClosed ? 'abrir' : 'cerrar'} las inscripciones?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+                                        <div className="flex">
+                                            <div className="flex-shrink-0">
+                                                <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+                                            </div>
+                                            <div className="ml-3">
+                                                <p className="text-sm text-yellow-700">
+                                                    {registrationsClosed 
+                                                        ? "Al abrir las inscripciones, nuevos colegios verificados podrán participar en el sorteo."
+                                                        : `Al cerrar, se fijará la lista de ${verifiedSchools.length} equipos verificados para el sorteo. No se podrán añadir más equipos.`
+                                                    } 
+                                                    Esta acción no se puede deshacer fácilmente.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                    onClick={() => handleToggleRegistration(!registrationsClosed)} 
+                                    className={!registrationsClosed ? "bg-destructive hover:bg-destructive/90" : ""}
+                                >
+                                    {registrationsClosed ? 'Sí, abrir inscripciones' : 'Sí, cerrar inscripciones'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
+                </div>
             </CardContent>
+             <CardFooter>
+                <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    <Lock className="h-3 w-3" />
+                    Este ajuste es global y afecta la elegibilidad de equipos para el sorteo.
+                </p>
+            </CardFooter>
         </Card>
     );
 }
-
-    
