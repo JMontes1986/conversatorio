@@ -237,7 +237,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
 
 export function DebateControlPanel({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
     const { toast } = useToast();
-    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now() });
+    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     
@@ -260,7 +260,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 const data = docSnap.data();
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
-                if(data.timer) setMainTimer(prev => ({...prev, duration: data.timer.duration}));
+                if(data.timer) {
+                    setMainTimer(prev => ({
+                        ...prev,
+                        duration: data.timer.duration,
+                        isActive: data.timer.isActive || false
+                    }));
+                }
                 setCurrentRound(data.currentRound || '');
                 setBracketTitle(data.bracketTitle || "¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
                 setBracketSubtitle(data.bracketSubtitle || "Debate Intercolegial");
@@ -307,7 +313,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         setMainTimer(newTime);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { timer: { duration: newDuration } }, { merge: true });
+            await setDoc(docRef, { timer: { duration: newDuration, isActive: mainTimer.isActive } }, { merge: true });
              toast({
                 title: "Temporizador Actualizado",
                 description: `El tiempo se ha establecido en ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,

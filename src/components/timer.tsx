@@ -6,6 +6,10 @@ import * as Tone from "tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Pause, RotateCcw, Bell } from "lucide-react";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+
+const DEBATE_STATE_DOC_ID = "current";
 
 interface TimerProps {
   initialTime: number; // in seconds
@@ -25,14 +29,27 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
 
   useEffect(() => {
     setTimeRemaining(initialTime);
-    // Do not auto-start if controls are hidden, moderator will control it
-    if (showControls) {
-        setIsActive(false);
-    } else {
-        // For public view, we can assume it's active and syncing with moderator
-        setIsActive(true);
+    // When initialTime changes, reset the timer but don't auto-start it.
+    // The active state should only be controlled by user interaction (moderator)
+    // or by the Firestore listener for the public view.
+    setIsActive(false);
+  }, [initialTime]);
+  
+  useEffect(() => {
+    // Public view timer logic: listens to firestore for active state
+    if (!showControls) {
+      const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+      const unsubscribe = onSnapshot(docRef, (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          if (data.timer && typeof data.timer.isActive === 'boolean') {
+              setIsActive(data.timer.isActive);
+          }
+        }
+      });
+      return () => unsubscribe();
     }
-  }, [initialTime, showControls]);
+  }, [showControls]);
 
 
   useEffect(() => {
@@ -43,8 +60,7 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
       }, 1000);
     } else if (timeRemaining === 0 && isActive) {
       setIsActive(false);
-      // Only the moderator's timer should make a sound
-      if(showControls) playSound();
+      if (showControls) playSound();
     }
     return () => {
       if (interval) {
@@ -67,12 +83,43 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
      if (Tone.context.state !== 'running') {
       await Tone.start();
     }
-    setIsActive(!isActive);
+    const newIsActive = !isActive;
+    setIsActive(newIsActive);
+
+    // If controls are shown, it means this is the moderator/admin panel.
+    // We need to update the active state in Firestore so the public view can sync.
+    if (showControls) {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                timer: { 
+                    isActive: newIsActive,
+                    duration: initialTime 
+                } 
+            }, { merge: true });
+        } catch (error) {
+            console.error("Error updating timer state in Firestore:", error);
+        }
+    }
   };
 
-  const resetTimer = () => {
+  const resetTimer = async () => {
     setIsActive(false);
     setTimeRemaining(initialTime);
+     if (showControls) {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                timer: { 
+                    isActive: false, 
+                    duration: initialTime,
+                    lastUpdated: Date.now() // Force a refresh on public view
+                } 
+            }, { merge: true });
+        } catch (error) {
+            console.error("Error resetting timer state in Firestore:", error);
+        }
+    }
   };
 
   const formatTime = (seconds: number) => {
