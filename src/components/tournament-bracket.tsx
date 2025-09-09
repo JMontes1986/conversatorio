@@ -240,7 +240,7 @@ export function TournamentBracket() {
                      if (lastRoundWinners.length === 0 && phase !== "Cuartos de Final") break;
                      
                      const currentRound: BracketRound = { title: phase, matches: [] };
-                     const nextRoundWinners: Participant[] = [];
+                     let nextRoundWinners: Participant[] = [];
                      
                      let teamsForThisPhase = lastRoundWinners;
                      
@@ -270,6 +270,7 @@ export function TournamentBracket() {
                              const p2 = teamsForThisPhase[i+1];
                              
                              if (!p2) { // Handle BYE - automatic pass
+                                p1.winner = true; // Mark as winner to advance
                                 nextRoundWinners.push(p1);
                                 currentRound.matches.push({ id: matchId, participants: [p1] });
                                 continue;
