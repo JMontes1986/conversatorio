@@ -45,6 +45,7 @@ interface ScoreData {
     matchId: string;
     judgeId?: string;
     teams: { name: string; total: number }[];
+    fullScores?: { name: string; total: number; scores: Record<string, number> }[];
     createdAt: any;
 }
 
@@ -106,6 +107,7 @@ function ScoringPanel() {
       setLoadingHistory(true);
       const scoresQuery = query(
           collection(db, "scores"),
+          where("judgeId", "==", judge.id),
           orderBy("createdAt", "desc")
       );
 
@@ -115,9 +117,7 @@ function ScoringPanel() {
               ...doc.data()
           } as ScoreData));
           
-          const judgeScores = allScores.filter(score => score.judgeId === judge.id);
-          
-          setPastScores(judgeScores);
+          setPastScores(allScores);
           setLoadingHistory(false);
       }, (error) => {
         console.error("Error fetching score history:", error);
@@ -234,6 +234,11 @@ function ScoringPanel() {
       ))}
     </div>
   );
+  
+  const getCriterionName = (id: string) => {
+    return rubricCriteria.find(c => c.id === id)?.name || 'Criterio Desconocido';
+  }
+
 
   if (loadingDebateState || loadingRubric) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
@@ -356,11 +361,35 @@ function ScoringPanel() {
                                     </div>
                                 </div>
                             </AccordionTrigger>
-                             <AccordionContent>
-                                {score.teams.map(t => (
-                                     <p key={t.name} className="text-sm">Puntuación final para <span className="font-semibold">{t.name}</span>: <span className="font-bold text-primary">{t.total}</span></p>
-                                ))}
-                                <p className="text-xs text-muted-foreground mt-2">Enviado el: {new Date(score.createdAt.seconds * 1000).toLocaleString()}</p>
+                            <AccordionContent>
+                                {score.fullScores && score.fullScores.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {score.fullScores.map(teamScore => (
+                                            <div key={teamScore.name}>
+                                                <h4 className="font-semibold">{teamScore.name} - Total: {teamScore.total}</h4>
+                                                <Table className="mt-2 text-xs">
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Criterio</TableHead>
+                                                            <TableHead className="text-right">Puntaje</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {Object.entries(teamScore.scores).map(([criterionId, points]) => (
+                                                            <TableRow key={criterionId}>
+                                                                <TableCell>{getCriterionName(criterionId)}</TableCell>
+                                                                <TableCell className="text-right">{points}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">No hay desglose disponible para esta puntuación.</p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-4">Enviado el: {new Date(score.createdAt.seconds * 1000).toLocaleString()}</p>
                             </AccordionContent>
                         </AccordionItem>
                     ))}
@@ -378,3 +407,5 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
+
+    
