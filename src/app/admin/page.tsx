@@ -296,7 +296,7 @@ function AdminDashboard() {
             if (!teamTotals[team.name]) {
                 teamTotals[team.name] = 0;
             }
-            teamTotals[team.name].push(team.total);
+            teamTotals[team.name] += team.total;
         });
     });
 
