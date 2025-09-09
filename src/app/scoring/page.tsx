@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash, Loader2, History } from 'lucide-react';
+import { Swords, Check, Hash, Loader2, History, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
@@ -130,6 +130,13 @@ function ScoringPanel() {
       return () => unsubscribeHistory();
 
   }, [judge]);
+  
+  const hasAlreadyScoredCurrentRound = useMemo(() => {
+    if (!judge || !debateState.currentRound || pastScores.length === 0) {
+        return false;
+    }
+    return pastScores.some(score => score.matchId === debateState.currentRound);
+  }, [pastScores, debateState.currentRound, judge]);
 
 
   const handleScoreChange = (teamName: string, criteriaId: string, value: number) => {
@@ -243,7 +250,7 @@ function ScoringPanel() {
   }
 
 
-  if (loadingDebateState || loadingRubric) {
+  if (loadingDebateState || loadingRubric || loadingHistory) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
 
@@ -270,72 +277,82 @@ function ScoringPanel() {
       )}
 
       {debateState.teams.length > 0 ? (
-        <>
-            <Card>
-                <CardHeader>
-                <CardTitle>Rúbrica de Evaluación</CardTitle>
-                <CardDescription>Seleccione una puntuación de 1 a 5 para cada criterio.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                <div className="w-full overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
-                            {debateState.teams.map(team => (
-                                <TableHead key={team.name} className="w-1/3 text-center min-w-[200px]">{team.name}</TableHead>
-                            ))}
-                        </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {rubricCriteria.length === 0 ? (
-                             <TableRow>
-                                <TableCell colSpan={debateState.teams.length + 1} className="text-center text-muted-foreground">
-                                    No hay criterios de evaluación definidos. Contacte al administrador.
-                                </TableCell>
-                            </TableRow>
-                        ) :
-                        rubricCriteria.map(criterion => (
-                            <TableRow key={criterion.id}>
-                            <TableCell>
-                                <p className="font-medium">{criterion.name}</p>
-                                <p className="text-xs text-muted-foreground">{criterion.description}</p>
-                            </TableCell>
-                            {debateState.teams.map(team => (
-                                <TableCell key={team.name}>
-                                    <ScoreButtons teamName={team.name} criteriaId={criterion.id} />
-                                </TableCell>
-                            ))}
-                            </TableRow>
-                        ))}
-                        <TableRow className="bg-secondary/50">
-                            <TableCell className="font-bold">Total</TableCell>
-                            {debateState.teams.map(team => (
-                                <TableCell key={team.name} className="text-center font-bold text-lg text-primary">{calculateTotal(team.name)}</TableCell>
-                            ))}
-                        </TableRow>
-                        <TableRow>
-                            <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
-                            {debateState.teams.map(team => (
-                                <TableCell key={team.name} className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum(team.name)}</TableCell>
-                            ))}
-                        </TableRow>
-                        </TableBody>
-                    </Table>
-                </div>
+        hasAlreadyScoredCurrentRound ? (
+            <Card className="bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
+                <CardContent className="pt-6 text-center text-green-700 dark:text-green-300">
+                    <CheckCircle2 className="h-12 w-12 mx-auto mb-4"/>
+                    <h3 className="text-xl font-bold">Ronda Calificada</h3>
+                    <p className="text-muted-foreground text-green-600 dark:text-green-400">Ya ha enviado su puntuación para esta ronda. Puede verla en su historial a continuación.</p>
                 </CardContent>
             </Card>
-            <div className="mt-8 flex justify-end">
-                <Button size="lg" onClick={handleSubmit} disabled={isSubmitting || rubricCriteria.length === 0}>
-                    {isSubmitting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                        <Check className="mr-2 h-4 w-4" />
-                    )}
-                    {isSubmitting ? 'Enviando...' : 'Enviar Puntuación'}
-                </Button>
-            </div>
-        </>
+        ) : (
+            <>
+                <Card>
+                    <CardHeader>
+                    <CardTitle>Rúbrica de Evaluación</CardTitle>
+                    <CardDescription>Seleccione una puntuación de 1 a 5 para cada criterio.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                    <div className="w-full overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
+                                {debateState.teams.map(team => (
+                                    <TableHead key={team.name} className="w-1/3 text-center min-w-[200px]">{team.name}</TableHead>
+                                ))}
+                            </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {rubricCriteria.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={debateState.teams.length + 1} className="text-center text-muted-foreground">
+                                        No hay criterios de evaluación definidos. Contacte al administrador.
+                                    </TableCell>
+                                </TableRow>
+                            ) :
+                            rubricCriteria.map(criterion => (
+                                <TableRow key={criterion.id}>
+                                <TableCell>
+                                    <p className="font-medium">{criterion.name}</p>
+                                    <p className="text-xs text-muted-foreground">{criterion.description}</p>
+                                </TableCell>
+                                {debateState.teams.map(team => (
+                                    <TableCell key={team.name}>
+                                        <ScoreButtons teamName={team.name} criteriaId={criterion.id} />
+                                    </TableCell>
+                                ))}
+                                </TableRow>
+                            ))}
+                            <TableRow className="bg-secondary/50">
+                                <TableCell className="font-bold">Total</TableCell>
+                                {debateState.teams.map(team => (
+                                    <TableCell key={team.name} className="text-center font-bold text-lg text-primary">{calculateTotal(team.name)}</TableCell>
+                                ))}
+                            </TableRow>
+                            <TableRow>
+                                <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
+                                {debateState.teams.map(team => (
+                                    <TableCell key={team.name} className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum(team.name)}</TableCell>
+                                ))}
+                            </TableRow>
+                            </TableBody>
+                        </Table>
+                    </div>
+                    </CardContent>
+                </Card>
+                <div className="mt-8 flex justify-end">
+                    <Button size="lg" onClick={handleSubmit} disabled={isSubmitting || rubricCriteria.length === 0}>
+                        {isSubmitting ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Check className="mr-2 h-4 w-4" />
+                        )}
+                        {isSubmitting ? 'Enviando...' : 'Enviar Puntuación'}
+                    </Button>
+                </div>
+            </>
+        )
       ) : (
         <Card>
             <CardContent className="pt-6">
