@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 import { useJudgeAuth } from "@/context/judge-auth-context";
 import { useModeratorAuth } from "@/context/moderator-auth-context";
+import Image from "next/image";
 
 const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
@@ -72,7 +73,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
         <Link href="/" className="flex items-center gap-2">
-          <Scale className="h-6 w-6 text-primary" />
+          <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={32} height={32} />
           <span className="font-headline text-xl font-bold">
             Conversatorio Colgemelli
           </span>
@@ -132,7 +133,7 @@ export function Header() {
             <SheetContent side="right">
               <div className="grid gap-4 py-6">
                 <Link href="/" className="flex items-center gap-2 mb-4">
-                  <Scale className="h-6 w-6 text-primary" />
+                  <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={32} height={32} />
                   <span className="font-headline text-xl font-bold">
                     Colgemelli
                   </span>
