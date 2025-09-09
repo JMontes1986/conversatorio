@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home, UserPlus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -598,6 +598,20 @@ function AdminDashboard() {
                                 </form>
                             </CardContent>
                         </Card>
+                         <Card className="mt-6">
+                            <CardHeader>
+                                <CardTitle>Crear Administrador</CardTitle>
+                                <CardDescription>Añada un nuevo usuario con permisos de administrador.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button asChild className="w-full">
+                                    <Link href="/admin/crear-usuario">
+                                        <UserPlus className="mr-2 h-4 w-4" />
+                                        Crear Nuevo Administrador
+                                    </Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
                     </div>
                     <div className="md:col-span-2">
                         <Card>
@@ -753,3 +767,5 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
+
+    
