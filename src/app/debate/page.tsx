@@ -76,7 +76,7 @@ export default function DebatePage() {
         >
             <div className="w-full max-w-5xl space-y-8 text-center">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="text-center md:text-left">
+                        <div className={cn("text-center md:text-left", isFullscreen && "hidden")}>
                             <h1 className="font-headline text-3xl md:text-4xl font-bold capitalize">
                                 {debateState.currentRound}
                             </h1>
