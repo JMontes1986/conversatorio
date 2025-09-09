@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
@@ -51,6 +51,7 @@ interface Question {
 interface Team {
     id: string;
     name: string;
+    isBye?: boolean; // To mark a team that has a bye
 }
 
 interface SchoolData {
@@ -87,6 +88,17 @@ function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
     const matches: Record<string, { teamTotals: Record<string, number> }> = {};
 
     roundScores.forEach(score => {
+        // Handle bye rounds, which won't have multiple teams
+        if (score.matchId.includes('-bye')) {
+             if (!matches[score.matchId]) {
+                matches[score.matchId] = { teamTotals: {} };
+             }
+             score.teams.forEach(team => {
+                 matches[score.matchId].teamTotals[team.name] = team.total;
+             });
+             return;
+        }
+
         const teamNames = score.teams.map(t => t.name).sort().join(' vs ');
         if (!matches[teamNames]) {
             matches[teamNames] = { teamTotals: {} };
@@ -228,7 +240,15 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         
         if (qualifiedTeams.length > 0) {
              setIsAutoFilled(true);
-             setTeams(qualifiedTeams.map(name => ({ id: nanoid(), name })));
+             const teamObjects: Team[] = qualifiedTeams.map(name => ({ id: nanoid(), name }));
+             
+             // Check for bye
+             if (teamObjects.length % 2 !== 0) {
+                 const byeTeam = teamObjects[teamObjects.length - 1];
+                 byeTeam.isBye = true;
+             }
+
+             setTeams(teamObjects);
              toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos para ${roundName} han sido cargados.` });
         } else {
             setIsAutoFilled(false);
@@ -241,8 +261,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         e.preventDefault();
         const validTeams = teams.filter(t => t.name.trim() !== '');
 
-        if (!currentRound || validTeams.length < 2) {
-            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y asegúrese de que haya al menos dos equipos." });
+        if (!currentRound || validTeams.length < 1) { // Can be 1 in case of a bye
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y asegúrese de que haya al menos un equipo." });
             return;
         }
         setIsSubmitting(true);
@@ -261,6 +281,46 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         }
     }
     
+    const handleConfirmBye = async (team: Team) => {
+        if (!team.isBye || !currentRound) return;
+        
+        setIsSubmitting(true);
+        const byeMatchId = `${currentRound}-bye-${team.name}`;
+
+        try {
+            // Check if score already exists
+            const scoreQuery = query(collection(db, "scores"), where("matchId", "==", byeMatchId));
+            const existingScores = await getDocs(scoreQuery);
+            if (!existingScores.empty) {
+                toast({
+                    variant: "default",
+                    title: "Avance ya Registrado",
+                    description: `${team.name} ya ha avanzado por bye en esta ronda.`,
+                });
+                return;
+            }
+
+            const byeScoreData = {
+                matchId: byeMatchId,
+                judgeName: "Sistema",
+                teams: [{ name: team.name, total: 1 }], // Give 1 point to signify a win
+                fullScores: [{ name: team.name, total: 1, scores: { bye: 1 } }],
+                createdAt: new Date(),
+            };
+            await addDoc(collection(db, "scores"), byeScoreData);
+            toast({
+                title: "Avance Confirmado",
+                description: `${team.name} avanza a la siguiente fase.`,
+            });
+        } catch (error) {
+            console.error("Error confirming bye:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo confirmar el avance del equipo." });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+
     const handleTeamNameChange = (id: string, name: string) => {
         setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
     };
@@ -323,10 +383,16 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                                         ))}
                                     </SelectContent>
                                 </Select>
-
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting || isAutoFilled}>
-                                    <Trash2 className="h-4 w-4 text-destructive"/>
-                                </Button>
+                                {team.isBye ? (
+                                    <Button type="button" variant="secondary" size="sm" onClick={() => handleConfirmBye(team)} disabled={isSubmitting}>
+                                        <Crown className="mr-2 h-4 w-4 text-amber-500" />
+                                        Confirmar Avance
+                                    </Button>
+                                ) : (
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting || isAutoFilled}>
+                                        <Trash2 className="h-4 w-4 text-destructive"/>
+                                    </Button>
+                                )}
                             </div>
                         ))}
                         <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting || isAutoFilled}>
