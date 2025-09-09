@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash, Loader2, History, CheckCircle2 } from 'lucide-react';
+import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
@@ -135,9 +135,10 @@ function ScoringPanel() {
     if (!judge || !debateState.currentRound || pastScores.length === 0) {
         return false;
     }
-    return pastScores.some(score => score.matchId === debateState.currentRound);
+    return pastScores.some(score => score.matchId === debateState.currentRound || score.matchId.startsWith(debateState.currentRound + '-bye'));
   }, [pastScores, debateState.currentRound, judge]);
-
+  
+  const isByeRound = debateState.teams.length === 1;
 
   const handleScoreChange = (teamName: string, criteriaId: string, value: number) => {
     setScores(prev => ({
@@ -285,6 +286,14 @@ function ScoringPanel() {
                     <p className="text-muted-foreground text-green-600 dark:text-green-400">Ya ha enviado su puntuación para esta ronda. Puede verla en su historial a continuación.</p>
                 </CardContent>
             </Card>
+        ) : isByeRound ? (
+            <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+                <CardContent className="pt-6 text-center text-blue-700 dark:text-blue-300">
+                    <Info className="h-12 w-12 mx-auto mb-4"/>
+                    <h3 className="text-xl font-bold">Avance Automático</h3>
+                    <p className="text-muted-foreground text-blue-600 dark:text-blue-400">No se requiere calificación para esta ronda, ya que un equipo avanzó automáticamente (bye).</p>
+                </CardContent>
+            </Card>
         ) : (
             <>
                 <Card>
@@ -427,5 +436,3 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
-
-    
