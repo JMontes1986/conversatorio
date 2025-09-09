@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trash2, PlusCircle, Save, Home, Users, Shuffle, Gavel, ClipboardCheck, Trophy, Monitor, Calendar, Shield, Star, Icon as LucideIcon, Image as ImageIcon } from "lucide-react";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
@@ -25,7 +25,6 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "./ui/textarea";
 import { nanoid } from "nanoid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import Image from 'next/image';
 import { Progress } from "./ui/progress";
 
@@ -48,7 +47,7 @@ const formSchema = z.object({
     title: z.string().min(3, "El título de la sección es requerido."),
     paragraph1: z.string().min(10, "El primer párrafo es requerido."),
     paragraph2: z.string().min(10, "El segundo párrafo es requerido."),
-    imageUrl: z.string().url("Debe ser una URL válida").optional(),
+    imageUrl: z.string().url("Debe ser una URL válida.").or(z.literal("")).optional(),
   }),
 });
 
@@ -60,9 +59,7 @@ export function HomePageEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-
+  
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -101,52 +98,13 @@ export function HomePageEditor() {
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
-    let finalValues = { ...values };
-
-    if (imageFile) {
-        const storageRef = ref(storage, `site-images/${Date.now()}_${imageFile.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, imageFile);
-
-        try {
-            await new Promise<void>((resolve, reject) => {
-                 uploadTask.on('state_changed',
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        setUploadProgress(progress);
-                    },
-                    (error) => {
-                        console.error("Upload failed:", error);
-                        reject(error);
-                    },
-                    async () => {
-                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                        finalValues.promoSection.imageUrl = downloadURL;
-                        resolve();
-                    }
-                );
-            });
-        } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Error al subir la imagen",
-                description: "No se pudo subir la nueva imagen. Por favor, inténtelo de nuevo.",
-            });
-            setIsSubmitting(false);
-            setUploadProgress(0);
-            return;
-        }
-    }
-
-
     try {
       const docRef = doc(db, 'siteContent', 'home');
-      await setDoc(docRef, finalValues);
+      await setDoc(docRef, values);
       toast({
         title: "¡Contenido Actualizado!",
         description: "La página de inicio ha sido actualizada con la nueva información.",
       });
-      setImageFile(null);
-      setUploadProgress(0);
     } catch (error) {
       console.error("Error updating document: ", error);
       toast({
@@ -311,21 +269,22 @@ export function HomePageEditor() {
                         <Image src={promoImageUrl} alt="Vista previa" fill className="object-cover" />
                     </div>
                 )}
-                <div className="space-y-2">
-                    <Input 
-                        type="file" 
-                        accept="image/png, image/jpeg, image/webp"
-                        onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                        disabled={isSubmitting}
-                    />
-                     <FormDescription>Seleccione una nueva imagen para reemplazar la actual. Ancho recomendado: 600px.</FormDescription>
-                </div>
-                 {isSubmitting && imageFile && (
-                    <div className="space-y-1">
-                        <Progress value={uploadProgress} />
-                        <p className="text-xs text-muted-foreground">Subiendo: {Math.round(uploadProgress)}%</p>
-                    </div>
-                 )}
+                <FormField
+                    control={form.control}
+                    name="promoSection.imageUrl"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Enlace público de la Imagen</FormLabel>
+                        <FormControl>
+                            <Input placeholder="https://..." {...field} />
+                        </FormControl>
+                        <FormDescription>
+                            Pegue aquí el enlace público de su imagen (ej: desde Supabase Storage).
+                        </FormDescription>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
               </div>
 
             </div>
@@ -340,5 +299,3 @@ export function HomePageEditor() {
     </Card>
   );
 }
-
-    
