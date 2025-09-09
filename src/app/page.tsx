@@ -179,7 +179,7 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          <Carousel className="w-full" opts={{ loop: true }}>
+          <Carousel className="w-full" opts={{ loop: (content.promoSection.imageUrls?.length ?? 0) > 1 }}>
               <CarouselContent>
                 {(content.promoSection.imageUrls && content.promoSection.imageUrls.length > 0) ? (
                     content.promoSection.imageUrls.map((image) => (
@@ -209,8 +209,12 @@ export default function Home() {
                     </CarouselItem>
                 )}
               </CarouselContent>
-              <CarouselPrevious />
-              <CarouselNext />
+              {(content.promoSection.imageUrls?.length ?? 0) > 1 && (
+                <>
+                    <CarouselPrevious />
+                    <CarouselNext />
+                </>
+              )}
             </Carousel>
         </div>
       </section>
