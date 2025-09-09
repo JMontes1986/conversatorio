@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy, where, doc, getDoc } from "firebase/firestore";
-import { Loader2, Trophy, EyeOff } from "lucide-react";
+import { Loader2, Trophy, EyeOff, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -27,6 +27,7 @@ type MatchResult = {
     teams: { name: string; total: number }[];
     winner: string;
     judges: number;
+    isBye?: boolean;
 }
 
 export function GroupStageResults() {
@@ -80,12 +81,29 @@ export function GroupStageResults() {
 
     const resultsByRound = groupRounds.map(round => {
         const roundScores = scores.filter(s => s.matchId === round.name);
-        if (roundScores.length === 0) {
+        const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
+
+        if (roundScores.length === 0 && !byeScore) {
             return {
                 id: round.id,
                 name: round.name,
                 match: null,
             };
+        }
+
+        if (byeScore) {
+            const winnerTeam = byeScore.teams[0];
+            return {
+                id: round.id,
+                name: round.name,
+                match: {
+                    id: round.name,
+                    teams: [winnerTeam],
+                    winner: winnerTeam.name,
+                    judges: 0,
+                    isBye: true,
+                } as MatchResult
+            }
         }
 
         const teamTotals: Record<string, number> = {};
@@ -155,6 +173,18 @@ export function GroupStageResults() {
                     </CardHeader>
                     <CardContent>
                        {result.match ? (
+                           result.match.isBye ? (
+                             <div className="text-center text-sm h-24 flex flex-col items-center justify-center">
+                                <p className="font-bold flex items-center gap-2">
+                                     <Trophy className="h-4 w-4 text-amber-500" />
+                                    {result.match.winner}
+                                </p>
+                                <Badge variant="secondary" className="mt-2">
+                                     <CheckCircle className="h-3 w-3 mr-1"/>
+                                     Avance Automático
+                                </Badge>
+                             </div>
+                           ) : (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -174,6 +204,7 @@ export function GroupStageResults() {
                                     ))}
                                 </TableBody>
                             </Table>
+                           )
                        ) : (
                            <div className="text-center text-sm text-muted-foreground h-24 flex items-center justify-center">
                                 Esperando resultados...
