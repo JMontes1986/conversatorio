@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -105,17 +105,18 @@ export function DrawAnimation() {
         setAllScores(scoresData);
     });
     
-    // Check for existing live draw
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
     const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // only apply state if the tab matches, to avoid overwriting the current view with old data
-            if(data.activeTab === activeTab) {
-              setTeams(data.teams || []);
-              setRounds(data.rounds || []);
-              setIsDrawing(data.isDrawing || false);
-              setIsFinished(data.isFinished || false);
+            const currentTabInDb = data.activeTab || 'groups';
+            
+            // If the database tab matches the current tab, update the state
+            if (currentTabInDb === activeTab) {
+                setTeams(data.teams || []);
+                setRounds(data.rounds || []);
+                setIsDrawing(data.isDrawing || false);
+                setIsFinished(data.isFinished || false);
             }
         }
         setLoading(false);
@@ -130,7 +131,7 @@ export function DrawAnimation() {
     };
   }, [activeTab]);
 
-  const resetDraw = useCallback((isTabChange = false) => {
+ const resetDraw = useCallback(async (isTabChange = false) => {
     let currentTeams: Team[] = [];
     let currentRounds: RoundData[] = [];
 
@@ -146,29 +147,43 @@ export function DrawAnimation() {
             .map(t => ({...t, round: null}));
     }
     
-    const resetState = {
-        teams: currentTeams.map(t => ({...t, round: null})),
-        rounds: currentRounds,
-        isDrawing: false,
-        isFinished: false,
-        activeTab
-    };
+    let stateToSet;
+    const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+    const docSnap = await getDoc(drawStateRef);
+
+    if (isTabChange && docSnap.exists() && docSnap.data().activeTab === activeTab) {
+        // If tab is just changing, load existing data for that tab
+        const data = docSnap.data();
+        stateToSet = {
+            teams: data.teams || currentTeams.map(t => ({...t, round: null})),
+            rounds: data.rounds || currentRounds,
+            isDrawing: data.isDrawing || false,
+            isFinished: data.isFinished || false,
+            activeTab
+        };
+    } else {
+        // Otherwise, reset to a clean state for the current tab
+        stateToSet = {
+            teams: currentTeams.map(t => ({...t, round: null})),
+            rounds: currentRounds,
+            isDrawing: false,
+            isFinished: false,
+            activeTab
+        };
+        // Update Firestore only on a manual reset, not a tab change that loads existing data.
+         await updateLiveDrawState(stateToSet);
+    }
     
-    setTeams(resetState.teams);
-    setRounds(resetState.rounds);
-    setIsDrawing(resetState.isDrawing);
-    setIsFinished(resetState.isFinished);
+    setTeams(stateToSet.teams);
+    setRounds(stateToSet.rounds);
+    setIsDrawing(stateToSet.isDrawing);
+    setIsFinished(stateToSet.isFinished);
     setIsFixing(false);
     
-    // Only update firestore if it's a manual reset, not just a tab change
-    if(!isTabChange) {
-      updateLiveDrawState(resetState);
-    }
   }, [activeTab, allRounds, allTeams, allScores]);
   
-  // Recalculate teams and rounds when tab changes
   useEffect(() => {
-      resetDraw(true); // Soft reset on tab change
+      resetDraw(true);
   }, [activeTab, allTeams, allRounds, resetDraw]);
 
 
@@ -224,7 +239,7 @@ export function DrawAnimation() {
 
     setIsDrawing(false);
     setIsFinished(true);
-    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds: shuffledRounds });
+    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds: shuffledRounds, activeTab });
   };
   
   const fixToBlockchain = () => {
