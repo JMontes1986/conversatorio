@@ -1,12 +1,18 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
 
@@ -22,9 +28,16 @@ type RoundData = {
     phase: string;
 }
 
+type SchoolData = {
+    id: string;
+    teamName: string;
+    participants: { name: string }[];
+}
+
 export function PublicDrawDisplay() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [rounds, setRounds] = useState<RoundData[]>([]);
+  const [allSchools, setAllSchools] = useState<SchoolData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
@@ -34,7 +47,7 @@ export function PublicDrawDisplay() {
     setLoading(true);
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
     
-    const unsubscribe = onSnapshot(drawStateRef, (docSnap) => {
+    const unsubscribeDraw = onSnapshot(drawStateRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             setTeams(data.teams || []);
@@ -43,17 +56,38 @@ export function PublicDrawDisplay() {
             setIsFinished(data.isFinished || false);
             setActiveTab(data.activeTab || 'groups');
         }
-        setLoading(false);
     }, (error) => {
         console.error("Error fetching live draw state:", error);
+    });
+
+    const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+    const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
+        const fetchedSchools = snapshot.docs.map(doc => ({
+            id: doc.id,
+            teamName: doc.data().teamName,
+            participants: doc.data().participants || [],
+        })) as SchoolData[];
+        setAllSchools(fetchedSchools);
+        setLoading(false);
+    }, (error) => {
+        console.error("Error fetching schools:", error);
         setLoading(false);
     });
 
-    return () => unsubscribe();
+
+    return () => {
+        unsubscribeDraw();
+        unsubscribeSchools();
+    };
   }, []);
 
   const getRoundTeams = (roundName: string) => {
     return teams.filter(t => t.round === roundName);
+  }
+
+  const getTeamParticipants = (teamName: string) => {
+    const school = allSchools.find(s => s.teamName === teamName);
+    return school?.participants || [];
   }
 
   const animationStyles = useMemo(() => {
@@ -91,6 +125,7 @@ export function PublicDrawDisplay() {
     }
     
     return (
+      <TooltipProvider>
         <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.max(1, rounds.length)} gap-6 min-h-[400px]`}>
             {rounds.map(round => (
                 <Card key={round.id} className="flex flex-col">
@@ -98,15 +133,31 @@ export function PublicDrawDisplay() {
                     <CardTitle className="font-headline text-center">{round.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex-grow space-y-2 relative">
-                    {getRoundTeams(round.name).map((team) => (
-                    <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
-                        {team.name}
-                    </div>
-                    ))}
+                    {getRoundTeams(round.name).map((team) => {
+                       const participants = getTeamParticipants(team.name);
+                       return (
+                        <Tooltip key={team.id}>
+                            <TooltipTrigger asChild>
+                                <div className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500 cursor-help">
+                                    {team.name}
+                                </div>
+                            </TooltipTrigger>
+                            {participants.length > 0 && (
+                               <TooltipContent>
+                                    <p className="font-bold mb-2">Participantes:</p>
+                                    <ul className="list-disc pl-4">
+                                       {participants.map((p, i) => <li key={i}>{p.name}</li>)}
+                                    </ul>
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
+                       )
+                    })}
                 </CardContent>
                 </Card>
             ))}
         </div>
+      </TooltipProvider>
     )
   }
 
