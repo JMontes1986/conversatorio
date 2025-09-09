@@ -9,7 +9,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 2000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -163,6 +163,12 @@ function toast({ ...props }: Toast) {
       },
     },
   })
+  
+  // Auto-dismiss after timeout
+  setTimeout(() => {
+    dismiss();
+  }, TOAST_REMOVE_DELAY);
+
 
   return {
     id: id,
