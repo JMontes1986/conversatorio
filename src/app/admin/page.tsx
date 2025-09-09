@@ -279,53 +279,44 @@ function AdminDashboard() {
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
  
- const processedResults = scores.reduce((acc, score) => {
-    let match = acc.find(m => m.matchId === score.matchId);
-    if (!match) {
-        match = { matchId: score.matchId, scores: [], teamTotals: {}, winner: '' };
-        acc.push(match);
+ const scoresByMatch = scores.reduce((acc, score) => {
+    if (!acc[score.matchId]) {
+        acc[score.matchId] = [];
     }
-    match.scores.push(score);
+    acc[score.matchId].push(score);
+    return acc;
+ }, {} as Record<string, ScoreData[]>);
 
-    // Recalculate totals for all judges every time
-    const allScoresForMatch = scores.filter(s => s.matchId === score.matchId);
+ const processedResults: MatchResults[] = Object.entries(scoresByMatch).map(([matchId, matchScores]) => {
     const teamTotals: Record<string, number> = {};
-
-    allScoresForMatch.forEach(s => {
-        s.teams.forEach(team => {
+    
+    matchScores.forEach(score => {
+        score.teams.forEach(team => {
             if (!teamTotals[team.name]) {
                 teamTotals[team.name] = 0;
             }
             teamTotals[team.name] += team.total;
         });
     });
-    match.teamTotals = teamTotals;
-    
-    // Determine winner based on aggregated scores
-    const totals = Object.values(match.teamTotals);
-    if(totals.length > 0) {
-        const maxScore = Math.max(...totals);
-        const winners = Object.entries(match.teamTotals).filter(([, score]) => score === maxScore);
-        
-        if (winners.length > 1 && totals.every(t => t === maxScore)) {
-            match.winner = 'Empate';
-        } else if (winners.length === 1) {
-            match.winner = winners[0][0];
-        } else {
-             // Handle cases of multi-team tie for first where not all teams are tied
-            match.winner = 'Empate';
-        }
-    } else {
-        match.winner = '';
-    }
 
-    return acc;
-  }, [] as MatchResults[]);
-  
-  // Deduplicate results
-  const uniqueResults = processedResults.filter((result, index, self) =>
-    index === self.findIndex((r) => r.matchId === result.matchId)
-  );
+    let winner = 'Empate';
+    const totals = Object.values(teamTotals);
+    if (totals.length > 0) {
+        const maxScore = Math.max(...totals);
+        const winners = Object.entries(teamTotals).filter(([, score]) => score === maxScore);
+        if (winners.length === 1) {
+            winner = winners[0][0];
+        }
+    }
+    
+    return {
+        matchId,
+        scores: matchScores,
+        teamTotals,
+        winner,
+    };
+ });
+
 
   const openEditDialog = (school: SchoolData) => {
     setSelectedSchool(school);
@@ -683,9 +674,9 @@ function AdminDashboard() {
                 </CardHeader>
                 <CardContent>
                     {loadingScores && <p className="text-center">Cargando resultados...</p>}
-                    {!loadingScores && uniqueResults.length === 0 && <p className="text-center text-muted-foreground">Aún no hay resultados para mostrar.</p>}
+                    {!loadingScores && processedResults.length === 0 && <p className="text-center text-muted-foreground">Aún no hay resultados para mostrar.</p>}
                     <Accordion type="single" collapsible className="w-full">
-                        {uniqueResults.map(result => (
+                        {processedResults.map(result => (
                             <AccordionItem value={result.matchId} key={result.matchId}>
                                 <AccordionTrigger>
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center w-full pr-4 text-left gap-4">
@@ -757,3 +748,5 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
+
+    
