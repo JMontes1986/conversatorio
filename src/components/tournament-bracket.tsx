@@ -48,6 +48,7 @@ type BracketSettings = {
     bracketTitle?: string;
     bracketSubtitle?: string;
     bracketTitleSize?: number;
+    resultsPublished?: boolean;
 }
 
 type SchoolData = {
@@ -70,8 +71,8 @@ const ParticipantCard = ({ participant, showScore }: { participant: Participant,
 
     return (
         <div className={cn("flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md", 
-            participant.winner ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-secondary-foreground", 
-            participant.winner === false && "opacity-50")}>
+            showScore && participant.winner ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-secondary-foreground", 
+            showScore && participant.winner === false && "opacity-50")}>
             <div className="relative h-6 w-6 rounded-full overflow-hidden bg-muted shrink-0">
                 <Image
                     src={participant.avatar}
@@ -100,12 +101,12 @@ const MatchCard = ({ match, showScore }: { match: Match, showScore: boolean }) =
     </div>
 );
 
-const RoundColumn = ({ round }: { round: BracketRound }) => (
+const RoundColumn = ({ round, showScore }: { round: BracketRound, showScore: boolean }) => (
     <div className="flex flex-col justify-around flex-shrink-0 w-48">
         <h3 className="text-center font-headline text-lg font-bold mb-8 text-primary uppercase h-10 flex items-center justify-center">{round.title}</h3>
         <div className="flex flex-col justify-around gap-y-12 h-full">
             {round.matches.map((match, index) => (
-                <MatchCard key={match.id || `m-${index}`} match={match} showScore={round.title !== 'Ganador'} />
+                <MatchCard key={match.id || `m-${index}`} match={match} showScore={showScore && round.title !== 'Ganador'} />
             ))}
         </div>
     </div>
@@ -144,7 +145,7 @@ export function TournamentBracket() {
   useEffect(() => {
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
     const drawStateRef = doc(db, "drawState", "liveDraw");
-    const debateStateRef = doc(db, "debateState", "current");
+    const settingsRef = doc(db, "settings", "competition");
     const schoolsQuery = query(collection(db, "schools"));
 
     let unsubScores: () => void, unsubDraw: () => void, unsubSettings: () => void, unsubSchools: () => void;
@@ -153,13 +154,14 @@ export function TournamentBracket() {
         const schools = schoolsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SchoolData));
         setAllSchools(schools);
 
-        unsubSettings = onSnapshot(debateStateRef, (doc) => {
+        unsubSettings = onSnapshot(settingsRef, (doc) => {
             if(doc.exists()) {
                 const data = doc.data();
                 setBracketSettings({
                     bracketTitle: data.bracketTitle,
                     bracketSubtitle: data.bracketSubtitle,
-                    bracketTitleSize: data.bracketTitleSize
+                    bracketTitleSize: data.bracketTitleSize,
+                    resultsPublished: data.resultsPublished || false,
                 });
             }
         });
@@ -360,6 +362,8 @@ export function TournamentBracket() {
         4: "text-4xl",
         5: "text-5xl"
     };
+    
+    const showResults = bracketSettings.resultsPublished ?? false;
 
   if (loading) {
     return (
@@ -389,7 +393,7 @@ export function TournamentBracket() {
             <p className="text-lg text-muted-foreground mt-2">{bracketSettings.bracketSubtitle || 'Debate Intercolegial'}</p>
         </div>
         
-        {champion && (
+        {showResults && champion && (
           <div className="flex flex-col items-center mb-12 animate-in fade-in-50 duration-500">
             <Trophy className="h-16 w-16 text-amber-400"/>
             <h3 className="font-headline text-2xl font-bold mt-2">GANADOR</h3>
@@ -408,7 +412,7 @@ export function TournamentBracket() {
       <div className="flex items-start min-w-max">
         {bracketData.map((round, roundIndex) => (
             <div key={round.title} className="flex items-start">
-               <RoundColumn round={round} />
+               <RoundColumn round={round} showScore={showResults} />
                {roundIndex < bracketData.length -1 && round.matches.length > 0 && (
                    <ConnectorColumn numMatches={bracketData[roundIndex+1].matches.length} numPreviousMatches={round.matches.length} />
                )}

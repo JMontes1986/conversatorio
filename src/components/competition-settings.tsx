@@ -12,7 +12,7 @@ import {
   CardFooter
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Lock } from "lucide-react";
+import { Loader2, AlertTriangle, Lock, Eye } from "lucide-react";
 import { db } from '@/lib/firebase';
 import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
@@ -29,16 +29,12 @@ interface SchoolData {
     teamName: string;
     status: 'Verificado' | 'Pendiente';
 }
-interface ScoreData {
-    id: string;
-    matchId: string;
-    teams: { name: string; total: number }[];
-}
 
 
-export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[] }) {
+export function CompetitionSettings({ allScores = [] }: { allScores?: any[] }) {
     const { toast } = useToast();
     const [registrationsClosed, setRegistrationsClosed] = useState(false);
+    const [resultsPublished, setResultsPublished] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loading, setLoading] = useState(true);
     const [verifiedSchools, setVerifiedSchools] = useState<SchoolData[]>([]);
@@ -49,6 +45,7 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setRegistrationsClosed(data.registrationsClosed || false);
+                setResultsPublished(data.resultsPublished || false);
             }
             setLoading(false);
         });
@@ -76,7 +73,6 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             
             const dataToSet: any = { registrationsClosed: closed };
             if (closed) {
-                // If closing, store the current list of verified schools
                 dataToSet.lockedInTeams = verifiedSchools.map(school => ({
                     id: school.id,
                     teamName: school.teamName
@@ -97,6 +93,25 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             setIsSubmitting(false);
         }
     }
+    
+     const handleToggleResultsPublication = async (published: boolean) => {
+        setIsSubmitting(true);
+        try {
+            const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
+            await setDoc(settingsRef, { resultsPublished: published }, { merge: true });
+            setResultsPublished(published);
+            toast({
+                title: "Ajustes de Visibilidad Actualizados",
+                description: `Los resultados ahora están ${published ? 'públicos' : 'ocultos'}.`
+            });
+        } catch (error) {
+            console.error("Error updating settings:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudieron actualizar los ajustes." });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
 
     if (loading) {
         return (
@@ -111,10 +126,10 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             <CardHeader>
                 <CardTitle>Ajustes Generales de la Competencia</CardTitle>
                 <CardDescription>
-                    Controle aspectos clave del torneo, como el cierre de inscripciones.
+                    Controle aspectos clave del torneo como el cierre de inscripciones y la visibilidad de los resultados.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
                 <div className={cn(
                     "flex items-center justify-between rounded-lg border p-4 transition-colors",
                     registrationsClosed 
@@ -140,7 +155,6 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                                 checked={registrationsClosed}
                                 disabled={isSubmitting}
                                 className={cn(registrationsClosed && "data-[state=checked]:bg-destructive")}
-                                // We trigger the dialog but don't change the switch state directly
                                 onCheckedChange={() => {}} 
                             />
                         </AlertDialogTrigger>
@@ -180,11 +194,60 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                     </AlertDialog>
 
                 </div>
+                 <div className={cn(
+                    "flex items-center justify-between rounded-lg border p-4 transition-colors",
+                    resultsPublished 
+                        ? "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800"
+                        : "bg-secondary"
+                )}>
+                    <div>
+                        <Label htmlFor="results-switch" className={cn("font-bold text-lg", resultsPublished ? "text-blue-800 dark:text-blue-300" : "text-foreground")}>
+                            {resultsPublished ? "Resultados Públicos" : "Resultados Ocultos"}
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            {resultsPublished 
+                                ? "Los marcadores y brackets son visibles para todos."
+                                : "Los resultados no son visibles para el público general."
+                            }
+                        </p>
+                    </div>
+
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Switch
+                                id="results-switch"
+                                checked={resultsPublished}
+                                disabled={isSubmitting}
+                                onCheckedChange={() => {}} 
+                            />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Desea {resultsPublished ? 'ocultar' : 'publicar'} los resultados?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    {resultsPublished 
+                                        ? "Esta acción ocultará los puntajes y ganadores en el marcador público. Ideal para preparar la siguiente fase."
+                                        : "Esta acción hará que todos los puntajes y ganadores sean visibles en el marcador público."
+                                    }
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                    onClick={() => handleToggleResultsPublication(!resultsPublished)}
+                                >
+                                    {resultsPublished ? 'Sí, ocultar' : 'Sí, publicar'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
+                </div>
             </CardContent>
              <CardFooter>
                 <p className="text-xs text-muted-foreground flex items-center gap-2">
                     <Lock className="h-3 w-3" />
-                    Este ajuste es global y afecta la elegibilidad de equipos para el sorteo.
+                    Estos ajustes afectan la visualización y elegibilidad en toda la plataforma.
                 </p>
             </CardFooter>
         </Card>

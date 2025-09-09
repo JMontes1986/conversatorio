@@ -3,8 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
-import { Loader2, Trophy } from "lucide-react";
+import { collection, onSnapshot, query, orderBy, where, doc } from "firebase/firestore";
+import { Loader2, Trophy, EyeOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -32,6 +32,7 @@ type MatchResult = {
 export function GroupStageResults() {
     const [groupRounds, setGroupRounds] = useState<RoundData[]>([]);
     const [scores, setScores] = useState<ScoreData[]>([]);
+    const [resultsPublished, setResultsPublished] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -50,12 +51,30 @@ export function GroupStageResults() {
         const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
             const scoresData = snapshot.docs.map(doc => doc.data() as ScoreData);
             setScores(scoresData);
+            checkPublicationStatus();
+        });
+        
+        const settingsRef = doc(db, "settings", "competition");
+        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setResultsPublished(docSnap.data().resultsPublished || false);
+            }
             setLoading(false);
         });
+        
+        const checkPublicationStatus = async () => {
+             const settingsSnap = await doc(db, "settings", "competition").get();
+             if(settingsSnap.exists()){
+                setResultsPublished(settingsSnap.data().resultsPublished || false);
+             }
+             setLoading(false);
+        }
+
 
         return () => {
             unsubscribeRounds();
             unsubscribeScores();
+            unsubscribeSettings();
         };
     }, []);
 
@@ -104,6 +123,21 @@ export function GroupStageResults() {
         );
     }
     
+    if (!resultsPublished) {
+         return (
+            <div className="text-center text-muted-foreground p-8 col-span-1 md:col-span-2 lg:col-span-3">
+                <Card className="max-w-md mx-auto">
+                    <CardHeader>
+                        <CardTitle className="flex items-center justify-center gap-2"><EyeOff /> Resultados Ocultos</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>Los resultados de la fase de grupos se publicarán pronto. ¡Estén atentos!</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     if (resultsByRound.length === 0) {
         return (
             <div className="text-center text-muted-foreground p-8">
