@@ -3,6 +3,7 @@
 
 import { TournamentBracket } from "@/components/tournament-bracket";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GroupStageResults } from "@/components/group-stage-results";
 
 export default function ScoreboardPage() {
     return (
@@ -12,11 +13,20 @@ export default function ScoreboardPage() {
                     Marcador de la Competencia
                 </h1>
                 <p className="text-muted-foreground mt-2">
-                    Siga el progreso del torneo en tiempo real.
+                    Siga el progreso del torneo en tiempo real, desde la fase de grupos hasta la final.
                 </p>
             </div>
             
             <div className="space-y-8">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados de la Fase de Grupos</CardTitle>
+                        <CardDescription>Puntuaciones de las rondas iniciales.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <GroupStageResults />
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Bracket del Torneo</CardTitle>
