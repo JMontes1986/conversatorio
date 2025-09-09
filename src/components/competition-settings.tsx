@@ -18,6 +18,7 @@ import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where } fr
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from './ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 
 const SETTINGS_DOC_ID = "competition";
@@ -133,6 +134,7 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                                 id="registrations-switch"
                                 checked={registrationsClosed}
                                 disabled={isSubmitting}
+                                className={cn(registrationsClosed && "data-[state=checked]:bg-destructive")}
                                 // We trigger the dialog but don't change the switch state directly
                                 onCheckedChange={() => {}} 
                             />
@@ -140,23 +142,23 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>¿Está seguro que desea {registrationsClosed ? 'abrir' : 'cerrar'} las inscripciones?</AlertDialogTitle>
-                                 <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
-                                    <div className="flex">
-                                        <div className="flex-shrink-0">
-                                            <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
-                                        </div>
-                                        <div className="ml-3">
-                                            <AlertDialogDescription className="text-sm text-yellow-700">
-                                                {registrationsClosed 
-                                                    ? "Al abrir las inscripciones, nuevos colegios verificados podrán participar en el sorteo."
-                                                    : `Al cerrar, se fijará la lista de ${verifiedSchools.length} equipos verificados para el sorteo. No se podrán añadir más equipos.`
-                                                } 
-                                                Esta acción no se puede deshacer fácilmente.
-                                            </AlertDialogDescription>
-                                        </div>
+                            </AlertDialogHeader>
+                            <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+                                    </div>
+                                    <div className="ml-3">
+                                        <p className="text-sm text-yellow-700">
+                                            {registrationsClosed 
+                                                ? "Al abrir las inscripciones, nuevos colegios verificados podrán participar en el sorteo."
+                                                : `Al cerrar, se fijará la lista de ${verifiedSchools.length} equipos verificados para el sorteo. No se podrán añadir más equipos.`
+                                            } 
+                                            Esta acción no se puede deshacer fácilmente.
+                                        </p>
                                     </div>
                                 </div>
-                            </AlertDialogHeader>
+                            </div>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                 <AlertDialogAction 
