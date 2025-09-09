@@ -216,7 +216,7 @@ export function TournamentBracket() {
                         if(result.winner) winners.add(result.winner.name);
                     });
                      const winnersFromBye = allScores
-                        .filter(s => s.matchId.startsWith(`${phase}-bye`))
+                        .filter(s => s.matchId.includes('-bye-') && s.matchId.startsWith(phase))
                         .map(s => s.teams[0].name);
 
                     [...winnersFromBye].forEach(w => winners.add(w));
@@ -292,6 +292,17 @@ export function TournamentBracket() {
                                 currentRound.matches.push({ id: round.name, participants });
                              }
                          });
+                     } else if (teamsForThisPhase.length === 3) {
+                         // Special case for 3 teams: they all play in one match
+                         const matchId = `${phase}-1`;
+                         const result = getMatchResult(matchId);
+
+                         if (result.participants.length > 0) {
+                            currentRound.matches.push({ id: matchId, participants: result.participants });
+                            if (result.winner) nextRoundWinners.push(result.winner);
+                         } else {
+                            currentRound.matches.push({ id: matchId, participants: teamsForThisPhase });
+                         }
                      } else {
                          for (let i = 0; i < teamsForThisPhase.length; i += 2) {
                              const matchId = `${phase}-${(i/2) + 1}`;
