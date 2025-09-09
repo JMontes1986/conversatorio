@@ -95,9 +95,6 @@ const MatchCard = ({ match, showScore }: { match: Match, showScore: boolean }) =
         {match.participants.map((p, pIndex) => (
             <ParticipantCard key={p.name || `p-${pIndex}`} participant={p} showScore={showScore} />
         ))}
-         {match.participants.length < 2 && (
-            <ParticipantCard participant={{ name: '', avatar: '' }} showScore={false} />
-        )}
     </div>
 );
 
@@ -169,9 +166,9 @@ export function TournamentBracket() {
         unsubScores = onSnapshot(scoresQuery, scoresSnap => {
             const allScores = scoresSnap.docs.map(doc => doc.data() as ScoreData);
 
-            const getMatchResult = (matchId: string): { winner: Participant | null, participants: Participant[] } => {
+            const getMatchResult = (matchId: string): { winner: Participant | null, participants: Participant[], matchId: string } => {
                 const matchScores = allScores.filter(s => s.matchId === matchId || s.matchId.startsWith(`${matchId}-bye`));
-                if (matchScores.length === 0) return { winner: null, participants: [] };
+                if (matchScores.length === 0) return { winner: null, participants: [], matchId };
 
                 const teamTotals: Record<string, number> = {};
                 matchScores.forEach(score => {
@@ -182,7 +179,7 @@ export function TournamentBracket() {
                 });
                 
                 const entries = Object.entries(teamTotals);
-                if (entries.length === 0) return { winner: null, participants: [] };
+                if (entries.length === 0) return { winner: null, participants: [], matchId };
 
                 const winnerEntry = entries.length === 1 ? entries[0] : entries.reduce((a, b) => a[1] > b[1] ? a : b);
                 const winnerName = winnerEntry[0];
@@ -201,7 +198,7 @@ export function TournamentBracket() {
                 const winner = participants.find(p => p.winner);
                 participants.forEach(p => { if (p.name !== winnerName) p.winner = false; });
 
-                return { winner: winner || null, participants };
+                return { winner: winner || null, participants, matchId };
             };
 
             unsubDraw = onSnapshot(drawStateRef, async (drawSnap) => {
@@ -293,11 +290,10 @@ export function TournamentBracket() {
                              }
                          });
                      } else if (teamsForThisPhase.length === 3) {
-                        // Special case for 3 teams: create three "matches" with one participant each to spread them out.
                         teamsForThisPhase.forEach((team, index) => {
                             const matchId = `${phase}-trio-${index + 1}`;
-                            const result = getMatchResult(matchId); // Check if there's a score for a 3-way match
-                             if (result.participants.length > 0) {
+                            const result = getMatchResult(matchId);
+                            if (result.participants.length > 0) {
                                 if (!currentRound.matches.find(m => m.id === result.matchId)) {
                                     currentRound.matches.push({ id: result.matchId, participants: result.participants });
                                 }
@@ -306,7 +302,6 @@ export function TournamentBracket() {
                                 currentRound.matches.push({ id: matchId, participants: [team] });
                             }
                         });
-                        // If a 3-way match has already been scored, its winner should be found.
                         const trioMatchResult = getMatchResult(`${phase}-1`);
                         if(trioMatchResult.winner) {
                            nextRoundWinners = [trioMatchResult.winner];
@@ -446,7 +441,5 @@ export function TournamentBracket() {
     </div>
   );
 }
-
-    
 
     
