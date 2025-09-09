@@ -688,13 +688,18 @@ function AdminDashboard() {
                         {uniqueResults.map(result => (
                             <AccordionItem value={result.matchId} key={result.matchId}>
                                 <AccordionTrigger>
-                                    <div className="flex justify-between items-center w-full pr-4">
-                                        <span className="font-bold text-lg capitalize">Ronda: {result.matchId.replace(/-/g, ' ')}</span>
-                                        <div className="text-right">
-                                            <div className="text-sm">Ganador: <Badge variant={result.winner === 'Empate' ? 'secondary' : 'default'}>{result.winner}</Badge></div>
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center w-full pr-4 text-left gap-4">
+                                        <div>
+                                            <span className="font-bold text-lg capitalize">Ronda: {result.matchId.replace(/-/g, ' ')}</span>
                                             <div className="text-xs text-muted-foreground">
                                                 {Object.entries(result.teamTotals).map(([name, total]) => `${name}: ${total}`).join(' vs ')}
                                             </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-xs text-muted-foreground font-semibold">GANADOR</div>
+                                            <Badge variant={result.winner === 'Empate' ? 'secondary' : 'default'} className="text-lg px-4 py-1 mt-1">
+                                                {result.winner}
+                                            </Badge>
                                         </div>
                                     </div>
                                 </AccordionTrigger>
