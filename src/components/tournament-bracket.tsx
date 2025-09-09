@@ -61,10 +61,7 @@ type SchoolData = {
 // --- UI COMPONENTS ---
 const ParticipantCard = ({ participant, showScore }: { participant: Participant, showScore: boolean }) => {
     if (!participant.name) {
-        return (
-             <div className="flex items-center gap-2 w-40 text-sm h-10 px-2 bg-secondary rounded-md text-muted-foreground">
-             </div>
-        );
+        return null;
     }
 
     return (
@@ -93,7 +90,6 @@ const MatchCard = ({ match, showScore }: { match: Match, showScore: boolean }) =
         {match.participants.map((p, pIndex) => (
             <ParticipantCard key={p.name || `p-${pIndex}`} participant={p} showScore={showScore} />
         ))}
-        {match.participants.length === 1 && <ParticipantCard participant={{name: '', avatar: ''}} showScore={showScore} />}
     </div>
 );
 
@@ -205,36 +201,10 @@ export function TournamentBracket() {
                 const drawData = drawSnap.exists() ? drawSnap.data() as DrawState : null;
                 const finalBracketData: BracketRound[] = [];
 
-                let lastRound: BracketRound | null = null;
-                
-                const groupStageRound: BracketRound = { title: "Fase de Grupos", matches: [] };
-                const groupRoundsFromDraw = drawData?.rounds.filter(r => r.phase === "Fase de Grupos") || [];
-                
-                groupRoundsFromDraw.forEach(round => {
-                    const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
-                    const result = getMatchResult(round.name);
-
-                    if (result.participants.length > 0) {
-                        groupStageRound.matches.push({ id: round.name, participants: result.participants });
-                    } else if (teamsInDraw.length > 0) {
-                        const participants = teamsInDraw.map(t => {
-                            const schoolData = schools.find(s => s.teamName === t.name);
-                             return {
-                                name: t.name,
-                                avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`,
-                                participants: schoolData?.participants
-                             };
-                        });
-                        groupStageRound.matches.push({ id: round.name, participants });
-                    }
-                });
-                
-                if (groupStageRound.matches.length > 0) {
-                    // finalBracketData.push(groupStageRound); // We don't display group stage in the bracket
-                    lastRound = groupStageRound;
-                }
+                let lastRoundWinners: (Participant | null)[] = [];
 
                 const getTop8FromGroups = () => {
+                    const groupRoundsFromDraw = drawData?.rounds.filter(r => r.phase === "Fase de Grupos") || [];
                     const groupScores = allScores.filter(s => groupRoundsFromDraw.some(r => r.name === s.matchId || s.matchId.startsWith(`${r.name}-bye`)));
                      const teamTotals: Record<string, number> = {};
                     groupScores.forEach(score => {
@@ -244,81 +214,70 @@ export function TournamentBracket() {
                         });
                     });
                     const top8 = Object.entries(teamTotals).sort((a,b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
-                    return top8.map(name => ({name, avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`}));
+                    return top8.map(name => {
+                         const schoolData = schools.find(s => s.teamName === name);
+                         return {name, avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`, participants: schoolData?.participants};
+                    });
                 }
-
+                
                 const quartersFromDraw = drawData?.rounds.filter(r => r.phase === "Cuartos de Final") || [];
                 const quartersRound: BracketRound = { title: "Cuartos de Final", matches: [] };
+
                 if (quartersFromDraw.length > 0) {
-                    const teamsForQuartersInDraw = quartersFromDraw.flatMap(r => drawData?.teams.filter(t => t.round === r.name).map(t => t.name) || []);
-                    if (teamsForQuartersInDraw.length > 0) {
-                         quartersFromDraw.forEach(round => {
-                            const result = getMatchResult(round.name);
-                            if (result.participants.length > 0) {
-                                quartersRound.matches.push({ id: round.name, participants: result.participants });
-                            } else {
-                                const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
-                                const participants = teamsInDraw.map(t => ({ name: t.name, avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`}));
-                                quartersRound.matches.push({ id: round.name, participants });
-                            }
-                        });
-                    } else {
-                        // Use top 8 from groups if draw is set but teams are not assigned
-                        const top8 = getTop8FromGroups();
-                        for (let i = 0; i < top8.length; i += 2) {
-                            const p1 = top8[i];
-                            const p2 = top8[i+1];
-                            const matchId = `Cuartos de Final-${(i/2) + 1}`;
-                            quartersRound.matches.push({ id: matchId, participants: p2 ? [p1,p2] : [p1] });
-                        }
-                    }
-                    
-                } else if (lastRound) { // Fallback to group stage results if no quarters draw
-                    const top8 = getTop8FromGroups();
-                    for (let i = 0; i < top8.length; i += 2) {
-                        const p1 = top8[i];
-                        const p2 = top8[i+1];
-                        const matchId = `Cuartos de Final-${(i/2) + 1}`;
-                        quartersRound.matches.push({ id: matchId, participants: p2 ? [p1,p2] : [p1] });
-                    }
+                     quartersFromDraw.forEach(round => {
+                        const result = getMatchResult(round.name);
+                        quartersRound.matches.push({ id: round.name, participants: result.participants });
+                        lastRoundWinners.push(result.winner);
+                     });
+                } else {
+                     const top8 = getTop8FromGroups();
+                     for (let i = 0; i < 4; i++) {
+                         const p1 = top8[i*2];
+                         const p2 = top8[i*2+1];
+                         const participants = [];
+                         if (p1) participants.push(p1);
+                         if (p2) participants.push(p2);
+                         quartersRound.matches.push({ id: `qf-${i}`, participants });
+                     }
                 }
                 
                 if (quartersRound.matches.length > 0) {
-                    finalBracketData.push(quartersRound);
-                    lastRound = quartersRound;
+                     finalBracketData.push(quartersRound);
                 }
+
 
                 const eliminationPhases = ["Semifinal", "Final"];
                 
                 for(const phase of eliminationPhases) {
-                     if (!lastRound) break;
-                     
-                     const currentRound: BracketRound = { title: phase, matches: [] };
-                     
-                     for(let i = 0; i < lastRound.matches.length; i+=2) {
-                        const match1 = lastRound.matches[i];
-                        const match2 = lastRound.matches[i+1];
-
-                        const winner1 = getMatchResult(match1.id).winner;
-                        const winner2 = match2 ? getMatchResult(match2.id).winner : null;
-
-                        const nextMatchId = `${phase}-${Math.floor(i/2)+1}`;
-                        const nextMatchParticipants: Participant[] = [];
-                        if (winner1) nextMatchParticipants.push(winner1);
-                        if (winner2) nextMatchParticipants.push(winner2);
+                    if (lastRoundWinners.length === 0) break;
+                    
+                    const nextRound: BracketRound = { title: phase, matches: [] };
+                    const nextRoundWinners: (Participant | null)[] = [];
+                    
+                    for(let i = 0; i < lastRoundWinners.length; i += 2) {
+                        const p1 = lastRoundWinners[i];
+                        const p2 = lastRoundWinners[i+1];
                         
-                        const result = getMatchResult(nextMatchId);
-                        if(result.participants.length > 0) {
-                            currentRound.matches.push({ id: nextMatchId, participants: result.participants });
-                        } else {
-                            currentRound.matches.push({ id: nextMatchId, participants: nextMatchParticipants });
-                        }
-                     }
+                        const matchId = `${phase}-${Math.floor(i/2)+1}`;
+                        const participants: Participant[] = [];
+                        if(p1) participants.push(p1);
+                        if(p2) participants.push(p2);
+                        
+                        const result = getMatchResult(matchId);
 
-                     if(currentRound.matches.length > 0) {
-                        finalBracketData.push(currentRound);
-                        lastRound = currentRound;
-                     }
+                        if(result.participants.length > 0){
+                           nextRound.matches.push({ id: matchId, participants: result.participants });
+                           nextRoundWinners.push(result.winner);
+                        } else {
+                           nextRound.matches.push({ id: matchId, participants: participants });
+                           nextRoundWinners.push(null);
+                        }
+                    }
+                    
+                    if(nextRound.matches.length > 0){
+                        finalBracketData.push(nextRound);
+                    }
+                    lastRoundWinners = nextRoundWinners;
                 }
                 
                 const finalRound = finalBracketData.find(r => r.title === "Final");
