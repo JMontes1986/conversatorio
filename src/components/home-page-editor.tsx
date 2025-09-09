@@ -26,8 +26,6 @@ import { Textarea } from "./ui/textarea";
 import { nanoid } from "nanoid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import Image from 'next/image';
-import { Progress } from "./ui/progress";
-
 
 const featureSchema = z.object({
   id: z.string(),
@@ -73,7 +71,12 @@ export function HomePageEditor() {
     const docRef = doc(db, 'siteContent', 'home');
     const unsubscribe = onSnapshot(docRef, (doc) => {
         if (doc.exists()) {
-            form.reset(doc.data() as FormData);
+            const data = doc.data() as FormData;
+            // Ensure imageUrl is a string to avoid uncontrolled to controlled error
+            if (data.promoSection && typeof data.promoSection.imageUrl === 'undefined') {
+                data.promoSection.imageUrl = "";
+            }
+            form.reset(data);
         } else {
              // Initialize with default data if document doesn't exist
             form.reset({
