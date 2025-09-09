@@ -203,16 +203,17 @@ export function TournamentBracket() {
             unsubDraw = onSnapshot(drawStateRef, drawSnap => {
                 const drawData = drawSnap.exists() ? drawSnap.data() as DrawState : null;
                 const finalBracketData: BracketRound[] = [];
-                const quartersDraw = drawData?.rounds.filter(r => r.phase === "Cuartos de Final") || [];
+                
+                const groupRoundsDraw = drawData?.rounds.filter(r => r.phase === "Fase de Grupos") || [];
                 const quarterFinalists: Participant[] = [];
                 
-                const quarters: BracketRound = { title: "Cuartos de Final", matches: [] };
-                quartersDraw.forEach(round => {
+                const groupStageRound: BracketRound = { title: "Fase de Grupos", matches: [] };
+                groupRoundsDraw.forEach(round => {
                     const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
                     const result = getMatchResult(round.name);
 
                     if (result.participants.length > 0) {
-                        quarters.matches.push({ id: round.name, participants: result.participants });
+                        groupStageRound.matches.push({ id: round.name, participants: result.participants });
                         if(result.winner) quarterFinalists.push(result.winner);
                     } else if (teamsInDraw.length > 0) {
                         const participants = teamsInDraw.map(t => {
@@ -223,47 +224,73 @@ export function TournamentBracket() {
                                 participants: schoolData?.participants
                              };
                         });
-                        quarters.matches.push({ id: round.name, participants });
+                        groupStageRound.matches.push({ id: round.name, participants });
                     }
                 });
-
-                if (quarters.matches.length > 0) {
-                    finalBracketData.push(quarters);
-                }
                 
-                let lastRoundWinners = quarterFinalists;
-                const eliminationPhases = ["Semifinal", "Final"];
+                if (groupStageRound.matches.length > 0) {
+                    finalBracketData.push(groupStageRound);
+                }
+
+                // If we have group stage winners, we proceed to build the quarters
+                const quarterFinalistsFromScores = quarterFinalists.length > 0
+                    ? quarterFinalists
+                    : (drawData?.activeTab === 'quarters' ? (drawData.teams.map(t => ({...t, avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`}))) : []);
+                
+                let lastRoundWinners: Participant[] = quarterFinalistsFromScores;
+                const eliminationPhases = ["Cuartos de Final", "Semifinal", "Final"];
                 
                 for(const phase of eliminationPhases) {
                      if (lastRoundWinners.length === 0) break;
                      const currentRound: BracketRound = { title: phase, matches: [] };
                      const nextRoundWinners: Participant[] = [];
+                     
+                     // If this is the quarters, use the draw if available
+                     const quartersDraw = drawData?.rounds.filter(r => r.phase === "Cuartos de Final") || [];
+                     if(phase === "Cuartos de Final" && quartersDraw.length > 0) {
+                         quartersDraw.forEach(round => {
+                            const result = getMatchResult(round.name);
+                            if (result.participants.length > 0) {
+                                currentRound.matches.push({ id: round.name, participants: result.participants });
+                                if (result.winner) nextRoundWinners.push(result.winner);
+                            } else {
+                                const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
+                                const participants = teamsInDraw.map(t => ({
+                                    name: t.name,
+                                    avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`,
+                                }));
+                                currentRound.matches.push({ id: round.name, participants });
+                            }
+                        });
+                     } else {
+                        // Logic for Semis and Final (and Quarters if no draw yet)
+                         for (let i = 0; i < lastRoundWinners.length; i += 2) {
+                             const matchId = `${phase}-${(i/2) + 1}`;
+                             const p1 = lastRoundWinners[i];
+                             const p2 = lastRoundWinners[i+1];
+                             
+                             if (!p2) {
+                                nextRoundWinners.push(p1);
+                                currentRound.matches.push({ id: matchId, participants: [p1] });
+                                continue;
+                             }
 
-                     for (let i = 0; i < lastRoundWinners.length; i += 2) {
-                         const matchId = `${phase}-${(i/2) + 1}`;
-                         const p1 = lastRoundWinners[i];
-                         const p2 = lastRoundWinners[i+1];
-                         
-                         if (!p2) { // Handle bye (odd number of teams)
-                            nextRoundWinners.push(p1);
-                            currentRound.matches.push({ id: matchId, participants: [p1] });
-                            continue;
-                         }
+                             const result = getMatchResult(matchId);
 
-                         const result = getMatchResult(matchId);
-
-                         if(result.participants.length > 0) {
-                            currentRound.matches.push({ id: matchId, participants: result.participants });
-                            if(result.winner) nextRoundWinners.push(result.winner);
-                         } else {
-                            currentRound.matches.push({ id: matchId, participants: p1 && p2 ? [p1, p2] : (p1 ? [p1] : []) });
+                             if(result.participants.length > 0) {
+                                currentRound.matches.push({ id: matchId, participants: result.participants });
+                                if(result.winner) nextRoundWinners.push(result.winner);
+                             } else {
+                                currentRound.matches.push({ id: matchId, participants: p1 && p2 ? [p1, p2] : (p1 ? [p1] : []) });
+                             }
                          }
                      }
+                     
                      if(currentRound.matches.length > 0) finalBracketData.push(currentRound);
-                     lastRoundWinners = nextRoundWinners;
+                     lastRoundWinners = nextRoundWinners.length > 0 ? nextRoundWinners : lastRoundWinners;
                 }
                 
-                const finalWinner = lastRoundWinners.length > 0 ? lastRoundWinners[0] : null;
+                const finalWinner = lastRoundWinners.length === 1 ? lastRoundWinners[0] : null;
                 if(finalWinner) {
                     setChampion(finalWinner);
                 } else {
@@ -308,7 +335,7 @@ export function TournamentBracket() {
             <div className="text-center">
                  <h2 className={cn("font-bold text-foreground", titleSizeMap[bracketSettings.bracketTitleSize || 3])}>{bracketSettings.bracketTitle || '¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?'}</h2>
                  <p className="text-lg text-muted-foreground mt-2">{bracketSettings.bracketSubtitle || 'Debate Intercolegial'}</p>
-                 <p className="text-lg text-muted-foreground mt-8">El bracket aparecerá aquí una vez que se realice el sorteo de Cuartos de Final.</p>
+                 <p className="text-lg text-muted-foreground mt-8">El bracket aparecerá aquí una vez que se realice el sorteo de la Fase de Grupos.</p>
             </div>
         </div>
       )
