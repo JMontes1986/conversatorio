@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -45,6 +45,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DrawAnimation } from '@/components/draw-animation';
 import { RubricManagement } from '@/components/rubric-management';
+import { HomePageEditor } from '@/components/home-page-editor';
 
 
 interface SchoolData {
@@ -295,7 +296,7 @@ function AdminDashboard() {
             if (!teamTotals[team.name]) {
                 teamTotals[team.name] = 0;
             }
-            teamTotals[team.name] += team.total;
+            teamTotals[team.name].push(team.total);
         });
     });
 
@@ -336,8 +337,9 @@ function AdminDashboard() {
       </div>
 
       <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
-        <Tabs defaultValue="schools" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-8">
+        <Tabs defaultValue="home" className="w-full">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-9">
+            <TabsTrigger value="home"><Home className="mr-2 h-4 w-4" />Home</TabsTrigger>
             <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
             <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Rondas</TabsTrigger>
             <TabsTrigger value="rubric"><ListChecks className="mr-2 h-4 w-4" />Rúbrica</TabsTrigger>
@@ -347,6 +349,9 @@ function AdminDashboard() {
             <TabsTrigger value="debate-control"><Gavel className="mr-2 h-4 w-4" />Control del Debate</TabsTrigger>
             <TabsTrigger value="results"><Trophy className="mr-2 h-4 w-4"/>Resultados</TabsTrigger>
             </TabsList>
+             <TabsContent value="home">
+                <HomePageEditor />
+            </TabsContent>
             <TabsContent value="schools">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -748,5 +753,3 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
-
-    

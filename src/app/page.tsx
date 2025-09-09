@@ -1,4 +1,8 @@
 
+
+"use client";
+
+import { useState, useEffect } from 'react';
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,52 +13,97 @@ import {
   Gavel,
   ClipboardCheck,
   Trophy,
+  Loader2,
+  Icon as LucideIcon,
+  Home as HomeIcon,
+  Monitor,
+  Calendar,
+  Shield,
+  Star,
 } from "lucide-react";
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
-const features = [
-  {
-    icon: <Users className="h-8 w-8 text-primary" />,
-    title: "Registro de Colegios",
-    description: "Inscriba a su colegio en la competencia de manera rápida y sencilla.",
-    link: "/register",
-  },
-  {
-    icon: <Shuffle className="h-8 w-8 text-primary" />,
-    title: "Sorteo de Grupos",
-    description: "Vea en tiempo real cómo se definen los enfrentamientos de las rondas.",
-    link: "/draw",
-  },
-  {
-    icon: <Gavel className="h-8 w-8 text-primary" />,
-    title: "Panel de Moderador",
-    description: "Gestione los debates con controles de video, preguntas y temporizadores.",
-    link: "/moderator/login",
-  },
-  {
-    icon: <ClipboardCheck className="h-8 w-8 text-primary" />,
-    title: "Puntuación por Rúbrica",
-    description: "Jueces calificarán a los equipos con una rúbrica detallada y configurable.",
-    link: "/scoring/login",
-  },
-  {
-    icon: <Trophy className="h-8 w-8 text-primary" />,
-    title: "Marcador en Tiempo Real",
-    description: "Siga el progreso de la competencia con un marcador en vivo y brackets actualizados.",
-    link: "/scoreboard",
-  },
-];
+interface Feature {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  link: string;
+}
+
+interface HomePageContent {
+  hero: {
+    title: string;
+    subtitle: string;
+  };
+  features: Feature[];
+  promoSection: {
+    title: string;
+    paragraph1: string;
+    paragraph2: string;
+  };
+}
+
+const iconMap: { [key: string]: LucideIcon } = {
+  Users: Users,
+  Shuffle: Shuffle,
+  Gavel: Gavel,
+  ClipboardCheck: ClipboardCheck,
+  Trophy: Trophy,
+  Home: HomeIcon,
+  Monitor: Monitor,
+  Calendar: Calendar,
+  Shield: Shield,
+  Star: Star,
+  Default: HomeIcon,
+};
+
+const getIcon = (iconName: string) => {
+    return iconMap[iconName] || iconMap.Default;
+}
 
 export default function Home() {
+    const [content, setContent] = useState<HomePageContent | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const docRef = doc(db, 'siteContent', 'home');
+        const unsubscribe = onSnapshot(docRef, (doc) => {
+            if (doc.exists()) {
+                setContent(doc.data() as HomePageContent);
+            } else {
+                // Set default content if nothing in DB
+                setContent({
+                    hero: { title: "Conversatorio Colgemelli", subtitle: "La plataforma definitiva para competencias de debate escolar." },
+                    features: [],
+                    promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva.", paragraph2: "Garantizamos una competencia equitativa."}
+                })
+            }
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    if (loading || !content) {
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            </div>
+        );
+    }
+
   return (
     <div className="flex flex-col">
       <section className="relative w-full py-20 md:py-32 lg:py-40 bg-card">
         <div className="container mx-auto px-4 md:px-6 text-center">
           <div className="max-w-3xl mx-auto">
             <h1 className="font-headline text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl">
-              Conversatorio Colgemelli
+              {content.hero.title}
             </h1>
             <p className="mt-6 text-lg leading-8 text-muted-foreground">
-              La plataforma definitiva para competencias de debate escolar. Fomentando el pensamiento crítico y la oratoria en la próxima generación de líderes.
+              {content.hero.subtitle}
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
               <Button asChild size="lg">
@@ -80,22 +129,25 @@ export default function Home() {
             </p>
           </div>
           <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-            {features.map((feature) => (
-              <Card key={feature.title} className="hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="flex flex-col items-center text-center">
-                  {feature.icon}
-                  <CardTitle className="mt-4 font-headline">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-muted-foreground">{feature.description}</p>
-                   <Button variant="link" asChild className="mt-4 text-primary">
-                    <Link href={feature.link}>
-                      Ir a {feature.title.split(' ')[0]}
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+            {content.features.map((feature) => {
+                const Icon = getIcon(feature.icon);
+                return (
+                    <Card key={feature.id} className="hover:shadow-lg transition-shadow duration-300">
+                        <CardHeader className="flex flex-col items-center text-center">
+                        <Icon className="h-8 w-8 text-primary" />
+                        <CardTitle className="mt-4 font-headline">{feature.title}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-center">
+                        <p className="text-muted-foreground">{feature.description}</p>
+                        <Button variant="link" asChild className="mt-4 text-primary">
+                            <Link href={feature.link}>
+                            Ir a {feature.title.split(' ')[0]}
+                            </Link>
+                        </Button>
+                        </CardContent>
+                    </Card>
+                )
+            })}
           </div>
         </div>
       </section>
@@ -104,13 +156,13 @@ export default function Home() {
         <div className="container mx-auto grid items-center gap-8 px-4 md:px-6 lg:grid-cols-2 lg:gap-16">
           <div className="space-y-4">
             <h2 className="font-headline text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Listos para el Debate del Siglo
+              {content.promoSection.title}
             </h2>
             <p className="text-muted-foreground md:text-xl/relaxed">
-              Nuestra plataforma está diseñada para ser intuitiva para estudiantes, jueces y administradores, permitiendo que todos se concentren en lo que realmente importa: el poder de las ideas.
+              {content.promoSection.paragraph1}
             </p>
             <p className="text-muted-foreground md:text-xl/relaxed">
-              Con características como sorteos auditables y puntuación transparente, garantizamos una competencia equitativa y emocionante para todos los participantes.
+              {content.promoSection.paragraph2}
             </p>
             <div className="flex flex-col gap-2 min-[400px]:flex-row">
               <Button asChild size="lg">
