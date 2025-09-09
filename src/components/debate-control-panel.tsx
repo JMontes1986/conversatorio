@@ -65,7 +65,7 @@ interface RoundData {
 }
 
 
-function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendVideo, onSendQuestion }: any) {
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion }: any) {
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
@@ -114,7 +114,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             <CardHeader>
                 <CardTitle>Gestión de Preguntas y Videos</CardTitle>
                  <CardDescription>
-                    Prepare, envíe y gestione las preguntas y videos del debate por ronda.
+                    Prepare las preguntas y videos del debate. Puede usar enlaces de YouTube o enlaces directos a videos (ej. OneDrive).
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -170,11 +170,11 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                 <p className="flex-grow text-sm font-medium">{q.text}</p>
                                                 
                                                 <div className="space-y-2">
-                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs">Enlace del Video (OneDrive)</Label>
+                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Enlace del Video (Opcional)</Label>
                                                     <div className="flex items-center gap-2">
                                                         <Input 
                                                             id={`video-url-${q.id}`}
-                                                            placeholder="Pegar enlace de OneDrive"
+                                                            placeholder="Pegar enlace de YouTube o video directo"
                                                             value={videoInputs[q.id] || ''}
                                                             onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
                                                             disabled={savingVideoId === q.id}
@@ -211,11 +211,8 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
-                                                    <Button size="sm" onClick={() => onSendVideo(q)} variant="outline">
-                                                        <Video className="mr-2 h-4 w-4" /> Enviar Video
-                                                    </Button>
                                                      <Button size="sm" onClick={() => onSendQuestion(q)}>
-                                                        <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
+                                                        <MessageSquare className="mr-2 h-4 w-4" /> Enviar a Pantalla
                                                     </Button>
                                                 </div>
                                             </div>
@@ -327,33 +324,18 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             });
         }
     };
-    
-    const handleSendVideo = async (question: Question) => {
-         try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            const videoUrlToSend = videoInputs[question.id] || "";
-            await setDoc(docRef, {
-                videoUrl: videoUrlToSend,
-                question: "" // Clear question when sending video
-            }, { merge: true });
-            toast({ title: "Video Enviado", description: "El video es ahora visible para los participantes." });
-        } catch (error) {
-            console.error("Error setting video: ", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
-        }
-    };
 
     const handleSendQuestion = async (question: Question) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: question.text,
-                 videoUrl: "" // Clear video when sending question
+                videoUrl: videoInputs[question.id] || ""
             }, { merge: true });
-            toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
+            toast({ title: "Contenido Enviado", description: "La pregunta y/o video son ahora visibles." });
         } catch (error) {
              console.error("Error setting question: ", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar la pregunta." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el contenido." });
         }
     };
 
@@ -361,7 +343,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                question: "",
+                question: "Esperando la pregunta del moderador...",
                 videoUrl: ""
             }, { merge: true });
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
@@ -528,7 +510,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onAddQuestion={handleAddQuestion}
                     onDeleteQuestion={handleDeleteQuestion}
                     onSaveVideoLink={handleSaveVideoLink}
-                    onSendVideo={handleSendVideo}
                     onSendQuestion={handleSendQuestion}
                 />
             </div>

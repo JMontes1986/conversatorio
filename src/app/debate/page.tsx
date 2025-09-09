@@ -3,11 +3,9 @@
 
 import { useState, useEffect } from "react";
 import { Timer } from "@/components/timer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
-import { MessageSquare, Video } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { VideoEmbed } from "@/components/video-embed";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -40,48 +38,8 @@ export default function DebatePage() {
         return () => unsubscribe();
     }, []);
 
-    const isValidHttpUrl = (str: string) => {
-        try {
-            const url = new URL(str);
-            return url.protocol === "http:" || url.protocol === "https:";
-        } catch (_) {
-            return false;  
-        }
-    }
-    
-    // New logic: Show question if it exists, otherwise show video prompt if URL exists.
-    const showQuestion = debateState.question && debateState.question !== "Esperando la pregunta del moderador...";
-    const showVideo = !showQuestion && isValidHttpUrl(debateState.videoUrl);
+    const showVideo = debateState.videoUrl;
 
-    let mainContent;
-
-    if (showQuestion) {
-        mainContent = (
-            <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
-                {debateState.question}
-            </p>
-        );
-    } else if (showVideo) {
-        mainContent = (
-             <div className="flex flex-col items-center gap-6">
-                <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
-                    Por favor, observe el video presentado.
-                </p>
-                 <Button asChild size="lg">
-                    <a href={debateState.videoUrl} target="_blank" rel="noopener noreferrer">
-                        <Video className="mr-2 h-5 w-5"/> Ver Video en OneDrive
-                    </a>
-                </Button>
-            </div>
-        );
-    } else {
-        mainContent = (
-             <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
-                {debateState.question}
-            </p>
-        );
-    }
-    
     return (
         <div className="container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)]">
             <div className="w-full max-w-5xl space-y-8 text-center">
@@ -106,7 +64,12 @@ export default function DebatePage() {
                     </div>
 
                 <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center">
-                    {mainContent}
+                   <div className="space-y-6 w-full">
+                        {showVideo && <VideoEmbed url={debateState.videoUrl} />}
+                        <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
+                            {debateState.question}
+                        </p>
+                    </div>
                 </div>
 
             </div>
