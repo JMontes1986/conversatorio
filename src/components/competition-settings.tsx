@@ -13,14 +13,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Loader2, Send, Plus, Trash2 } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from "@/components/ui/select";
 import { nanoid } from 'nanoid';
 
 const DEBATE_STATE_DOC_ID = "current";
-
-const advancedRounds = ["Cuartos de Final", "Semifinal", "Final"];
+const DRAW_STATE_DOC_ID = "liveDraw";
 
 interface Team {
     id: string;
@@ -34,7 +33,7 @@ interface SchoolData {
 interface ScoreData {
     id: string;
     matchId: string;
-    judgeName: string; // Keep for context, though not directly used in this logic
+    judgeName: string;
     teams: { name: string; total: number }[];
 }
 interface RoundData {
@@ -42,11 +41,21 @@ interface RoundData {
     name: string;
     phase: string;
 }
+type DrawTeam = {
+  id: string;
+  name: string;
+  round: string | null;
+};
+type DrawState = {
+    teams: DrawTeam[];
+    rounds: RoundData[];
+    activeTab?: string;
+};
+
 
 function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
     const roundScores = scores.filter(score => score.matchId.startsWith(roundName));
 
-    // Group scores by match (assuming a match is defined by the teams playing)
     const matches: Record<string, { teamTotals: Record<string, number> }> = {};
 
     roundScores.forEach(score => {
@@ -62,7 +71,6 @@ function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
         });
     });
     
-    // Determine the winner for each match
     const winners: string[] = [];
     Object.values(matches).forEach(match => {
         const entries = Object.entries(match.teamTotals);
@@ -106,11 +114,13 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
     const [isAutoFilled, setIsAutoFilled] = useState(false);
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
+    const [drawState, setDrawState] = useState<DrawState | null>(null);
+
 
     useEffect(() => {
         setLoadingRounds(true);
         const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-        const unsubscribe = onSnapshot(roundsQuery, (snapshot) => {
+        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
             const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
             setDebateRounds(roundsData);
             setLoadingRounds(false);
@@ -118,7 +128,18 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
             console.error("Error fetching rounds:", error);
             setLoadingRounds(false);
         });
-        return () => unsubscribe();
+
+        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+        const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setDrawState(docSnap.data() as DrawState);
+            }
+        });
+
+        return () => {
+            unsubscribeRounds();
+            unsubscribeDrawState();
+        };
     }, []);
     
     const roundsByPhase = useMemo(() => {
@@ -149,10 +170,18 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
         setCurrentRound(roundName);
         const selectedRoundData = debateRounds.find(r => r.name === roundName);
         
-        if (selectedRoundData && advancedRounds.includes(selectedRoundData.phase)) {
-            setIsAutoFilled(true);
-            let qualifiedTeams: string[] = [];
-            
+        let qualifiedTeams: string[] = [];
+
+        // Check draw state first
+        if (drawState && drawState.teams) {
+            const teamsFromDraw = drawState.teams.filter(t => t.round === roundName).map(t => t.name);
+            if (teamsFromDraw.length > 0) {
+                qualifiedTeams = teamsFromDraw;
+            }
+        }
+
+        // If not found in draw, check advanced rounds logic
+        if (qualifiedTeams.length === 0 && selectedRoundData) {
             if (selectedRoundData.phase === "Cuartos de Final") {
                  const groupStageRounds = debateRounds.filter(r => r.phase === "Fase de Grupos");
                  qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
@@ -167,20 +196,18 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                     qualifiedTeams = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
                 }
             }
-            
-            if (qualifiedTeams.length >= 2) {
-                 setTeams(qualifiedTeams.map((name) => ({ id: nanoid(), name })));
-                 toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos clasificados han sido seleccionados para ${roundName}.`});
-            } else {
-                 setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
-                 toast({ variant: "destructive", title: "No se encontraron equipos", description: `No se pudieron determinar suficientes equipos clasificados para esta fase.`});
-            }
-
+        }
+        
+        if (qualifiedTeams.length > 0) {
+             setIsAutoFilled(true);
+             setTeams(qualifiedTeams.map(name => ({ id: nanoid(), name })));
+             toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos para ${roundName} han sido cargados.` });
         } else {
             setIsAutoFilled(false);
             setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
         }
-    }, [allScores, toast, debateRounds]);
+
+    }, [allScores, toast, debateRounds, drawState]);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -277,7 +304,7 @@ export function CompetitionSettings({ registeredSchools = [], allScores = [] }: 
                         <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting || isAutoFilled}>
                             <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
                         </Button>
-                        {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda. Puede reordenarlos si es necesario.</p>}
+                        {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda.</p>}
                     </div>
                     <Button type="submit" disabled={isSubmitting || !currentRound}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
