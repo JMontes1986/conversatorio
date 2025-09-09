@@ -71,7 +71,11 @@ export default function Home() {
         const docRef = doc(db, 'siteContent', 'home');
         const unsubscribe = onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
-                setContent(doc.data() as HomePageContent);
+                const data = doc.data() as HomePageContent;
+                 if (data.promoSection && typeof data.promoSection.imageUrl === 'undefined') {
+                    data.promoSection.imageUrl = "";
+                }
+                setContent(data);
             } else {
                 // Set default content if nothing in DB
                 setContent({
@@ -176,7 +180,7 @@ export default function Home() {
               alt="Estudiantes debatiendo"
               data-ai-hint="students debating"
               fill
-              className="rounded-lg object-cover shadow-2xl"
+              className="rounded-lg object-contain shadow-2xl"
             />
           </div>
         </div>
