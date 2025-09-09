@@ -33,7 +33,6 @@ const rubricCriteria = [
 const DEBATE_STATE_DOC_ID = "current";
 
 interface Team {
-    id: number;
     name: string;
 }
 
@@ -234,7 +233,7 @@ function ScoringPanel() {
       {debateState.teams.length > 0 && (
          <div className="flex justify-center items-center mb-8 space-x-2 md:space-x-4 flex-wrap">
             {debateState.teams.map((team, index) => (
-                <div key={team.id} className="flex items-center">
+                <div key={`${team.name}-${index}`} className="flex items-center">
                     <h2 className="font-headline text-xl md:text-2xl text-center">{team.name}</h2>
                     {index < debateState.teams.length - 1 && <Swords className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0 mx-2" />}
                 </div>
@@ -256,7 +255,7 @@ function ScoringPanel() {
                         <TableRow>
                             <TableHead className="w-1/3 min-w-[200px]">Criterio</TableHead>
                             {debateState.teams.map(team => (
-                                <TableHead key={team.id} className="w-1/3 text-center min-w-[200px]">{team.name}</TableHead>
+                                <TableHead key={team.name} className="w-1/3 text-center min-w-[200px]">{team.name}</TableHead>
                             ))}
                         </TableRow>
                         </TableHeader>
@@ -268,7 +267,7 @@ function ScoringPanel() {
                                 <p className="text-xs text-muted-foreground">{criterion.description}</p>
                             </TableCell>
                             {debateState.teams.map(team => (
-                                <TableCell key={team.id}>
+                                <TableCell key={team.name}>
                                     <ScoreButtons teamName={team.name} criteriaId={criterion.id} />
                                 </TableCell>
                             ))}
@@ -277,13 +276,13 @@ function ScoringPanel() {
                         <TableRow className="bg-secondary/50">
                             <TableCell className="font-bold">Total</TableCell>
                             {debateState.teams.map(team => (
-                                <TableCell key={team.id} className="text-center font-bold text-lg text-primary">{calculateTotal(team.name)}</TableCell>
+                                <TableCell key={team.name} className="text-center font-bold text-lg text-primary">{calculateTotal(team.name)}</TableCell>
                             ))}
                         </TableRow>
                         <TableRow>
                             <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
                             {debateState.teams.map(team => (
-                                <TableCell key={team.id} className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum(team.name)}</TableCell>
+                                <TableCell key={team.name} className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum(team.name)}</TableCell>
                             ))}
                         </TableRow>
                         </TableBody>
@@ -352,3 +351,5 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
+
+    
