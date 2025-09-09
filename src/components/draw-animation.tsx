@@ -136,7 +136,7 @@ export function DrawAnimation() {
 
     if (activeTab === "groups") {
         currentRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        currentTeams = allTeams.map(t => ({...t, round: null}));;
+        currentTeams = allTeams.map(t => ({...t, round: null}));
     } else if (activeTab === "quarters") {
         currentRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
         const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
