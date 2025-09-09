@@ -57,14 +57,14 @@ export default function DebatePage() {
 
     if (showQuestion) {
         mainContent = (
-            <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+            <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
                 {debateState.question}
             </p>
         );
     } else if (showVideo) {
         mainContent = (
              <div className="flex flex-col items-center gap-6">
-                <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+                <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
                     Por favor, observe el video presentado.
                 </p>
                  <Button asChild size="lg">
@@ -76,7 +76,7 @@ export default function DebatePage() {
         );
     } else {
         mainContent = (
-             <p className="text-3xl md:text-4xl lg:text-5xl font-medium leading-tight">
+             <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
                 {debateState.question}
             </p>
         );
@@ -105,7 +105,7 @@ export default function DebatePage() {
                         </div>
                     </div>
 
-                <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[300px] flex items-center justify-center">
+                <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center">
                     {mainContent}
                 </div>
 
