@@ -74,11 +74,8 @@ export function HomePageEditor() {
     const docRef = doc(db, 'siteContent', 'home');
     const unsubscribe = onSnapshot(docRef, (doc) => {
         if (doc.exists()) {
-            const data = doc.data() as any; // Use any to handle legacy imageUrl
-             if (data.promoSection && typeof data.promoSection.imageUrl === 'string') {
-                data.promoSection.imageUrls = [{ id: nanoid(), url: data.promoSection.imageUrl }];
-                delete data.promoSection.imageUrl;
-            } else if (data.promoSection && !data.promoSection.imageUrls) {
+            const data = doc.data() as any;
+             if (data.promoSection && !data.promoSection.imageUrls) {
                 data.promoSection.imageUrls = [];
             }
             form.reset(data as FormData);
