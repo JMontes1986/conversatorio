@@ -1,11 +1,13 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Timer } from "@/components/timer";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { VideoEmbed } from "@/components/video-embed";
+import { Maximize, Minimize } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -16,6 +18,8 @@ export default function DebatePage() {
         currentRound: "Ronda de Debate",
         videoUrl: ""
     });
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const fullscreenRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -29,14 +33,34 @@ export default function DebatePage() {
                     currentRound: data.currentRound || "Ronda de Debate",
                     videoUrl: data.videoUrl || ""
                 });
-
             } else {
                 console.log("No such document!");
             }
         });
 
-        return () => unsubscribe();
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+        return () => {
+            unsubscribe();
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        }
     }, []);
+
+    const toggleFullscreen = () => {
+        if (!fullscreenRef.current) return;
+
+        if (!document.fullscreenElement) {
+            fullscreenRef.current.requestFullscreen().catch(err => {
+                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    };
 
     const showVideo = debateState.videoUrl;
     const showQuestion = !showVideo;
@@ -64,7 +88,16 @@ export default function DebatePage() {
                         </div>
                     </div>
 
-                <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center">
+                <div ref={fullscreenRef} className="relative bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center">
+                   <Button 
+                        onClick={toggleFullscreen}
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-4 right-4 z-10 text-muted-foreground hover:text-foreground"
+                    >
+                        {isFullscreen ? <Minimize className="h-6 w-6"/> : <Maximize className="h-6 w-6"/>}
+                        <span className="sr-only">Pantalla Completa</span>
+                    </Button>
                    <div className="space-y-6 w-full">
                         {showVideo && <VideoEmbed url={debateState.videoUrl} />}
                         {showQuestion && (
