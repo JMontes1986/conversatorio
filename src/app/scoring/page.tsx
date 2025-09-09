@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -22,13 +23,11 @@ import { useJudgeAuth } from '@/context/judge-auth-context';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
-const rubricCriteria = [
-    { id: 'arg', name: 'Argumentación', description: 'Calidad y solidez de los argumentos.' },
-    { id: 'reb', name: 'Refutación', description: 'Habilidad para contra-argumentar eficazmente.' },
-    { id: 'clar', name: 'Claridad y Oratoria', description: 'Expresión verbal, lenguaje corporal y claridad.' },
-    { id: 'est', name: 'Estrategia', description: 'Uso del tiempo y estructura del discurso.' },
-    { id: 'resp', name: 'Respeto y Ética', description: 'Conducta hacia el equipo contrario y moderador.' },
-];
+interface RubricCriterion {
+    id: string;
+    name: string;
+    description: string;
+}
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -62,6 +61,8 @@ function ScoringPanel() {
   const [loadingDebateState, setLoadingDebateState] = useState(true);
   const [pastScores, setPastScores] = useState<ScoreData[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [rubricCriteria, setRubricCriteria] = useState<RubricCriterion[]>([]);
+  const [loadingRubric, setLoadingRubric] = useState(true);
 
   useEffect(() => {
     const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -85,7 +86,18 @@ function ScoringPanel() {
         setLoadingDebateState(false);
     });
 
-    return () => unsubscribeDebateState();
+    const rubricQuery = query(collection(db, "rubric"), orderBy("createdAt", "asc"));
+    const unsubscribeRubric = onSnapshot(rubricQuery, (snapshot) => {
+        const criteria = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RubricCriterion));
+        setRubricCriteria(criteria);
+        setLoadingRubric(false);
+    });
+
+
+    return () => {
+        unsubscribeDebateState();
+        unsubscribeRubric();
+    };
   }, []);
 
   useEffect(() => {
@@ -133,7 +145,7 @@ function ScoringPanel() {
   };
   
   const calculateChecksum = (teamName: string) => {
-    if (!scores[teamName]) return '';
+    if (!scores[teamName] || rubricCriteria.length === 0) return '';
     const scoreString = rubricCriteria.map(criterion => scores[teamName][criterion.id] || 0).join('-');
     let hash = 0;
     for (let i = 0; i < scoreString.length; i++) {
@@ -145,6 +157,14 @@ function ScoringPanel() {
   }
 
   const handleSubmit = async () => {
+    if (rubricCriteria.length === 0) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No hay criterios de evaluación configurados. Contacte al administrador.",
+        });
+        return;
+    }
     for (const team of debateState.teams) {
         if (Object.keys(scores[team.name] || {}).length < rubricCriteria.length) {
             toast({
@@ -215,7 +235,7 @@ function ScoringPanel() {
     </div>
   );
 
-  if (loadingDebateState) {
+  if (loadingDebateState || loadingRubric) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
   }
 
@@ -260,7 +280,14 @@ function ScoringPanel() {
                         </TableRow>
                         </TableHeader>
                         <TableBody>
-                        {rubricCriteria.map(criterion => (
+                        {rubricCriteria.length === 0 ? (
+                             <TableRow>
+                                <TableCell colSpan={debateState.teams.length + 1} className="text-center text-muted-foreground">
+                                    No hay criterios de evaluación definidos. Contacte al administrador.
+                                </TableCell>
+                            </TableRow>
+                        ) :
+                        rubricCriteria.map(criterion => (
                             <TableRow key={criterion.id}>
                             <TableCell>
                                 <p className="font-medium">{criterion.name}</p>
@@ -291,7 +318,7 @@ function ScoringPanel() {
                 </CardContent>
             </Card>
             <div className="mt-8 flex justify-end">
-                <Button size="lg" onClick={handleSubmit} disabled={isSubmitting}>
+                <Button size="lg" onClick={handleSubmit} disabled={isSubmitting || rubricCriteria.length === 0}>
                     {isSubmitting ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -351,5 +378,3 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
-
-    

@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -44,6 +44,7 @@ import { EditSchoolForm } from '@/components/edit-school-form';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DrawAnimation } from '@/components/draw-animation';
+import { RubricManagement } from '@/components/rubric-management';
 
 
 interface SchoolData {
@@ -326,9 +327,10 @@ function AdminDashboard() {
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <Tabs defaultValue="schools" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-7">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-8">
             <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
             <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Rondas</TabsTrigger>
+            <TabsTrigger value="rubric"><ListChecks className="mr-2 h-4 w-4" />Rúbrica</TabsTrigger>
             <TabsTrigger value="draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
             <TabsTrigger value="judges"><User className="mr-2 h-4 w-4" />Jurados</TabsTrigger>
             <TabsTrigger value="moderators"><KeyRound className="mr-2 h-4 w-4" />Moderadores</TabsTrigger>
@@ -374,7 +376,7 @@ function AdminDashboard() {
                         </TableBody>
                     ) : (
                         schools.map(school => (
-                            <Collapsible asChild key={school.id} asChild>
+                            <Collapsible asChild key={school.id}>
                                 <TableBody>
                                     <TableRow>
                                         <TableCell>
@@ -477,6 +479,9 @@ function AdminDashboard() {
             </TabsContent>
             <TabsContent value="rounds">
                 <RoundManagement />
+            </TabsContent>
+            <TabsContent value="rubric">
+                <RubricManagement />
             </TabsContent>
             <TabsContent value="draw">
                 <DrawAnimation />
