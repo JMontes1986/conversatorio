@@ -140,24 +140,22 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>¿Está seguro que desea {registrationsClosed ? 'abrir' : 'cerrar'} las inscripciones?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
-                                        <div className="flex">
-                                            <div className="flex-shrink-0">
-                                                <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
-                                            </div>
-                                            <div className="ml-3">
-                                                <p className="text-sm text-yellow-700">
-                                                    {registrationsClosed 
-                                                        ? "Al abrir las inscripciones, nuevos colegios verificados podrán participar en el sorteo."
-                                                        : `Al cerrar, se fijará la lista de ${verifiedSchools.length} equipos verificados para el sorteo. No se podrán añadir más equipos.`
-                                                    } 
-                                                    Esta acción no se puede deshacer fácilmente.
-                                                </p>
-                                            </div>
+                                 <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+                                    <div className="flex">
+                                        <div className="flex-shrink-0">
+                                            <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+                                        </div>
+                                        <div className="ml-3">
+                                            <AlertDialogDescription className="text-sm text-yellow-700">
+                                                {registrationsClosed 
+                                                    ? "Al abrir las inscripciones, nuevos colegios verificados podrán participar en el sorteo."
+                                                    : `Al cerrar, se fijará la lista de ${verifiedSchools.length} equipos verificados para el sorteo. No se podrán añadir más equipos.`
+                                                } 
+                                                Esta acción no se puede deshacer fácilmente.
+                                            </AlertDialogDescription>
                                         </div>
                                     </div>
-                                </AlertDialogDescription>
+                                </div>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
