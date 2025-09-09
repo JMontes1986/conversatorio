@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Timer } from "@/components/timer";
@@ -297,6 +297,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                     title: "Avance ya Registrado",
                     description: `${team.name} ya ha avanzado por bye en esta ronda.`,
                 });
+                setIsSubmitting(false);
                 return;
             }
 
