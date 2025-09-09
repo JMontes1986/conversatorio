@@ -4,7 +4,7 @@
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { Loader2, Trophy, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, doc, orderBy, where } from "firebase/firestore";
 
