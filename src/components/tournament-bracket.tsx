@@ -115,12 +115,16 @@ const ConnectorColumn = ({ numMatches }: { numMatches: number }) => (
     <div className="flex flex-col justify-around w-12 flex-shrink-0">
          <div className="h-10 mb-8"></div>
          <div className="flex flex-col justify-around h-full">
-            {Array.from({ length: numMatches / 2 }).map((_, i) => (
+            {Array.from({ length: Math.ceil(numMatches / 2) }).map((_, i) => (
                 <div key={i} className="relative h-[116px] flex-grow">
-                    <div className="absolute top-1/4 left-0 w-1/2 h-px bg-border"></div>
-                    <div className="absolute bottom-1/4 left-0 w-1/2 h-px bg-border"></div>
-                    <div className="absolute top-1/4 left-1/2 w-px h-1/2 bg-border"></div>
-                    <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-border"></div>
+                    { numMatches > 1 &&
+                       <>
+                         <div className="absolute top-1/4 left-0 w-1/2 h-px bg-border"></div>
+                         <div className="absolute bottom-1/4 left-0 w-1/2 h-px bg-border"></div>
+                         <div className="absolute top-1/4 left-1/2 w-px h-1/2 bg-border"></div>
+                         <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-border"></div>
+                       </>
+                    }
                 </div>
             ))}
         </div>
@@ -240,6 +244,12 @@ export function TournamentBracket() {
                          const p1 = lastRoundWinners[i];
                          const p2 = lastRoundWinners[i+1];
                          
+                         if (!p2) { // Handle bye (odd number of teams)
+                            nextRoundWinners.push(p1);
+                            currentRound.matches.push({ id: matchId, participants: [p1] });
+                            continue;
+                         }
+
                          const result = getMatchResult(matchId);
 
                          if(result.participants.length > 0) {
