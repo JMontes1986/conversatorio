@@ -8,6 +8,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { VideoEmbed } from "@/components/video-embed";
 import { Maximize, Minimize } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -88,7 +89,13 @@ export default function DebatePage() {
                         </div>
                     </div>
 
-                <div ref={fullscreenRef} className="relative bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center">
+                <div 
+                    ref={fullscreenRef} 
+                    className={cn(
+                        "relative rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center transition-colors", 
+                        isFullscreen ? "bg-background" : "bg-secondary/50"
+                    )}
+                >
                    <Button 
                         onClick={toggleFullscreen}
                         variant="ghost"
