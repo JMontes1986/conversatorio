@@ -111,25 +111,27 @@ const RoundColumn = ({ round }: { round: BracketRound }) => (
     </div>
 );
 
-const ConnectorColumn = ({ numMatches }: { numMatches: number }) => (
-    <div className="flex flex-col justify-around w-12 flex-shrink-0">
-         <div className="h-10 mb-8"></div>
-         <div className="flex flex-col justify-around h-full">
-            {Array.from({ length: Math.ceil(numMatches / 2) }).map((_, i) => (
-                <div key={i} className="relative h-[116px] flex-grow">
-                    { numMatches > 1 &&
+const ConnectorColumn = ({ numMatches, numPreviousMatches }: { numMatches: number, numPreviousMatches?: number }) => {
+    const isConnectingToOne = numMatches === 1 && (numPreviousMatches && numPreviousMatches > 1);
+
+    return (
+        <div className="flex flex-col justify-around w-12 flex-shrink-0">
+             <div className="h-10 mb-8"></div>
+             <div className="flex flex-col justify-around h-full">
+                {Array.from({ length: numMatches }).map((_, i) => (
+                    <div key={i} className="relative flex-grow" style={{ height: isConnectingToOne ? `${116 * (numPreviousMatches! / 2)}px` : '116px' }}>
                        <>
                          <div className="absolute top-1/4 left-0 w-1/2 h-px bg-border"></div>
                          <div className="absolute bottom-1/4 left-0 w-1/2 h-px bg-border"></div>
                          <div className="absolute top-1/4 left-1/2 w-px h-1/2 bg-border"></div>
                          <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-border"></div>
                        </>
-                    }
-                </div>
-            ))}
+                    </div>
+                ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 
 export function TournamentBracket() {
@@ -204,17 +206,17 @@ export function TournamentBracket() {
                 const drawData = drawSnap.exists() ? drawSnap.data() as DrawState : null;
                 const finalBracketData: BracketRound[] = [];
                 
-                const groupRoundsDraw = drawData?.rounds.filter(r => r.phase === "Fase de Grupos") || [];
-                const quarterFinalists: Participant[] = [];
-                
+                let lastRoundWinners: Participant[] = [];
                 const groupStageRound: BracketRound = { title: "Fase de Grupos", matches: [] };
-                groupRoundsDraw.forEach(round => {
+                const groupRoundsFromDraw = drawData?.rounds.filter(r => r.phase === "Fase de Grupos") || [];
+                
+                groupRoundsFromDraw.forEach(round => {
                     const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
                     const result = getMatchResult(round.name);
 
                     if (result.participants.length > 0) {
                         groupStageRound.matches.push({ id: round.name, participants: result.participants });
-                        if(result.winner) quarterFinalists.push(result.winner);
+                        if(result.winner) lastRoundWinners.push(result.winner);
                     } else if (teamsInDraw.length > 0) {
                         const participants = teamsInDraw.map(t => {
                             const schoolData = schools.find(s => s.teamName === t.name);
@@ -227,49 +229,47 @@ export function TournamentBracket() {
                         groupStageRound.matches.push({ id: round.name, participants });
                     }
                 });
-                
+
                 if (groupStageRound.matches.length > 0) {
                     finalBracketData.push(groupStageRound);
                 }
-
-                // If we have group stage winners, we proceed to build the quarters
-                const quarterFinalistsFromScores = quarterFinalists.length > 0
-                    ? quarterFinalists
-                    : (drawData?.activeTab === 'quarters' ? (drawData.teams.map(t => ({...t, avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`}))) : []);
                 
-                let lastRoundWinners: Participant[] = quarterFinalistsFromScores;
                 const eliminationPhases = ["Cuartos de Final", "Semifinal", "Final"];
                 
                 for(const phase of eliminationPhases) {
-                     if (lastRoundWinners.length === 0) break;
+                     if (lastRoundWinners.length === 0 && phase !== "Cuartos de Final") break;
+                     
                      const currentRound: BracketRound = { title: phase, matches: [] };
                      const nextRoundWinners: Participant[] = [];
                      
-                     // If this is the quarters, use the draw if available
-                     const quartersDraw = drawData?.rounds.filter(r => r.phase === "Cuartos de Final") || [];
-                     if(phase === "Cuartos de Final" && quartersDraw.length > 0) {
-                         quartersDraw.forEach(round => {
-                            const result = getMatchResult(round.name);
-                            if (result.participants.length > 0) {
+                     let teamsForThisPhase = lastRoundWinners;
+                     
+                     // For Quarters, if no winners from groups, check the draw for quarter finalists
+                     if (phase === "Cuartos de Final" && lastRoundWinners.length === 0 && drawData?.activeTab === 'quarters') {
+                        teamsForThisPhase = drawData.teams.map(t => ({...t, avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`}));
+                     }
+
+                     const quartersDrawRounds = drawData?.rounds.filter(r => r.phase === "Cuartos de Final") || [];
+
+                     if (phase === "Cuartos de Final" && quartersDrawRounds.length > 0) {
+                        quartersDrawRounds.forEach(round => {
+                             const result = getMatchResult(round.name);
+                             if (result.participants.length > 0) {
                                 currentRound.matches.push({ id: round.name, participants: result.participants });
                                 if (result.winner) nextRoundWinners.push(result.winner);
-                            } else {
+                             } else {
                                 const teamsInDraw = drawData?.teams.filter(t => t.round === round.name) || [];
-                                const participants = teamsInDraw.map(t => ({
-                                    name: t.name,
-                                    avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`,
-                                }));
+                                const participants = teamsInDraw.map(t => ({ name: t.name, avatar: `https://picsum.photos/seed/${encodeURIComponent(t.name)}/200`}));
                                 currentRound.matches.push({ id: round.name, participants });
-                            }
-                        });
+                             }
+                         });
                      } else {
-                        // Logic for Semis and Final (and Quarters if no draw yet)
-                         for (let i = 0; i < lastRoundWinners.length; i += 2) {
+                         for (let i = 0; i < teamsForThisPhase.length; i += 2) {
                              const matchId = `${phase}-${(i/2) + 1}`;
-                             const p1 = lastRoundWinners[i];
-                             const p2 = lastRoundWinners[i+1];
+                             const p1 = teamsForThisPhase[i];
+                             const p2 = teamsForThisPhase[i+1];
                              
-                             if (!p2) {
+                             if (!p2) { // Handle BYE - automatic pass
                                 nextRoundWinners.push(p1);
                                 currentRound.matches.push({ id: matchId, participants: [p1] });
                                 continue;
@@ -281,18 +281,32 @@ export function TournamentBracket() {
                                 currentRound.matches.push({ id: matchId, participants: result.participants });
                                 if(result.winner) nextRoundWinners.push(result.winner);
                              } else {
-                                currentRound.matches.push({ id: matchId, participants: p1 && p2 ? [p1, p2] : (p1 ? [p1] : []) });
+                                currentRound.matches.push({ id: matchId, participants: [p1, p2] });
                              }
                          }
                      }
-                     
-                     if(currentRound.matches.length > 0) finalBracketData.push(currentRound);
-                     lastRoundWinners = nextRoundWinners.length > 0 ? nextRoundWinners : lastRoundWinners;
+
+                     if(currentRound.matches.length > 0) {
+                        finalBracketData.push(currentRound);
+                        lastRoundWinners = nextRoundWinners;
+                     } else if (phase === 'Cuartos de Final' && teamsForThisPhase.length > 0) {
+                        // If there are quarter finalists but no matches (e.g. from draw), show them
+                        for (let i = 0; i < Math.ceil(teamsForThisPhase.length / 2); i++) {
+                            currentRound.matches.push({id: `${phase}-m${i}`, participants: []});
+                        }
+                        finalBracketData.push(currentRound);
+                     }
                 }
                 
-                const finalWinner = lastRoundWinners.length === 1 ? lastRoundWinners[0] : null;
-                if(finalWinner) {
-                    setChampion(finalWinner);
+                const finalRound = finalBracketData.find(r => r.title === "Final");
+                if (finalRound && finalRound.matches.length > 0) {
+                    const finalMatch = finalRound.matches[0];
+                    const winner = finalMatch.participants.find(p => p.winner);
+                    if (winner) {
+                        setChampion(winner);
+                    } else {
+                        setChampion(null);
+                    }
                 } else {
                     setChampion(null);
                 }
@@ -368,7 +382,9 @@ export function TournamentBracket() {
         {bracketData.map((round, roundIndex) => (
             <div key={round.title} className="flex items-start">
                <RoundColumn round={round} />
-               {roundIndex < bracketData.length && round.matches.length > 0 && round.title !== 'Final' && <ConnectorColumn numMatches={round.matches.length} />}
+               {roundIndex < bracketData.length -1 && round.matches.length > 0 && (
+                   <ConnectorColumn numMatches={bracketData[roundIndex+1].matches.length} numPreviousMatches={round.matches.length} />
+               )}
             </div>
         ))}
       </div>
