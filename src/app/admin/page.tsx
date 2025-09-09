@@ -279,7 +279,7 @@ function AdminDashboard() {
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
  
- const processedResults: MatchResults[] = scores.reduce((acc, score) => {
+ const processedResults = scores.reduce((acc, score) => {
     let match = acc.find(m => m.matchId === score.matchId);
     if (!match) {
         match = { matchId: score.matchId, scores: [], teamTotals: {}, winner: '' };
@@ -287,26 +287,45 @@ function AdminDashboard() {
     }
     match.scores.push(score);
 
-    score.teams.forEach(team => {
-        if (!match!.teamTotals[team.name]) {
-            match!.teamTotals[team.name] = 0;
-        }
-        match!.teamTotals[team.name] += team.total;
+    // Recalculate totals for all judges every time
+    const allScoresForMatch = scores.filter(s => s.matchId === score.matchId);
+    const teamTotals: Record<string, number> = {};
+
+    allScoresForMatch.forEach(s => {
+        s.teams.forEach(team => {
+            if (!teamTotals[team.name]) {
+                teamTotals[team.name] = 0;
+            }
+            teamTotals[team.name] += team.total;
+        });
     });
+    match.teamTotals = teamTotals;
     
-    // Determine winner
+    // Determine winner based on aggregated scores
     const totals = Object.values(match.teamTotals);
-    const maxScore = Math.max(...totals);
-    const winners = Object.entries(match.teamTotals).filter(([, score]) => score === maxScore);
-    
-    if (winners.length > 1) {
-        match.winner = 'Empate';
-    } else if (winners.length === 1) {
-        match.winner = winners[0][0];
+    if(totals.length > 0) {
+        const maxScore = Math.max(...totals);
+        const winners = Object.entries(match.teamTotals).filter(([, score]) => score === maxScore);
+        
+        if (winners.length > 1 && totals.every(t => t === maxScore)) {
+            match.winner = 'Empate';
+        } else if (winners.length === 1) {
+            match.winner = winners[0][0];
+        } else {
+             // Handle cases of multi-team tie for first where not all teams are tied
+            match.winner = 'Empate';
+        }
+    } else {
+        match.winner = '';
     }
 
     return acc;
   }, [] as MatchResults[]);
+  
+  // Deduplicate results
+  const uniqueResults = processedResults.filter((result, index, self) =>
+    index === self.findIndex((r) => r.matchId === result.matchId)
+  );
 
   const openEditDialog = (school: SchoolData) => {
     setSelectedSchool(school);
@@ -664,18 +683,18 @@ function AdminDashboard() {
                 </CardHeader>
                 <CardContent>
                     {loadingScores && <p className="text-center">Cargando resultados...</p>}
-                    {!loadingScores && processedResults.length === 0 && <p className="text-center text-muted-foreground">Aún no hay resultados para mostrar.</p>}
+                    {!loadingScores && uniqueResults.length === 0 && <p className="text-center text-muted-foreground">Aún no hay resultados para mostrar.</p>}
                     <Accordion type="single" collapsible className="w-full">
-                        {processedResults.map(result => (
+                        {uniqueResults.map(result => (
                             <AccordionItem value={result.matchId} key={result.matchId}>
                                 <AccordionTrigger>
                                     <div className="flex justify-between items-center w-full pr-4">
                                         <span className="font-bold text-lg capitalize">Ronda: {result.matchId.replace(/-/g, ' ')}</span>
                                         <div className="text-right">
                                             <div className="text-sm">Ganador: <Badge variant={result.winner === 'Empate' ? 'secondary' : 'default'}>{result.winner}</Badge></div>
-                                            <p className="text-xs text-muted-foreground">
+                                            <div className="text-xs text-muted-foreground">
                                                 {Object.entries(result.teamTotals).map(([name, total]) => `${name}: ${total}`).join(' vs ')}
-                                            </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </AccordionTrigger>
