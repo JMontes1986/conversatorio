@@ -114,10 +114,6 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         const questionId = event.target.dataset.questionId;
 
         if (file && questionId) {
-            if (!['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/webm'].includes(file.type)) {
-                alert('Tipo de archivo no válido. Por favor, suba un archivo MP4, MOV, MKV o WEBM.');
-                return;
-            }
              setUploadingFile({ file, questionId });
         }
     };
@@ -236,7 +232,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                         <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile?.questionId === q.id}>
                                                            <Upload className="h-4 w-4" />
                                                         </Button>
-                                                        <input type="file" ref={fileInputRef} data-question-id={q.id} onChange={handleFileChange} className="hidden" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" />
+                                                        <input type="file" ref={fileInputRef} data-question-id={q.id} onChange={handleFileChange} className="hidden" accept="video/*" />
                                                     </div>
                                                     {uploadingFile?.questionId === q.id && (
                                                         <div className="space-y-1">
