@@ -105,17 +105,20 @@ function ScoringPanel() {
       if (!judge?.id) return;
       
       setLoadingHistory(true);
+      // Simplified query to avoid composite index
       const scoresQuery = query(
           collection(db, "scores"),
-          where("judgeId", "==", judge.id),
           orderBy("createdAt", "desc")
       );
 
       const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
-          const allScores = querySnapshot.docs.map(doc => ({
+          // Filter scores for the current judge on the client side
+          const allScores = querySnapshot.docs
+            .map(doc => ({
               id: doc.id,
               ...doc.data()
-          } as ScoreData));
+            } as ScoreData))
+            .filter(score => score.judgeId === judge.id);
           
           setPastScores(allScores);
           setLoadingHistory(false);
