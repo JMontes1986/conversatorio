@@ -112,19 +112,8 @@ const RoundColumn = ({ round, showScore }: { round: BracketRound, showScore: boo
     </div>
 );
 
-const ConnectorColumn = ({ numMatches, numPreviousMatches, isFirstConnector = false }: { numMatches: number, numPreviousMatches?: number, isFirstConnector?: boolean }) => {
+const ConnectorColumn = ({ numMatches, numPreviousMatches }: { numMatches: number, numPreviousMatches?: number }) => {
     const isConnectingToOne = numMatches === 1 && (numPreviousMatches && numPreviousMatches > 1);
-
-    if (isFirstConnector) {
-        return (
-            <div className="flex flex-col justify-around w-12 flex-shrink-0">
-                <div className="h-10 mb-8"></div>
-                <div className="relative h-full">
-                    <div className="absolute top-0 left-1/2 w-px h-full bg-border"></div>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="flex flex-col justify-around w-12 flex-shrink-0">
@@ -441,7 +430,6 @@ export function TournamentBracket() {
                    <ConnectorColumn 
                         numMatches={bracketData[roundIndex+1].matches.length} 
                         numPreviousMatches={round.matches.length}
-                        isFirstConnector={round.title === 'Fase de Grupos'}
                    />
                )}
             </div>
