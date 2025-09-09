@@ -83,33 +83,33 @@ export default function DebatePage() {
     }
     
     return (
-        <>
-            <div className="container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)]">
-                <div className="w-full max-w-5xl space-y-8 text-center">
-                     <div>
-                        <h1 className="font-headline text-3xl md:text-4xl font-bold capitalize">
-                            {debateState.currentRound}
-                        </h1>
-                        <p className="text-muted-foreground mt-2">
-                            Siga las instrucciones del moderador.
-                        </p>
+        <div className="container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)]">
+            <div className="w-full max-w-5xl space-y-8 text-center">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="text-center md:text-left">
+                            <h1 className="font-headline text-3xl md:text-4xl font-bold capitalize">
+                                {debateState.currentRound}
+                            </h1>
+                            <p className="text-muted-foreground mt-2">
+                                Siga las instrucciones del moderador.
+                            </p>
+                        </div>
+                        <div className="shrink-0">
+                             <Timer 
+                                key={debateState.timer.lastUpdated}
+                                initialTime={debateState.timer.duration}
+                                title="Tiempo"
+                                showControls={false}
+                                size="small"
+                            />
+                        </div>
                     </div>
 
-                    <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[300px] flex items-center justify-center">
-                       {mainContent}
-                    </div>
-
+                <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[300px] flex items-center justify-center">
+                    {mainContent}
                 </div>
+
             </div>
-            
-            <div className="fixed bottom-6 right-6 z-50">
-                 <Timer 
-                    key={debateState.timer.lastUpdated}
-                    initialTime={debateState.timer.duration}
-                    title="Tiempo"
-                    showControls={false}
-                />
-            </div>
-        </>
+        </div>
     );
 }

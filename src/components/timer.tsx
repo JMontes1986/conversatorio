@@ -5,9 +5,10 @@ import { useState, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Pause, RotateCcw, Bell } from "lucide-react";
+import { Play, Pause, RotateCcw, Bell, TimerIcon } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { cn } from "@/lib/utils";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -15,9 +16,10 @@ interface TimerProps {
   initialTime: number; // in seconds
   title: string;
   showControls?: boolean;
+  size?: 'default' | 'small';
 }
 
-export function Timer({ initialTime, title, showControls = true }: TimerProps) {
+export function Timer({ initialTime, title, showControls = true, size = 'default' }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [isActive, setIsActive] = useState(false);
   const synth = useRef<Tone.Synth | null>(null);
@@ -32,8 +34,10 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
     // When initialTime changes, reset the timer but don't auto-start it.
     // The active state should only be controlled by user interaction (moderator)
     // or by the Firestore listener for the public view.
-    setIsActive(false);
-  }, [initialTime]);
+    if (!showControls) {
+       setIsActive(false);
+    }
+  }, [initialTime, showControls]);
   
   useEffect(() => {
     // Public view timer logic: listens to firestore for active state
@@ -58,7 +62,7 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
       interval = setInterval(() => {
         setTimeRemaining((time) => time - 1);
       }, 1000);
-    } else if (timeRemaining === 0 && isActive) {
+    } else if (timeRemaining <= 0 && isActive) {
       setIsActive(false);
       if (showControls) playSound();
     }
@@ -131,6 +135,32 @@ export function Timer({ initialTime, title, showControls = true }: TimerProps) {
   };
 
   const progress = (timeRemaining / initialTime) * 100;
+
+  if (size === 'small') {
+      return (
+          <Card className="max-w-xs">
+              <CardContent className="p-2 flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <TimerIcon className="h-5 w-5" />
+                        <span className="text-sm font-medium">{title}</span>
+                    </div>
+                    <span className="text-2xl font-bold font-mono tabular-nums text-foreground">
+                        {formatTime(timeRemaining)}
+                    </span>
+                     {showControls && (
+                        <div className="flex items-center gap-1">
+                            <Button onClick={toggleTimer} size="icon" className="h-8 w-8">
+                                {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </Button>
+                            <Button onClick={resetTimer} variant="outline" size="icon" className="h-8 w-8">
+                                <RotateCcw className="h-4 w-4" />
+                            </Button>
+                        </div>
+                     )}
+              </CardContent>
+          </Card>
+      )
+  }
 
   return (
     <Card>
