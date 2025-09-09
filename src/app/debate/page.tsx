@@ -15,6 +15,7 @@ const DEBATE_STATE_DOC_ID = "current";
 export default function DebatePage() {
     const [debateState, setDebateState] = useState({
         question: "Esperando la pregunta del moderador...",
+        temporaryMessage: "",
         timer: { duration: 300, lastUpdated: Date.now() },
         currentRound: "Ronda de Debate",
         videoUrl: ""
@@ -30,6 +31,7 @@ export default function DebatePage() {
                 const data = doc.data();
                 setDebateState({
                     question: data.question || "Esperando la pregunta del moderador...",
+                    temporaryMessage: data.temporaryMessage || "",
                     timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : { duration: 300, lastUpdated: Date.now() },
                     currentRound: data.currentRound || "Ronda de Debate",
                     videoUrl: data.videoUrl || ""
@@ -63,8 +65,15 @@ export default function DebatePage() {
         }
     };
 
-    const showVideo = debateState.videoUrl;
-    const showQuestion = !showVideo;
+    const showVideo = debateState.videoUrl && !debateState.temporaryMessage;
+    const showQuestion = !showVideo && !debateState.temporaryMessage;
+    const showTemporaryMessage = !!debateState.temporaryMessage;
+    
+    let displayText = debateState.question;
+    if (showTemporaryMessage) {
+        displayText = debateState.temporaryMessage;
+    }
+
 
     return (
         <div 
@@ -112,14 +121,15 @@ export default function DebatePage() {
                     </Button>
                    <div className="space-y-6 w-full">
                         {showVideo && <VideoEmbed url={debateState.videoUrl} />}
-                        {showQuestion && (
+                        {(showQuestion || showTemporaryMessage) && (
                             <p className={cn(
                                 "font-medium leading-tight",
                                 isFullscreen
-                                  ? "text-4xl md:text-6xl lg:text-7xl"
-                                  : "text-4xl md:text-5xl lg:text-6xl"
+                                  ? "text-5xl md:text-7xl"
+                                  : "text-4xl md:text-5xl",
+                                showTemporaryMessage && "text-muted-foreground"
                               )}>
-                                {debateState.question}
+                                {displayText}
                             </p>
                         )}
                     </div>

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
@@ -295,6 +295,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
+    const [previewTempMessage, setPreviewTempMessage] = useState("");
+    const [tempMessageInput, setTempMessageInput] = useState("");
+    const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
@@ -315,6 +318,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 const data = docSnap.data();
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
+                setPreviewTempMessage(data.temporaryMessage || "");
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
@@ -388,7 +392,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: question.text,
-                videoUrl: "" // Clear video when question is sent
+                videoUrl: "", // Clear video when question is sent
+                temporaryMessage: "" // Clear temp message
             }, { merge: true });
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
@@ -402,7 +407,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 videoUrl: videoInputs[question.id] || "",
-                question: "" // Clear question when video is sent
+                question: "", // Clear question when video is sent
+                temporaryMessage: "" // Clear temp message
             }, { merge: true });
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
         } catch (error) {
@@ -416,12 +422,47 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: "Esperando la pregunta del moderador...",
-                videoUrl: ""
+                videoUrl: "",
+                temporaryMessage: ""
             }, { merge: true });
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
         } catch (error) {
              console.error("Error clearing screen: ", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo limpiar la pantalla." });
+        }
+    }
+
+    const handleSendTemporaryMessage = async () => {
+        if (!tempMessageInput.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "El mensaje no puede estar vacío." });
+            return;
+        }
+        setIsSendingTempMessage(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                temporaryMessage: tempMessageInput,
+                question: "",
+                videoUrl: ""
+            }, { merge: true });
+            toast({ title: "Mensaje Temporal Enviado" });
+        } catch (error) {
+            console.error("Error sending temporary message:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el mensaje." });
+        } finally {
+            setIsSendingTempMessage(false);
+        }
+    }
+
+    const handleClearTemporaryMessage = async () => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { temporaryMessage: "" }, { merge: true });
+            setTempMessageInput("");
+            toast({ title: "Mensaje Temporal Limpiado" });
+        } catch (error) {
+            console.error("Error clearing temporary message:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo limpiar el mensaje." });
         }
     }
 
@@ -567,15 +608,41 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                          <div className="space-y-4">
                             <h3 className="font-medium text-lg">Pantalla Pública:</h3>
                             <div className="text-xl p-4 bg-secondary rounded-md min-h-[100px] flex items-center justify-center text-center">
-                                {!previewVideoUrl && !previewQuestion && "Pantalla Limpia"}
-                                {previewVideoUrl && !previewQuestion && "Video en pantalla. Esperando pregunta."}
-                                {previewQuestion}
+                                {!previewVideoUrl && !previewQuestion && !previewTempMessage && "Pantalla Limpia"}
+                                {previewTempMessage && <span className="text-muted-foreground">{previewTempMessage}</span>}
+                                {previewVideoUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
+                                {previewQuestion && !previewTempMessage && previewQuestion}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
                 
                 <CompetitionSettings registeredSchools={registeredSchools} allScores={allScores} />
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
+                        <CardDescription>Muestre un mensaje temporal en la pantalla pública.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <Textarea 
+                            placeholder="Ej: En breves momentos, la siguiente pregunta..."
+                            value={tempMessageInput}
+                            onChange={(e) => setTempMessageInput(e.target.value)}
+                            rows={3}
+                        />
+                        <div className="flex gap-2">
+                            <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage} className="w-full">
+                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                Enviar Mensaje
+                            </Button>
+                             <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full">
+                                <Eraser className="mr-2 h-4 w-4"/>
+                                Limpiar Mensaje
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 <QuestionManagement 
                     preparedQuestions={preparedQuestions}
