@@ -13,6 +13,7 @@ type RoundData = {
   id: string;
   name: string;
   phase: string;
+  createdAt: { seconds: number, nanoseconds: number };
 }
 
 type ScoreData = {
@@ -36,11 +37,12 @@ export function GroupStageResults() {
     useEffect(() => {
         const roundsQuery = query(
             collection(db, "rounds"), 
-            where("phase", "==", "Fase de Grupos"),
-            orderBy("createdAt", "asc")
+            where("phase", "==", "Fase de Grupos")
         );
         const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
             const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            // Sort client-side to avoid composite index
+            rounds.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
             setGroupRounds(rounds);
         });
 
