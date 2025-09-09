@@ -67,7 +67,13 @@ export default function DebatePage() {
     const showQuestion = !showVideo;
 
     return (
-        <div className="container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)]">
+        <div 
+            ref={fullscreenRef}
+            className={cn(
+                "container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)] transition-colors",
+                isFullscreen ? "bg-background" : ""
+            )}
+        >
             <div className="w-full max-w-5xl space-y-8 text-center">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="text-center md:text-left">
@@ -90,10 +96,9 @@ export default function DebatePage() {
                     </div>
 
                 <div 
-                    ref={fullscreenRef} 
                     className={cn(
                         "relative rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center transition-colors", 
-                        isFullscreen ? "bg-background" : "bg-secondary/50"
+                        !isFullscreen && "bg-secondary/50"
                     )}
                 >
                    <Button 
