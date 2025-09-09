@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -55,6 +54,16 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const iconOptions = ["Users", "Shuffle", "Gavel", "ClipboardCheck", "Trophy", "Home", "Monitor", "Calendar", "Shield", "Star"];
+
+const linkOptions = [
+    { value: '/', label: 'Inicio' },
+    { value: '/scoreboard', label: 'Marcador' },
+    { value: '/draw', label: 'Sorteo' },
+    { value: '/debate', label: 'Debate' },
+    { value: '/register', label: 'Registro (Admin)' },
+    { value: '/scoring/login', label: 'Acceso Jurado' },
+    { value: '/moderator/login', label: 'Acceso Moderador' },
+];
 
 export function HomePageEditor() {
   const { toast } = useToast();
@@ -218,7 +227,24 @@ export function HomePageEditor() {
                             control={form.control}
                             name={`features.${index}.link`}
                             render={({ field }) => (
-                                <FormItem><FormLabel>Enlace</FormLabel><FormControl><Input {...field} placeholder="/ejemplo" /></FormControl><FormMessage /></FormItem>
+                                <FormItem>
+                                    <FormLabel>Enlace</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Seleccione una página de destino" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {linkOptions.map(option => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
                             )}
                         />
                         <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => removeFeature(index)}>
