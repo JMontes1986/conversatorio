@@ -39,6 +39,7 @@ export default function DebatePage() {
     }, []);
 
     const showVideo = debateState.videoUrl;
+    const showQuestion = !showVideo;
 
     return (
         <div className="container mx-auto py-10 px-4 md:px-6 flex flex-col justify-center items-center min-h-[calc(100vh-200px)]">
@@ -66,9 +67,11 @@ export default function DebatePage() {
                 <div className="bg-secondary/50 rounded-xl p-8 md:p-12 min-h-[400px] flex items-center justify-center">
                    <div className="space-y-6 w-full">
                         {showVideo && <VideoEmbed url={debateState.videoUrl} />}
-                        <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
-                            {debateState.question}
-                        </p>
+                        {showQuestion && (
+                            <p className="text-4xl md:text-5xl lg:text-6xl font-medium leading-tight">
+                                {debateState.question}
+                            </p>
+                        )}
                     </div>
                 </div>
 

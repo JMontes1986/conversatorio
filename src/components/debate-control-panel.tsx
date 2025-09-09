@@ -388,6 +388,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: question.text,
+                videoUrl: "" // Clear video when question is sent
             }, { merge: true });
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
@@ -400,7 +401,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: videoInputs[question.id] || ""
+                videoUrl: videoInputs[question.id] || "",
+                question: "" // Clear question when video is sent
             }, { merge: true });
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
         } catch (error) {
