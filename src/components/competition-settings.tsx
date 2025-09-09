@@ -115,12 +115,17 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className={cn(
+                    "flex items-center justify-between rounded-lg border p-4 transition-colors",
+                    registrationsClosed 
+                        ? "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
+                        : "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800"
+                )}>
                     <div>
-                        <Label htmlFor="registrations-switch" className="font-bold">
-                            Inscripciones de Equipos
+                        <Label htmlFor="registrations-switch" className={cn("font-bold text-lg", registrationsClosed ? "text-destructive" : "text-green-800 dark:text-green-300")}>
+                            {registrationsClosed ? "Inscripciones Cerradas" : "Inscripciones Abiertas"}
                         </Label>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mt-1">
                             {registrationsClosed 
                                 ? "Cerradas. Solo los equipos ya verificados participarán en el sorteo."
                                 : "Abiertas. Nuevos colegios verificados pueden entrar al sorteo."
@@ -142,6 +147,9 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>¿Está seguro que desea {registrationsClosed ? 'abrir' : 'cerrar'} las inscripciones?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción es importante y afectará qué equipos pueden participar en los sorteos.
+                                </AlertDialogDescription>
                             </AlertDialogHeader>
                             <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
                                 <div className="flex">
