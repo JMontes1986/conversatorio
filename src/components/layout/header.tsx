@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -73,7 +72,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={70} height={70} />
+          <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={80} height={80} />
           <span className="font-headline text-xl font-bold">
             Conversatorio Colgemelli
           </span>
@@ -133,7 +132,7 @@ export function Header() {
             <SheetContent side="right">
               <div className="grid gap-4 py-6">
                 <Link href="/" className="flex items-center gap-2 mb-4">
-                  <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={70} height={70} />
+                  <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={80} height={80} />
                   <span className="font-headline text-xl font-bold">
                     Colgemelli
                   </span>
