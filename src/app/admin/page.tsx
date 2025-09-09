@@ -672,7 +672,7 @@ function AdminDashboard() {
                                     <div className="flex justify-between items-center w-full pr-4">
                                         <span className="font-bold text-lg capitalize">Ronda: {result.matchId.replace(/-/g, ' ')}</span>
                                         <div className="text-right">
-                                            <p className="text-sm">Ganador: <Badge variant={result.winner === 'Empate' ? 'secondary' : 'default'}>{result.winner}</Badge></p>
+                                            <div className="text-sm">Ganador: <Badge variant={result.winner === 'Empate' ? 'secondary' : 'default'}>{result.winner}</Badge></div>
                                             <p className="text-xs text-muted-foreground">
                                                 {Object.entries(result.teamTotals).map(([name, total]) => `${name}: ${total}`).join(' vs ')}
                                             </p>
