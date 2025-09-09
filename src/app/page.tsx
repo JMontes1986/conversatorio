@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 
 interface Feature {
   id: string;
@@ -29,6 +30,11 @@ interface Feature {
   title: string;
   description: string;
   link: string;
+}
+
+interface PromoSectionImage {
+    id: string;
+    url: string;
 }
 
 interface HomePageContent {
@@ -41,7 +47,7 @@ interface HomePageContent {
     title: string;
     paragraph1: string;
     paragraph2: string;
-    imageUrl?: string;
+    imageUrls?: PromoSectionImage[];
   };
 }
 
@@ -72,16 +78,15 @@ export default function Home() {
         const unsubscribe = onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
                 const data = doc.data() as HomePageContent;
-                 if (data.promoSection && typeof data.promoSection.imageUrl === 'undefined') {
-                    data.promoSection.imageUrl = "";
+                 if (data.promoSection && !data.promoSection.imageUrls) {
+                    data.promoSection.imageUrls = [];
                 }
                 setContent(data);
             } else {
-                // Set default content if nothing in DB
                 setContent({
                     hero: { title: "Conversatorio Colgemelli", subtitle: "La plataforma definitiva para competencias de debate escolar." },
                     features: [],
-                    promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva.", paragraph2: "Garantizamos una competencia equitativa.", imageUrl: "https://picsum.photos/600/500" }
+                    promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva.", paragraph2: "Garantizamos una competencia equitativa.", imageUrls: [{id: '1', url: "https://picsum.photos/600/500"}] }
                 })
             }
             setLoading(false);
@@ -174,15 +179,39 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          <div className="relative h-[300px] w-full md:h-[400px] lg:h-[500px]">
-             <Image
-              src={content.promoSection.imageUrl || "https://picsum.photos/600/500"}
-              alt="Estudiantes debatiendo"
-              data-ai-hint="students debating"
-              fill
-              className="rounded-lg object-contain shadow-2xl"
-            />
-          </div>
+          <Carousel className="w-full" opts={{ loop: true }}>
+              <CarouselContent>
+                {(content.promoSection.imageUrls && content.promoSection.imageUrls.length > 0) ? (
+                    content.promoSection.imageUrls.map((image) => (
+                    <CarouselItem key={image.id}>
+                        <div className="relative h-[300px] w-full md:h-[400px] lg:h-[500px]">
+                            <Image
+                                src={image.url}
+                                alt="Imagen de la promoción del debate"
+                                data-ai-hint="students debating"
+                                fill
+                                className="rounded-lg object-contain shadow-2xl"
+                            />
+                        </div>
+                    </CarouselItem>
+                    ))
+                ) : (
+                     <CarouselItem>
+                         <div className="relative h-[300px] w-full md:h-[400px] lg:h-[500px]">
+                            <Image
+                                src="https://picsum.photos/600/500"
+                                alt="Imagen de marcador de posición"
+                                data-ai-hint="students debating"
+                                fill
+                                className="rounded-lg object-contain shadow-2xl"
+                            />
+                        </div>
+                    </CarouselItem>
+                )}
+              </CarouselContent>
+              <CarouselPrevious />
+              <CarouselNext />
+            </Carousel>
         </div>
       </section>
     </div>

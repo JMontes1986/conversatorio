@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, Home, Users, Shuffle, Gavel, ClipboardCheck, Trophy, Monitor, Calendar, Shield, Star, Icon as LucideIcon, Image as ImageIcon } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, Home, Users, Shuffle, Gavel, ClipboardCheck, Trophy, Monitor, Calendar, Shield, Star, Icon as LucideIcon } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -45,7 +45,10 @@ const formSchema = z.object({
     title: z.string().min(3, "El título de la sección es requerido."),
     paragraph1: z.string().min(10, "El primer párrafo es requerido."),
     paragraph2: z.string().min(10, "El segundo párrafo es requerido."),
-    imageUrl: z.string().url("Debe ser una URL válida.").or(z.literal("")).optional(),
+    imageUrls: z.array(z.object({
+      id: z.string(),
+      url: z.string().url("Debe ser una URL válida."),
+    })).optional(),
   }),
 });
 
@@ -63,7 +66,7 @@ export function HomePageEditor() {
     defaultValues: {
       hero: { title: "", subtitle: "" },
       features: [],
-      promoSection: { title: "", paragraph1: "", paragraph2: "", imageUrl: "" },
+      promoSection: { title: "", paragraph1: "", paragraph2: "", imageUrls: [] },
     },
   });
 
@@ -71,21 +74,22 @@ export function HomePageEditor() {
     const docRef = doc(db, 'siteContent', 'home');
     const unsubscribe = onSnapshot(docRef, (doc) => {
         if (doc.exists()) {
-            const data = doc.data() as FormData;
-            // Ensure imageUrl is a string to avoid uncontrolled to controlled error
-            if (data.promoSection && typeof data.promoSection.imageUrl === 'undefined') {
-                data.promoSection.imageUrl = "";
+            const data = doc.data() as any; // Use any to handle legacy imageUrl
+             if (data.promoSection && typeof data.promoSection.imageUrl === 'string') {
+                data.promoSection.imageUrls = [{ id: nanoid(), url: data.promoSection.imageUrl }];
+                delete data.promoSection.imageUrl;
+            } else if (data.promoSection && !data.promoSection.imageUrls) {
+                data.promoSection.imageUrls = [];
             }
-            form.reset(data);
+            form.reset(data as FormData);
         } else {
-             // Initialize with default data if document doesn't exist
             form.reset({
                 hero: { title: "Conversatorio Colgemelli", subtitle: "La plataforma definitiva para competencias de debate escolar. Fomentando el pensamiento crítico y la oratoria en la próxima generación de líderes." },
                 features: [
                     { id: nanoid(), icon: 'Users', title: 'Registro de Colegios', description: 'Inscriba a su colegio en la competencia de manera rápida y sencilla.', link: '/register' },
                     { id: nanoid(), icon: 'Shuffle', title: 'Sorteo de Grupos', description: 'Vea en tiempo real cómo se definen los enfrentamientos de las rondas.', link: '/draw' },
                 ],
-                promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva para estudiantes, jueces y administradores, permitiendo que todos se concentren en lo que realmente importa: el poder de las ideas.", paragraph2: "Con características como sorteos auditables y puntuación transparente, garantizamos una competencia equitativa y emocionante para todos los participantes.", imageUrl: "https://picsum.photos/600/500" }
+                promoSection: { title: "Listos para el Debate del Siglo", paragraph1: "Nuestra plataforma está diseñada para ser intuitiva.", paragraph2: "Garantizamos una competencia equitativa.", imageUrls: [{ id: nanoid(), url: "https://picsum.photos/600/500" }] }
             });
         }
         setLoading(false);
@@ -94,10 +98,16 @@ export function HomePageEditor() {
     return () => unsubscribe();
   }, [form]);
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: featureFields, append: appendFeature, remove: removeFeature } = useFieldArray({
     control: form.control,
     name: "features"
   });
+
+  const { fields: imageFields, append: appendImage, remove: removeImage } = useFieldArray({
+    control: form.control,
+    name: "promoSection.imageUrls"
+  });
+
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
@@ -120,9 +130,6 @@ export function HomePageEditor() {
     }
   }
 
-  const promoImageUrl = form.watch("promoSection.imageUrl");
-
-
   if (loading) {
       return (
           <div className="flex justify-center items-center py-10">
@@ -143,7 +150,6 @@ export function HomePageEditor() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             
-            {/* Hero Section */}
             <div className="space-y-4 rounded-md border p-4">
               <h3 className="text-lg font-medium">Sección Principal (Hero)</h3>
               <FormField
@@ -170,15 +176,14 @@ export function HomePageEditor() {
               />
             </div>
             
-            {/* Features Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium">Tarjetas de Características</h3>
-                <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), icon: 'Star', title: '', description: '', link: '/' })}>
+                <Button type="button" variant="outline" size="sm" onClick={() => appendFeature({ id: nanoid(), icon: 'Star', title: '', description: '', link: '/' })}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Añadir Tarjeta
                 </Button>
               </div>
-                {fields.map((field, index) => (
+                {featureFields.map((field, index) => (
                    <div key={field.id} className="space-y-4 rounded-md border p-4 relative">
                         <h4 className="font-medium">Tarjeta {index + 1}</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -219,77 +224,68 @@ export function HomePageEditor() {
                                 <FormItem><FormLabel>Enlace</FormLabel><FormControl><Input {...field} placeholder="/ejemplo" /></FormControl><FormMessage /></FormItem>
                             )}
                         />
-                        <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => remove(index)}>
+                        <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => removeFeature(index)}>
                             <Trash2 className="h-4 w-4" />
                         </Button>
                    </div>
                 ))}
             </div>
 
-            {/* Promo Section */}
             <div className="space-y-4 rounded-md border p-4">
               <h3 className="text-lg font-medium">Sección de Promoción</h3>
               <FormField
                 control={form.control}
                 name="promoSection.title"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Título</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  <FormItem><FormLabel>Título</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )}
               />
               <FormField
                 control={form.control}
                 name="promoSection.paragraph1"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Primer Párrafo</FormLabel>
-                    <FormControl><Textarea {...field} rows={3} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  <FormItem><FormLabel>Primer Párrafo</FormLabel><FormControl><Textarea {...field} rows={3} /></FormControl><FormMessage /></FormItem>
                 )}
               />
                <FormField
                 control={form.control}
                 name="promoSection.paragraph2"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Segundo Párrafo</FormLabel>
-                    <FormControl><Textarea {...field} rows={3} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  <FormItem><FormLabel>Segundo Párrafo</FormLabel><FormControl><Textarea {...field} rows={3} /></FormControl><FormMessage /></FormItem>
                 )}
               />
 
               <Separator />
 
-              <div className="space-y-2">
-                <FormLabel>Imagen de la Sección</FormLabel>
-                 {promoImageUrl && (
-                    <div className="relative h-40 w-full rounded-md overflow-hidden bg-muted">
-                        <Image src={promoImageUrl} alt="Vista previa" fill className="object-cover" />
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                         <h4 className="text-md font-medium">Imágenes del Carrusel</h4>
+                        <Button type="button" variant="outline" size="sm" onClick={() => appendImage({ id: nanoid(), url: '' })}>
+                            <PlusCircle className="mr-2 h-4 w-4" /> Añadir Imagen
+                        </Button>
                     </div>
-                )}
-                <FormField
-                    control={form.control}
-                    name="promoSection.imageUrl"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Enlace público de la Imagen</FormLabel>
-                        <FormControl>
-                            <Input placeholder="https://..." {...field} />
-                        </FormControl>
-                        <FormDescription>
-                            Pegue aquí el enlace público de su imagen (ej: desde Supabase Storage).
-                        </FormDescription>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                />
-              </div>
-
+                    {imageFields.map((field, index) => (
+                        <div key={field.id} className="flex items-end gap-2">
+                             <FormField
+                                control={form.control}
+                                name={`promoSection.imageUrls.${index}.url`}
+                                render={({ field }) => (
+                                    <FormItem className="flex-grow">
+                                    <FormLabel>Enlace público de la Imagen {index + 1}</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="https://..." {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                             <Button type="button" variant="ghost" size="icon" className="text-destructive" onClick={() => removeImage(index)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ))}
+                    {imageFields.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Añada al menos una imagen para el carrusel.</p>}
+                </div>
             </div>
 
             <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || loading}>
