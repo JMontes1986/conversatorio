@@ -9,7 +9,7 @@ Esta es una aplicación web full-stack construida con Next.js y Firebase, diseñ
 - **UI:** [ShadCN/UI](https://ui.shadcn.com/) y [Tailwind CSS](https://tailwindcss.com/)
 - **Base de Datos y Autenticación:** [Firebase](https://firebase.google.com/) (Firestore, Authentication, Storage)
 - **Estado y Formularios:** [React Hook Form](https://react-hook-form.com/) y [Zod](https://zod.dev/)
-- **Despliegue:** Preparado para [Firebase App Hosting](https://firebase.google.com/docs/app-hosting)
+- **Despliegue:** El código fuente se gestiona en [GitHub](https://github.com/) y el despliegue se realiza a través de [Netlify](https://www.netlify.com/).
 
 ---
 
