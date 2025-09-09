@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine } from "lucide-react";
-import { db } from '@/lib/firebase';
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload } from "lucide-react";
+import { db, storage } from '@/lib/firebase';
+import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -36,6 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { CompetitionSettings } from '@/components/competition-settings';
 import { Trash2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { Progress } from './ui/progress';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -65,10 +67,13 @@ interface RoundData {
 }
 
 
-function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo }: any) {
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo, onUploadComplete }: any) {
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingFile, setUploadingFile] = useState<{ file: File, questionId: string } | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
     
     const roundsByPhase = useMemo(() => {
         const grouped = debateRounds.reduce((acc: any, round: RoundData) => {
@@ -104,6 +109,46 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         }
     };
     
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        const questionId = event.target.dataset.questionId;
+
+        if (file && questionId) {
+            if (!['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/webm'].includes(file.type)) {
+                alert('Tipo de archivo no válido. Por favor, suba un archivo MP4, MOV, MKV o WEBM.');
+                return;
+            }
+             setUploadingFile({ file, questionId });
+        }
+    };
+    
+    useEffect(() => {
+        if (!uploadingFile) return;
+
+        const { file, questionId } = uploadingFile;
+        const storageRef = ref(storage, `videos/${Date.now()}_${file.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, file);
+
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+            },
+            (error) => {
+                console.error("Upload failed:", error);
+                alert("La subida del video falló.");
+                setUploadingFile(null);
+            },
+            async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                onUploadComplete(questionId, downloadURL);
+                setUploadingFile(null);
+                setUploadProgress(0);
+            }
+        );
+    }, [uploadingFile, onUploadComplete]);
+
+
     const questionsByRound = preparedQuestions.reduce((acc: any, q: Question) => {
         (acc[q.round] = acc[q.round] || []).push(q);
         return acc;
@@ -114,7 +159,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             <CardHeader>
                 <CardTitle>Gestión de Preguntas y Videos</CardTitle>
                  <CardDescription>
-                    Prepare las preguntas y videos del debate. Puede usar enlaces de YouTube o enlaces directos a videos (ej. OneDrive).
+                    Prepare las preguntas y videos del debate. Puede usar enlaces de YouTube, enlaces directos a videos, o subir un archivo.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -170,25 +215,35 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                 <p className="flex-grow text-sm font-medium">{q.text}</p>
                                                 
                                                 <div className="space-y-2">
-                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Enlace del Video (Opcional)</Label>
+                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Enlace o Archivo de Video</Label>
                                                     <div className="flex items-center gap-2">
                                                         <Input 
                                                             id={`video-url-${q.id}`}
-                                                            placeholder="Pegar enlace de YouTube o video directo"
+                                                            placeholder="Pegar enlace o subir archivo"
                                                             value={videoInputs[q.id] || ''}
                                                             onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
-                                                            disabled={savingVideoId === q.id}
+                                                            disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
                                                         />
                                                         <Button 
                                                             size="icon" 
                                                             variant="outline" 
                                                             className="h-9 w-9 shrink-0" 
                                                             onClick={() => onSaveVideoLink(q.id)}
-                                                            disabled={savingVideoId === q.id}
+                                                            disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
                                                             title="Guardar Enlace">
                                                             {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
                                                         </Button>
+                                                        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile?.questionId === q.id}>
+                                                           <Upload className="h-4 w-4" />
+                                                        </Button>
+                                                        <input type="file" ref={fileInputRef} data-question-id={q.id} onChange={handleFileChange} className="hidden" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" />
                                                     </div>
+                                                    {uploadingFile?.questionId === q.id && (
+                                                        <div className="space-y-1">
+                                                            <Progress value={uploadProgress} />
+                                                            <p className="text-xs text-muted-foreground">Subiendo: {Math.round(uploadProgress)}%</p>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex items-center justify-end gap-2 pt-2">
@@ -412,6 +467,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             setSavingVideoId(null);
         }
     }
+    
+    const handleUploadComplete = (questionId: string, url: string) => {
+        setVideoInputs(prev => ({ ...prev, [questionId]: url }));
+        handleSaveVideoLink(questionId);
+        toast({ title: "Subida Completa", description: "El video se ha subido y enlazado correctamente." });
+    };
 
     const handleSaveBracketSettings = async () => {
         setIsSavingBracketSettings(true);
@@ -527,6 +588,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onSaveVideoLink={handleSaveVideoLink}
                     onSendQuestion={handleSendQuestion}
                     onSendVideo={handleSendVideo}
+                    onUploadComplete={handleUploadComplete}
                 />
             </div>
 
