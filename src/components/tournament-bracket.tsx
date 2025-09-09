@@ -374,16 +374,18 @@ export function TournamentBracket() {
     )
   }
   
-  if (bracketData.length === 0) {
-      return (
+  const bracketIsEmpty = bracketData.length === 0;
+
+  if (!showResults && bracketIsEmpty) {
+    return (
         <div className="bg-card p-4 md:p-8 rounded-lg w-full min-h-[400px] flex justify-center items-center">
             <div className="text-center">
                  <h2 className={cn("font-bold text-foreground", titleSizeMap[bracketSettings.bracketTitleSize || 3])}>{bracketSettings.bracketTitle || '¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?'}</h2>
                  <p className="text-lg text-muted-foreground mt-2">{bracketSettings.bracketSubtitle || 'Debate Intercolegial'}</p>
-                 <p className="text-lg text-muted-foreground mt-8">El bracket aparecerá aquí una vez que se realice el sorteo de la Fase de Grupos.</p>
+                 <p className="text-lg text-muted-foreground mt-8">El bracket de las fases eliminatorias aparecerá aquí una vez que los resultados de la fase de grupos sean publicados.</p>
             </div>
         </div>
-      )
+    )
   }
 
   return (
@@ -422,3 +424,5 @@ export function TournamentBracket() {
     </div>
   );
 }
+
+    
