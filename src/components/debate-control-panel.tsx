@@ -65,7 +65,7 @@ interface RoundData {
 }
 
 
-function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion }: any) {
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo }: any) {
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
@@ -211,8 +211,11 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
+                                                    <Button size="sm" variant="outline" onClick={() => onSendVideo(q)} disabled={!videoInputs[q.id]}>
+                                                        <Video className="mr-2 h-4 w-4" /> Enviar Video
+                                                    </Button>
                                                      <Button size="sm" onClick={() => onSendQuestion(q)}>
-                                                        <MessageSquare className="mr-2 h-4 w-4" /> Enviar a Pantalla
+                                                        <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
                                                     </Button>
                                                 </div>
                                             </div>
@@ -330,12 +333,24 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: question.text,
-                videoUrl: videoInputs[question.id] || ""
             }, { merge: true });
-            toast({ title: "Contenido Enviado", description: "La pregunta y/o video son ahora visibles." });
+            toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
              console.error("Error setting question: ", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el contenido." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar la pregunta." });
+        }
+    };
+    
+    const handleSendVideo = async (question: Question) => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                videoUrl: videoInputs[question.id] || ""
+            }, { merge: true });
+            toast({ title: "Video Enviado", description: "El video es ahora visible." });
+        } catch (error) {
+             console.error("Error setting video: ", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
         }
     };
 
@@ -511,6 +526,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onDeleteQuestion={handleDeleteQuestion}
                     onSaveVideoLink={handleSaveVideoLink}
                     onSendQuestion={handleSendQuestion}
+                    onSendVideo={handleSendVideo}
                 />
             </div>
 
