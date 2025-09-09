@@ -45,6 +45,7 @@ interface DebateState {
 interface ScoreData {
     id: string;
     matchId: string;
+    judgeId?: string;
     teams: { name: string; total: number }[];
     createdAt: any;
 }
@@ -94,16 +95,18 @@ function ScoringPanel() {
       setLoadingHistory(true);
       const scoresQuery = query(
           collection(db, "scores"),
-          where("judgeId", "==", judge.id),
           orderBy("createdAt", "desc")
       );
 
       const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
-          const scoresData: ScoreData[] = querySnapshot.docs.map(doc => ({
+          const allScores = querySnapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
           } as ScoreData));
-          setPastScores(scoresData);
+          
+          const judgeScores = allScores.filter(score => score.judgeId === judge.id);
+          
+          setPastScores(judgeScores);
           setLoadingHistory(false);
       }, (error) => {
         console.error("Error fetching score history:", error);
@@ -349,5 +352,3 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
-
-    
