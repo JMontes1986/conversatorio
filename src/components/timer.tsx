@@ -155,11 +155,11 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                             <Button onClick={resetTimer} variant="outline" size="icon" className="h-8 w-8">
                                 <RotateCcw className="h-4 w-4" />
                             </Button>
-                             <Button onClick={playSound} variant="outline" size="icon" className="h-8 w-8">
-                                <Bell className="h-4 w-4" />
-                            </Button>
                         </div>
                      )}
+                     <Button onClick={playSound} variant="outline" size="icon" className="h-8 w-8">
+                        <Bell className="h-4 w-4" />
+                    </Button>
               </CardContent>
           </Card>
       )
