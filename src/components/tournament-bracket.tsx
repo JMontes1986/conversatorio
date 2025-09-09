@@ -61,7 +61,7 @@ type SchoolData = {
 // --- UI COMPONENTS ---
 const ParticipantCard = ({ participant, showScore }: { participant: Participant, showScore: boolean }) => {
     if (!participant.name) {
-        return null;
+        return <div className="flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md bg-secondary/50 text-muted-foreground italic">Por definir</div>;
     }
 
     return (
@@ -90,6 +90,7 @@ const MatchCard = ({ match, showScore }: { match: Match, showScore: boolean }) =
         {match.participants.map((p, pIndex) => (
             <ParticipantCard key={p.name || `p-${pIndex}`} participant={p} showScore={showScore} />
         ))}
+         {match.participants.length < 2 && <ParticipantCard participant={{name: '', avatar: ''}} showScore={false} />}
     </div>
 );
 
@@ -106,8 +107,6 @@ const RoundColumn = ({ round, showScore }: { round: BracketRound, showScore: boo
 );
 
 const ConnectorColumn = ({ numMatches, numPreviousMatches }: { numMatches: number, numPreviousMatches?: number }) => {
-    const isConnectingToOne = numMatches === 1 && (numPreviousMatches && numPreviousMatches > 1);
-
     return (
         <div className="flex flex-col justify-around w-12 flex-shrink-0">
              <div className="h-10 mb-8"></div>
@@ -137,11 +136,11 @@ export function TournamentBracket() {
 
   useEffect(() => {
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
-    const drawStateRef = doc(db, "drawState", "liveDraw");
+    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
     const settingsRef = doc(db, "settings", "competition");
     const schoolsQuery = query(collection(db, "schools"));
 
-    let unsubScores: () => void, unsubDraw: () => void, unsubSettings: () => void, unsubSchools: () => void;
+    let unsubScores: () => void, unsubRounds: () => void, unsubSettings: () => void, unsubSchools: () => void;
 
     unsubSchools = onSnapshot(schoolsQuery, schoolsSnap => {
         const schools = schoolsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SchoolData));
@@ -159,125 +158,145 @@ export function TournamentBracket() {
             }
         });
 
-        unsubScores = onSnapshot(scoresQuery, scoresSnap => {
-            const allScores = scoresSnap.docs.map(doc => doc.data() as ScoreData);
+        unsubRounds = onSnapshot(roundsQuery, roundsSnap => {
+            const allRounds = roundsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
 
-            const getMatchResult = (matchId: string): { winner: Participant | null, participants: Participant[], matchId: string } => {
-                const matchScores = allScores.filter(s => s.matchId === matchId || s.matchId.startsWith(`${matchId}-bye`));
-                if (matchScores.length === 0) return { winner: null, participants: [], matchId };
+            unsubScores = onSnapshot(scoresQuery, scoresSnap => {
+                const allScores = scoresSnap.docs.map(doc => doc.data() as ScoreData);
 
-                const teamTotals: Record<string, number> = {};
-                matchScores.forEach(score => {
-                    score.teams.forEach(team => {
-                        if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-                        teamTotals[team.name] += team.total;
+                const getMatchResult = (matchId: string): { winner: Participant | null, participants: Participant[], matchId: string } => {
+                    const matchScores = allScores.filter(s => s.matchId === matchId || s.matchId.startsWith(`${matchId}-bye`));
+                    if (matchScores.length === 0) return { winner: null, participants: [], matchId };
+
+                    const teamTotals: Record<string, number> = {};
+                    matchScores.forEach(score => {
+                        score.teams.forEach(team => {
+                            if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                            teamTotals[team.name] += team.total;
+                        });
                     });
-                });
+                    
+                    const entries = Object.entries(teamTotals);
+                    if (entries.length === 0) return { winner: null, participants: [], matchId };
+
+                    const winnerEntry = entries.length === 1 ? entries[0] : entries.reduce((a, b) => a[1] > b[1] ? a : b);
+                    const winnerName = winnerEntry[0];
+                    
+                    const participants = entries.map(([name, total]) => {
+                        const schoolData = schools.find(s => s.teamName === name);
+                        return {
+                            name: name,
+                            avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`,
+                            score: total,
+                            winner: name === winnerName,
+                            participants: schoolData?.participants
+                        };
+                    });
+
+                    const winner = participants.find(p => p.winner);
+                    participants.forEach(p => { if (p.name !== winnerName) p.winner = false; });
+
+                    return { winner: winner || null, participants, matchId };
+                };
                 
-                const entries = Object.entries(teamTotals);
-                if (entries.length === 0) return { winner: null, participants: [], matchId };
-
-                const winnerEntry = entries.length === 1 ? entries[0] : entries.reduce((a, b) => a[1] > b[1] ? a : b);
-                const winnerName = winnerEntry[0];
-                
-                const participants = entries.map(([name, total]) => {
-                    const schoolData = schools.find(s => s.teamName === name);
-                    return {
-                        name: name,
-                        avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`,
-                        score: total,
-                        winner: name === winnerName,
-                        participants: schoolData?.participants
-                    };
-                });
-
-                const winner = participants.find(p => p.winner);
-                participants.forEach(p => { if (p.name !== winnerName) p.winner = false; });
-
-                return { winner: winner || null, participants, matchId };
-            };
-
-            unsubDraw = onSnapshot(drawStateRef, async (drawSnap) => {
-                const drawData = drawSnap.exists() ? drawSnap.data() as DrawState : null;
                 const finalBracketData: BracketRound[] = [];
-
-                let lastRoundWinners: (Participant | null)[] = [];
-
-                const getTop8FromGroups = () => {
-                    const groupRoundsFromDraw = drawData?.rounds.filter(r => r.phase === "Fase de Grupos") || [];
-                    const groupScores = allScores.filter(s => groupRoundsFromDraw.some(r => r.name === s.matchId || s.matchId.startsWith(`${r.name}-bye`)));
-                     const teamTotals: Record<string, number> = {};
+                
+                const getTop8FromGroups = (): Participant[] => {
+                    const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+                    if (groupRounds.length === 0) return [];
+                    const groupRoundNames = groupRounds.map(r => r.name);
+                    const groupScores = allScores.filter(s => groupRoundNames.some(rn => s.matchId === rn || s.matchId.startsWith(rn + '-bye-')));
+                    
+                    const teamTotals: Record<string, number> = {};
                     groupScores.forEach(score => {
                         score.teams.forEach(team => {
                             if (!teamTotals[team.name]) teamTotals[team.name] = 0;
                             teamTotals[team.name] += team.total;
                         });
                     });
-                    const top8 = Object.entries(teamTotals).sort((a,b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
-                    return top8.map(name => {
-                         const schoolData = schools.find(s => s.teamName === name);
-                         return {name, avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`, participants: schoolData?.participants};
+                    
+                    const top8Names = Object.entries(teamTotals).sort((a,b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+
+                    return top8Names.map(name => {
+                        const schoolData = schools.find(s => s.teamName === name);
+                        return {
+                            name, 
+                            avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200`, 
+                            participants: schoolData?.participants
+                        };
                     });
-                }
-                
-                const quartersFromDraw = drawData?.rounds.filter(r => r.phase === "Cuartos de Final") || [];
+                };
+
+
                 const quartersRound: BracketRound = { title: "Cuartos de Final", matches: [] };
+                const top8 = getTop8FromGroups();
+                if (top8.length > 0) {
+                    for (let i = 0; i < 4; i++) {
+                        const matchId = `Cuartos de Final-${i+1}`;
+                        const p1 = top8[i*2];
+                        const p2 = top8[i*2+1];
+                        
+                        const result = getMatchResult(matchId);
 
-                if (quartersFromDraw.length > 0) {
-                     quartersFromDraw.forEach(round => {
-                        const result = getMatchResult(round.name);
-                        quartersRound.matches.push({ id: round.name, participants: result.participants });
-                        lastRoundWinners.push(result.winner);
-                     });
-                } else {
-                     const top8 = getTop8FromGroups();
-                     for (let i = 0; i < 4; i++) {
-                         const p1 = top8[i*2];
-                         const p2 = top8[i*2+1];
-                         const participants = [];
-                         if (p1) participants.push(p1);
-                         if (p2) participants.push(p2);
-                         quartersRound.matches.push({ id: `qf-${i}`, participants });
-                     }
-                }
-                
-                if (quartersRound.matches.length > 0) {
-                     finalBracketData.push(quartersRound);
+                        if(result.participants.length > 0) {
+                            quartersRound.matches.push({ id: matchId, participants: result.participants });
+                        } else {
+                            const participants = [];
+                            if (p1) participants.push(p1);
+                            if (p2) participants.push(p2);
+                            quartersRound.matches.push({ id: matchId, participants });
+                        }
+                    }
+                    finalBracketData.push(quartersRound);
                 }
 
+                let lastRoundWinners: (Participant | null)[] = quartersRound.matches.map(m => getMatchResult(m.id).winner);
 
                 const eliminationPhases = ["Semifinal", "Final"];
                 
                 for(const phase of eliminationPhases) {
-                    if (lastRoundWinners.length === 0) break;
+                    if (lastRoundWinners.filter(Boolean).length < 2 && phase !== "Final") break;
+                     if (lastRoundWinners.filter(Boolean).length === 0) break;
                     
                     const nextRound: BracketRound = { title: phase, matches: [] };
-                    const nextRoundWinners: (Participant | null)[] = [];
                     
-                    for(let i = 0; i < lastRoundWinners.length; i += 2) {
-                        const p1 = lastRoundWinners[i];
-                        const p2 = lastRoundWinners[i+1];
-                        
-                        const matchId = `${phase}-${Math.floor(i/2)+1}`;
-                        const participants: Participant[] = [];
-                        if(p1) participants.push(p1);
-                        if(p2) participants.push(p2);
-                        
+                    if(lastRoundWinners.length === 3 && phase === "Semifinal"){
+                        // Special case for 3 winners advancing
+                        const matchId = `${phase}-1`;
                         const result = getMatchResult(matchId);
-
-                        if(result.participants.length > 0){
+                         if(result.participants.length > 0){
                            nextRound.matches.push({ id: matchId, participants: result.participants });
-                           nextRoundWinners.push(result.winner);
+                           lastRoundWinners = [result.winner];
                         } else {
-                           nextRound.matches.push({ id: matchId, participants: participants });
-                           nextRoundWinners.push(null);
+                           nextRound.matches.push({ id: matchId, participants: lastRoundWinners.filter(p => p !== null) as Participant[] });
+                           lastRoundWinners = [null];
                         }
+                    } else {
+                        const nextRoundWinners: (Participant | null)[] = [];
+                        for(let i = 0; i < lastRoundWinners.length; i += 2) {
+                            const p1 = lastRoundWinners[i];
+                            const p2 = lastRoundWinners[i+1];
+                            
+                            const matchId = `${phase}-${Math.floor(i/2)+1}`;
+                            const result = getMatchResult(matchId);
+
+                            if(result.participants.length > 0){
+                                nextRound.matches.push({ id: matchId, participants: result.participants });
+                                nextRoundWinners.push(result.winner);
+                            } else {
+                                const participants: Participant[] = [];
+                                if(p1) participants.push(p1);
+                                if(p2) participants.push(p2);
+                                nextRound.matches.push({ id: matchId, participants: participants });
+                                nextRoundWinners.push(null);
+                            }
+                        }
+                         lastRoundWinners = nextRoundWinners;
                     }
                     
                     if(nextRound.matches.length > 0){
                         finalBracketData.push(nextRound);
                     }
-                    lastRoundWinners = nextRoundWinners;
                 }
                 
                 const finalRound = finalBracketData.find(r => r.title === "Final");
@@ -297,12 +316,11 @@ export function TournamentBracket() {
                 setLoading(false);
             });
         });
-
     });
 
     return () => {
         unsubScores && unsubScores();
-        unsubDraw && unsubDraw();
+        unsubRounds && unsubRounds();
         unsubSettings && unsubSettings();
         unsubSchools && unsubSchools();
     };
@@ -329,7 +347,7 @@ export function TournamentBracket() {
   
   const bracketIsEmpty = bracketData.length === 0;
 
-  if (!showResults && bracketIsEmpty) {
+  if (bracketIsEmpty) {
     return (
         <div className="bg-card p-4 md:p-8 rounded-lg w-full min-h-[400px] flex justify-center items-center">
             <div className="text-center">
@@ -380,3 +398,5 @@ export function TournamentBracket() {
     </div>
   );
 }
+
+    
