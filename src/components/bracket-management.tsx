@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Save, AlertTriangle, PlusCircle, Trash2, Users, Shuffle, X } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, setDoc, getDoc, where } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { nanoid } from 'nanoid';
 import { Input } from './ui/input';
@@ -307,6 +307,5 @@ export function BracketManagement() {
         </Card>
     );
 }
-
 
     
