@@ -4,6 +4,7 @@
 import { TournamentBracket } from "@/components/tournament-bracket";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GroupStageResults } from "@/components/group-stage-results";
+import { KnockoutStageResults } from "@/components/knockout-stage-results";
 
 export default function ScoreboardPage() {
     return (
@@ -25,6 +26,15 @@ export default function ScoreboardPage() {
                     </CardHeader>
                     <CardContent>
                         <GroupStageResults />
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
+                        <CardDescription>Puntuaciones de las rondas eliminatorias.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <KnockoutStageResults />
                     </CardContent>
                 </Card>
                 <Card>

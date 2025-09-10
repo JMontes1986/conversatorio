@@ -1,0 +1,213 @@
+
+"use client";
+
+import React, { useState, useEffect, useMemo } from "react";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, where, doc, orderBy } from "firebase/firestore";
+import { Loader2, Trophy, EyeOff, CheckCircle, Swords, Folder } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Badge } from "./ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
+
+type RoundData = {
+  id: string;
+  name: string;
+  phase: string;
+  createdAt: { seconds: number, nanoseconds: number };
+}
+
+type ScoreData = {
+  matchId: string;
+  teams: { name: string; total: number }[];
+  judgeName: string;
+}
+
+type MatchResult = {
+    id: string;
+    teams: { name: string; total: number }[];
+    winner: string | null;
+    isTie: boolean;
+    judges: number;
+    isBye?: boolean;
+}
+
+const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
+
+export function KnockoutStageResults() {
+    const [knockoutRounds, setKnockoutRounds] = useState<RoundData[]>([]);
+    const [scores, setScores] = useState<ScoreData[]>([]);
+    const [resultsPublished, setResultsPublished] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const roundsQuery = query(
+            collection(db, "rounds"), 
+            where("phase", "in", knockoutPhases)
+        );
+        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+            const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            setKnockoutRounds(rounds);
+        });
+
+        const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
+        const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
+            const scoresData = snapshot.docs.map(doc => doc.data() as ScoreData);
+            setScores(scoresData);
+        });
+        
+        const settingsRef = doc(db, "settings", "competition");
+        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setResultsPublished(docSnap.data().resultsPublished || false);
+            }
+            setLoading(false);
+        });
+
+        return () => {
+            unsubscribeRounds();
+            unsubscribeScores();
+            unsubscribeSettings();
+        };
+    }, []);
+
+    const resultsByPhase = useMemo(() => {
+        const phases: Record<string, { id: string, name: string, match: MatchResult | null }[]> = {};
+
+        knockoutPhases.forEach(phase => {
+            const roundsInPhase = knockoutRounds
+                .filter(r => r.phase === phase)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            
+            if (roundsInPhase.length > 0) {
+                phases[phase] = roundsInPhase.map(round => {
+                    const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
+                    if (byeScore) {
+                        const winnerTeam = byeScore.teams[0];
+                        return {
+                            id: round.id,
+                            name: round.name,
+                            match: { id: round.name, teams: [winnerTeam], winner: winnerTeam.name, isTie: false, judges: 0, isBye: true }
+                        };
+                    }
+                    
+                    const roundScores = scores.filter(s => s.matchId === round.name);
+                    if (roundScores.length > 0) {
+                        const teamTotals: Record<string, number> = {};
+                        const judges = new Set<string>();
+                        roundScores.forEach(score => {
+                            judges.add(score.judgeName);
+                            score.teams.forEach(team => {
+                                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                                teamTotals[team.name] += team.total;
+                            });
+                        });
+
+                        const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
+                        let winner: string | null = null;
+                        let isTie = false;
+                        if (teams.length > 0) {
+                            const maxScore = Math.max(...teams.map(t => t.total));
+                            const winners = teams.filter(t => t.total === maxScore);
+                            if (winners.length === 1) winner = winners[0].name;
+                            else isTie = true;
+                        }
+
+                        return { id: round.id, name: round.name, match: { id: round.name, teams, winner, isTie, judges: judges.size } };
+                    }
+                    
+                    return { id: round.id, name: round.name, match: null }; // No scores yet
+                });
+            }
+        });
+        return phases;
+    }, [knockoutRounds, scores]);
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center min-h-[200px]">
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <p className="ml-4">Cargando resultados de finales...</p>
+            </div>
+        );
+    }
+    
+    if (!resultsPublished) {
+         return (
+            <div className="text-center text-muted-foreground p-8">
+                <Card className="max-w-md mx-auto">
+                    <CardHeader>
+                        <CardTitle className="flex items-center justify-center gap-2"><EyeOff /> Resultados Ocultos</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p>Los resultados de las fases finales se publicarán pronto. ¡Estén atentos!</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    if (Object.keys(resultsByPhase).length === 0) {
+        return (
+            <div className="text-center text-muted-foreground p-8">
+                Aún no hay resultados para las fases finales.
+            </div>
+        );
+    }
+
+    return (
+        <Accordion type="multiple" className="w-full space-y-4" defaultValue={knockoutPhases}>
+            {knockoutPhases.map(phase => resultsByPhase[phase] && (
+                <AccordionItem value={phase} key={phase}>
+                    <Card>
+                        <AccordionTrigger className="p-6">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Folder className="h-5 w-5"/>
+                                {phase}
+                            </CardTitle>
+                        </AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0">
+                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {resultsByPhase[phase].map(({ id, name, match }) => (
+                                <Card key={id} className="bg-secondary/50">
+                                    <CardHeader>
+                                        <CardTitle className="text-base text-center">{name}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {match ? (
+                                            match.isBye ? (
+                                                <div className="text-center text-sm h-16 flex flex-col items-center justify-center">
+                                                    <p className="font-bold flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" />{match.winner}</p>
+                                                    <Badge variant="secondary" className="mt-2"><CheckCircle className="h-3 w-3 mr-1"/>Avance Automático</Badge>
+                                                </div>
+                                            ) : (
+                                                <Table>
+                                                    <TableBody>
+                                                    {match.teams.map(team => (
+                                                        <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
+                                                            <TableCell className="flex items-center gap-2">
+                                                                {team.name}
+                                                                {team.name === match.winner && <Trophy className="h-4 w-4 text-amber-500" />}
+                                                            </TableCell>
+                                                            <TableCell className="text-right text-lg">{team.total}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                    </TableBody>
+                                                </Table>
+                                            )
+                                        ) : (
+                                            <div className="text-center text-sm text-muted-foreground h-16 flex flex-col items-center justify-center">
+                                                <Badge variant="outline">Pendiente</Badge>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                           </div>
+                        </AccordionContent>
+                    </Card>
+                </AccordionItem>
+            ))}
+        </Accordion>
+    );
+}
