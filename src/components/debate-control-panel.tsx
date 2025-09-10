@@ -126,7 +126,11 @@ function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
 
 function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
     const phaseRoundNames = phaseRounds.map(r => r.name);
-    const phaseScores = scores.filter(s => phaseRoundNames.includes(s.matchId));
+    
+    // Include bye scores for the phase
+    const phaseScores = scores.filter(s => 
+        phaseRoundNames.some(roundName => s.matchId.startsWith(roundName))
+    );
 
     const teamTotals: Record<string, number> = {};
 
@@ -155,6 +159,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
     const [drawState, setDrawState] = useState<DrawState | null>(null);
+    const [availableTeams, setAvailableTeams] = useState<SchoolData[]>(registeredSchools);
 
 
     useEffect(() => {
@@ -210,21 +215,13 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         setCurrentRound(roundName);
         const selectedRoundData = debateRounds.find(r => r.name === roundName);
         
-        let qualifiedTeams: string[] = [];
+        let qualifiedTeamNames: string[] = [];
 
-        // Check draw state first
-        if (drawState && drawState.teams) {
-            const teamsFromDraw = drawState.teams.filter(t => t.round === roundName).map(t => t.name);
-            if (teamsFromDraw.length > 0) {
-                qualifiedTeams = teamsFromDraw;
-            }
-        }
-
-        // If not found in draw, check advanced rounds logic
-        if (qualifiedTeams.length === 0 && selectedRoundData) {
+        // Logic for advancing teams
+        if (selectedRoundData) {
             if (selectedRoundData.phase === "Cuartos de Final") {
                  const groupStageRounds = debateRounds.filter(r => r.phase === "Fase de Grupos");
-                 qualifiedTeams = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
+                 qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
             } else {
                  const roundDependencies: Record<string, string> = {
                     "Semifinal": "Cuartos de Final",
@@ -233,29 +230,25 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                 const previousRoundPhase = roundDependencies[selectedRoundData.phase];
                 if (previousRoundPhase) {
                     const previousRounds = debateRounds.filter(r => r.phase === previousRoundPhase);
-                    qualifiedTeams = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
+                    qualifiedTeamNames = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
                 }
             }
         }
         
-        if (qualifiedTeams.length > 0) {
-             setIsAutoFilled(true);
-             const teamObjects: Team[] = qualifiedTeams.map(name => ({ id: nanoid(), name }));
-             
-             // Check for bye
-             if (teamObjects.length % 2 !== 0) {
-                 const byeTeam = teamObjects[teamObjects.length - 1];
-                 byeTeam.isBye = true;
-             }
-
-             setTeams(teamObjects);
-             toast({ title: "Equipos Llenados Automáticamente", description: `Los equipos para ${roundName} han sido cargados.` });
+        if (qualifiedTeamNames.length > 0) {
+             const qualifiedSchools = registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
+             setAvailableTeams(qualifiedSchools);
+             setIsAutoFilled(false); // Allow manual selection from qualified teams
+             setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]); // Reset selection
+             toast({ title: "Equipos Calificados Cargados", description: `Seleccione de la lista de ${qualifiedTeamNames.length} equipos que avanzaron.` });
         } else {
+            // Default to all schools if no specific logic applies (e.g., Fase de Grupos)
+            setAvailableTeams(registeredSchools);
             setIsAutoFilled(false);
             setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
         }
 
-    }, [allScores, toast, debateRounds, drawState]);
+    }, [allScores, toast, debateRounds, registeredSchools]);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -377,7 +370,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                                         <SelectValue placeholder={`Equipo ${index + 1}`} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {registeredSchools.map(school => (
+                                        {availableTeams.map(school => (
                                             <SelectItem key={school.id} value={school.teamName}>
                                                 {school.teamName} ({school.schoolName})
                                             </SelectItem>
