@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -153,57 +152,58 @@ export function DrawAnimation() {
   }, [activeTab]);
 
   const resetDraw = useCallback(async (isTabChange = false) => {
-    let currentTeams: Team[] = [];
-    let currentRounds: RoundData[] = [];
+    let eligibleTeams: Team[] = [];
+    let eligibleRounds: RoundData[] = [];
     
     if (activeTab === "groups") {
-        const targetPhase = "Fase de Grupos";
-        currentRounds = allRounds.filter(r => r.phase === targetPhase);
-        currentTeams = allTeams.map(t => ({...t, round: null}));
+        eligibleRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        eligibleTeams = allTeams.map(t => ({...t, round: null}));
     } else if (activeTab === "quarters") {
-        const targetPhase = "Cuartos de Final";
-        currentRounds = allRounds.filter(r => r.phase === targetPhase);
+        eligibleRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
         const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
         const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
         const teamsSource = allTeams.filter(t => qualifiedTeamNames.includes(t.name));
-        currentTeams = teamsSource.map(t => ({...t, round: null}));
+        eligibleTeams = teamsSource.map(t => ({...t, round: null}));
     }
     
-    let stateToSet;
+    let finalState;
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
     const docSnap = await getDoc(drawStateRef);
 
-    if (isTabChange && docSnap.exists() && docSnap.data().activeTab === activeTab) {
+    if (docSnap.exists() && docSnap.data().activeTab === activeTab) {
         const data = docSnap.data();
-        stateToSet = {
-            teams: data.teams || currentTeams,
-            rounds: data.rounds || currentRounds,
+        finalState = {
+            teams: data.teams || eligibleTeams,
+            rounds: data.rounds || eligibleRounds,
             isDrawing: data.isDrawing || false,
             isFinished: data.isFinished || false,
             activeTab
         };
     } else {
-        stateToSet = {
-            teams: currentTeams,
-            rounds: currentRounds,
+        finalState = {
+            teams: eligibleTeams,
+            rounds: eligibleRounds,
             isDrawing: false,
             isFinished: false,
             activeTab
         };
-         await updateLiveDrawState(stateToSet);
+        // Only update remotely if it's a fresh state for this tab
+        await updateLiveDrawState(finalState);
     }
     
-    setTeams(stateToSet.teams);
-    setRounds(stateToSet.rounds);
-    setIsDrawing(stateToSet.isDrawing);
-    setIsFinished(stateToSet.isFinished);
+    setTeams(finalState.teams);
+    setRounds(finalState.rounds);
+    setIsDrawing(finalState.isDrawing);
+    setIsFinished(finalState.isFinished);
     setIsFixing(false);
+    setLoading(false);
     
   }, [activeTab, allRounds, allTeams, allScores]);
   
   useEffect(() => {
+      if (loading || allRounds.length === 0 || allTeams.length === 0) return;
       resetDraw(true);
-  }, [activeTab, allTeams, allRounds, resetDraw]);
+  }, [activeTab, allTeams, allRounds, resetDraw, loading]);
 
 
   const updateLiveDrawState = async (state: any) => {
