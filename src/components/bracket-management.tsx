@@ -11,15 +11,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Save, AlertTriangle, PlusCircle, Trash2, Users, Shuffle, X, CheckCircle2 } from "lucide-react";
+import { Loader2, Save, AlertTriangle, PlusCircle, Trash2, Users, Shuffle, X, CheckCircle2, HelpCircle } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, doc, setDoc, getDoc, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, setDoc, getDoc, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { nanoid } from 'nanoid';
 import { Input } from './ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 const BRACKET_DOC_ID = "liveBracket";
 const SETTINGS_DOC_ID = "competition";
@@ -58,6 +59,10 @@ type ScoreData = {
     teams: { name: string; total: number }[];
 };
 
+interface MatchWithTieInfo extends Match {
+    isTie: boolean;
+    tiedTeams: string[];
+}
 
 const TeamSelector = ({ onSelectTeam, availableTeams }: { onSelectTeam: (team: Team) => void, availableTeams: Team[] }) => (
     <PopoverContent className="p-0 w-56">
@@ -86,6 +91,7 @@ export function BracketManagement() {
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isBreakingTie, setIsBreakingTie] = useState<string | null>(null);
 
     useEffect(() => {
         const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
@@ -168,7 +174,39 @@ export function BracketManagement() {
         });
 
     }, [bracketRounds, drawState, allAvailableTeams]);
+
+    const getMatchTieInfo = (match: Match): { isTie: boolean, tiedTeams: string[] } => {
+        const participantNames = match.participants.map(p => p?.name).filter(Boolean) as string[];
+        if (participantNames.length < 2) return { isTie: false, tiedTeams: [] };
     
+        const matchScores = allScores.filter(score => {
+             const scoreTeamNames = score.teams.map(t => t.name);
+             return participantNames.every(pName => scoreTeamNames.includes(pName)) && scoreTeamNames.every(sName => participantNames.includes(sName));
+        });
+
+        if (matchScores.length === 0) return { isTie: false, tiedTeams: [] };
+
+        const teamTotals: Record<string, number> = {};
+        matchScores.forEach(score => {
+            score.teams.forEach(team => {
+                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                teamTotals[team.name] += team.total;
+            });
+        });
+
+        const totals = Object.values(teamTotals);
+        if (totals.length === 0) return { isTie: false, tiedTeams: [] };
+
+        const maxScore = Math.max(...totals);
+        const winners = Object.entries(teamTotals).filter(([, score]) => score === maxScore);
+
+        if (winners.length > 1) {
+            return { isTie: true, tiedTeams: winners.map(w => w[0]) };
+        }
+
+        return { isTie: false, tiedTeams: [] };
+    };
+
     const isRoundLocked = (roundTitle: string) => {
         return drawState?.teams.some(t => t.round === roundTitle) ?? false;
     }
@@ -182,6 +220,31 @@ export function BracketManagement() {
              return participantNames.every(pName => scoreTeamNames.includes(pName)) && scoreTeamNames.every(sName => participantNames.includes(sName));
         });
     }
+
+    const breakTie = async (matchId: string, winner: string, tiedTeams: string[]) => {
+      setIsBreakingTie(matchId);
+      try {
+          const tieBreakerScore = {
+              matchId: matchId, // Ensure the matchId is correct
+              judgeName: 'Sistema-Desempate',
+              teams: tiedTeams.map(name => ({
+                  name,
+                  total: name === winner ? 1 : 0
+              })),
+              createdAt: serverTimestamp(),
+          };
+          await addDoc(collection(db, "scores"), tieBreakerScore);
+          toast({
+              title: "¡Empate Resuelto!",
+              description: `${winner} ha sido declarado ganador.`,
+          });
+      } catch (error) {
+          console.error("Error breaking tie:", error);
+          toast({ variant: "destructive", title: "Error", description: "No se pudo resolver el empate." });
+      } finally {
+          setIsBreakingTie(null);
+      }
+  }
 
     const handleAddRound = () => setBracketRounds([...bracketRounds, { id: nanoid(), title: `Ronda ${bracketRounds.length + 1}`, matches: [] }]);
     const handleRemoveRound = (roundId: string) => setBracketRounds(bracketRounds.filter(r => r.id !== roundId));
@@ -325,48 +388,95 @@ export function BracketManagement() {
                                  )}
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {round.matches.map(match => (
-                                    <Card key={match.id} className="p-4 pt-8 space-y-2 bg-secondary/30 relative group">
-                                         {hasScores(match) && (
-                                            <CheckCircle2 className="h-4 w-4 text-green-500 absolute top-2 left-2" title="Este partido ya tiene puntuaciones registradas."/>
-                                        )}
-                                        {match.participants.map((participant, index) => (
-                                            <div key={index} className="flex items-center gap-1">
-                                                <Popover>
-                                                    <PopoverTrigger asChild disabled={isRoundLocked(round.title)}>
-                                                        <Button variant="outline" className="w-full justify-start font-normal text-left h-10 truncate disabled:opacity-100 disabled:cursor-default">
-                                                            {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo...</span>}
+                                {round.matches.map(match => {
+                                    const { isTie, tiedTeams } = getMatchTieInfo(match);
+                                    return (
+                                        <Card key={match.id} className="p-4 pt-8 space-y-2 bg-secondary/30 relative group">
+                                            {isTie && (
+                                                 <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button size="icon" variant="ghost" className="absolute top-1 left-1 h-6 w-6 text-amber-500 hover:bg-amber-100">
+                                                            <HelpCircle className="h-5 w-5" />
                                                         </Button>
-                                                    </PopoverTrigger>
-                                                     {!isRoundLocked(round.title) && (
-                                                        <PopoverContent className="p-0 w-auto">
-                                                            {participant ? (
-                                                                <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
-                                                            ) : (
-                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
-                                                            )}
-                                                        </PopoverContent>
-                                                     )}
-                                                </Popover>
-                                                {!isRoundLocked(round.title) && (
-                                                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleRemoveParticipantSlot(round.id, match.id, index)}>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Resolver Empate</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta partida terminó en empate entre {tiedTeams.join(' y ')}. Seleccione un método para determinar el ganador.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <div className="flex flex-wrap gap-2 mt-3">
+                                                            <Button 
+                                                                variant="secondary"
+                                                                disabled={isBreakingTie === match.id}
+                                                                onClick={() => {
+                                                                    const winner = tiedTeams[Math.floor(Math.random() * tiedTeams.length)];
+                                                                    breakTie(round.title, winner, tiedTeams);
+                                                                }}
+                                                            >
+                                                                <Shuffle className="mr-2 h-4 w-4"/>
+                                                                Sorteo Aleatorio
+                                                            </Button>
+                                                            {tiedTeams.map(team => (
+                                                                <Button 
+                                                                    key={team}
+                                                                    disabled={isBreakingTie === match.id}
+                                                                    onClick={() => breakTie(round.title, team, tiedTeams)}
+                                                                >
+                                                                    {isBreakingTie === match.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Users className="mr-2 h-4 w-4"/>}
+                                                                    Declarar Ganador a {team}
+                                                                </Button>
+                                                            ))}
+                                                        </div>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            )}
+                                            {hasScores(match) && !isTie && (
+                                                <CheckCircle2 className="h-4 w-4 text-green-500 absolute top-2 left-2" title="Este partido ya tiene puntuaciones registradas."/>
+                                            )}
+
+                                            {match.participants.map((participant, index) => (
+                                                <div key={index} className="flex items-center gap-1">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild disabled={isRoundLocked(round.title)}>
+                                                            <Button variant="outline" className="w-full justify-start font-normal text-left h-10 truncate disabled:opacity-100 disabled:cursor-default">
+                                                                {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo...</span>}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        {!isRoundLocked(round.title) && (
+                                                            <PopoverContent className="p-0 w-auto">
+                                                                {participant ? (
+                                                                    <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
+                                                                ) : (
+                                                                    <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
+                                                                )}
+                                                            </PopoverContent>
+                                                        )}
+                                                    </Popover>
+                                                    {!isRoundLocked(round.title) && (
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleRemoveParticipantSlot(round.id, match.id, index)}>
+                                                            <X className="h-4 w-4 text-destructive" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {!isRoundLocked(round.title) && (
+                                                <>
+                                                    <Button size="xs" variant="ghost" className="w-full mt-2 text-xs" onClick={() => handleAddParticipantSlot(round.id, match.id)}>
+                                                        <PlusCircle className="h-3 w-3 mr-1" /> Añadir Equipo al Partido
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-6 w-6" onClick={() => handleRemoveMatch(round.id, match.id)}>
                                                         <X className="h-4 w-4 text-destructive" />
                                                     </Button>
-                                                )}
-                                            </div>
-                                        ))}
-                                         {!isRoundLocked(round.title) && (
-                                            <>
-                                                <Button size="xs" variant="ghost" className="w-full mt-2 text-xs" onClick={() => handleAddParticipantSlot(round.id, match.id)}>
-                                                    <PlusCircle className="h-3 w-3 mr-1" /> Añadir Equipo al Partido
-                                                </Button>
-                                                <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-6 w-6" onClick={() => handleRemoveMatch(round.id, match.id)}>
-                                                    <X className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            </>
-                                         )}
-                                    </Card>
-                                ))}
+                                                </>
+                                            )}
+                                        </Card>
+                                    )
+                                })}
                             </div>
                              {!isRoundLocked(round.title) && (
                                 <div className="flex items-center gap-2 mt-4">
