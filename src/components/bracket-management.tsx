@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Save, AlertTriangle, PlusCircle, Trash2, Users, Shuffle, X, CheckCircle2, HelpCircle } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, doc, setDoc, getDoc, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, setDoc, getDoc, orderBy, addDoc, serverTimestamp, where } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { nanoid } from 'nanoid';
 import { Input } from './ui/input';
@@ -52,12 +52,6 @@ type ScoreData = {
     teams: { name: string; total: number }[];
 };
 
-type RoundData = {
-    id: string;
-    name: string;
-    phase: string;
-}
-
 const TeamSelector = ({ onSelectTeam, availableTeams }: { onSelectTeam: (team: Team) => void, availableTeams: Team[] }) => (
     <PopoverContent className="p-0 w-56">
         <ScrollArea className="h-64">
@@ -80,26 +74,18 @@ const TeamSelector = ({ onSelectTeam, availableTeams }: { onSelectTeam: (team: T
 export function BracketManagement() {
     const { toast } = useToast();
     const [allAvailableTeams, setAllAvailableTeams] = useState<Team[]>([]);
-    const [groupStageWinners, setGroupStageWinners] = useState<Team[]>([]);
     const [bracketRounds, setBracketRounds] = useState<BracketRound[]>([]);
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
-    const [allRounds, setAllRounds] = useState<RoundData[]>([]);
-    const [allSchools, setAllSchools] = useState<Team[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isBreakingTie, setIsBreakingTie] = useState<string | null>(null);
 
     useEffect(() => {
-        const schoolsQuery = query(collection(db, "schools"));
+        const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
             const schoolsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().teamName }));
-            setAllSchools(schoolsData);
-        });
-
-        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
-            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-            setAllRounds(roundsData);
+            setAllAvailableTeams(schoolsData);
+            setLoading(false);
         });
 
         const bracketDocRef = doc(db, "bracketState", BRACKET_DOC_ID);
@@ -107,7 +93,7 @@ export function BracketManagement() {
             if (docSnap.exists()) {
                 setBracketRounds(docSnap.data().bracketRounds || []);
             }
-            setLoading(false);
+             if(loading) setLoading(false);
         });
         
         const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
@@ -116,43 +102,12 @@ export function BracketManagement() {
             setAllScores(scoresData);
         });
 
-
         return () => {
             unsubscribeSchools();
-            unsubscribeRounds();
             unsubscribeBracket();
             unsubscribeScores();
         };
     }, []);
-
-    useEffect(() => {
-        if (loading || allRounds.length === 0 || allScores.length === 0 || allSchools.length === 0) return;
-
-        const groupPhaseRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        const groupPhaseRoundNames = groupPhaseRounds.map(r => r.name);
-        
-        const teamTotals: Record<string, number> = {};
-
-        allScores.forEach(score => {
-            // Check if the score's matchId starts with any of the group phase round names
-            const isInGroupPhase = groupPhaseRoundNames.some(roundName => score.matchId.startsWith(roundName));
-
-            if (isInGroupPhase) {
-                score.teams.forEach(team => {
-                    if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-                    teamTotals[team.name] += team.total;
-                });
-            }
-        });
-        
-        const winners = Object.entries(teamTotals)
-            .sort((a, b) => b[1] - a[1])
-            .map(([name]) => name);
-        
-        const winnerTeams = allSchools.filter(school => winners.includes(school.name));
-
-        setGroupStageWinners(winnerTeams);
-    }, [allRounds, allScores, allSchools, loading]);
     
 
     const getMatchTieInfo = (match: Match): { isTie: boolean, tiedTeams: string[] } => {
@@ -356,9 +311,9 @@ export function BracketManagement() {
                 <CardDescription>Organice visualmente los enfrentamientos del torneo. Asigne equipos a cada partido en las diferentes rondas.</CardDescription>
                  <div className="pt-2">
                     <p className="text-sm text-muted-foreground">
-                        {groupStageWinners.length > 0 
-                            ? `${groupStageWinners.length} equipos han clasificado de la Fase de Grupos y están disponibles para ser asignados.`
-                            : "Aún no hay equipos clasificados de la Fase de Grupos."
+                        {allAvailableTeams.length > 0 
+                            ? `${allAvailableTeams.length} equipos verificados están disponibles para ser asignados.`
+                            : "Aún no hay equipos verificados para asignar."
                         }
                     </p>
                 </div>
@@ -435,7 +390,7 @@ export function BracketManagement() {
                                                             {participant ? (
                                                                 <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
                                                             ) : (
-                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={groupStageWinners} />
+                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
                                                             )}
                                                         </PopoverContent>
                                                     </Popover>
@@ -482,3 +437,5 @@ export function BracketManagement() {
         </Card>
     );
 }
+
+    
