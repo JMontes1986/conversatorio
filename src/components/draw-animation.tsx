@@ -33,7 +33,7 @@ type ScoreData = {
 
 const shuffleArray = (array: any[]) => {
   let currentIndex = array.length, randomIndex;
-  const newArray = [...array]; // Create a copy to avoid mutating the original array
+  const newArray = [...array];
   while (currentIndex !== 0) {
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
@@ -66,115 +66,104 @@ function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData
 
 export function DrawAnimation() {
   const { toast } = useToast();
-  // Master lists
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [allRounds, setAllRounds] = useState<RoundData[]>([]);
   const [allScores, setAllScores] = useState<ScoreData[]>([]);
   
-  // State for the current tab
   const [teams, setTeams] = useState<Team[]>([]);
   const [rounds, setRounds] = useState<RoundData[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
   const [activeTab, setActiveTab] = useState("groups");
 
-  // Effect to load all initial data
   useEffect(() => {
     setLoading(true);
-    
-    const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
-    const unsubscribeSettings = onSnapshot(settingsRef, async (settingsSnap) => {
+
+    const unsubscribes = [
+      onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), async (settingsSnap) => {
         const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
-        
-        let teamsToFetchQuery;
-        if (settingsData.registrationsClosed && settingsData.lockedInTeams) {
-            const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
-            if (lockedInTeamIds.length > 0) {
-                teamsToFetchQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
-            } else {
-                setAllTeams([]);
-            }
+        let teamsQuery;
+        if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
+          const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
+          teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
         } else {
-            teamsToFetchQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+          teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         }
+        
+        onSnapshot(teamsQuery, (snapshot) => {
+          const fetchedTeams = snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().teamName,
+            round: null
+          }));
+          setAllTeams(fetchedTeams);
+        });
+      }),
 
-        if (teamsToFetchQuery) {
-            onSnapshot(teamsToFetchQuery, (snapshot) => {
-                const fetchedTeams = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    name: doc.data().teamName,
-                    round: null
-                }));
-                setAllTeams(fetchedTeams);
-            });
-        }
-    });
-
-    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-    const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+      onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
         const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
         setAllRounds(roundsData);
-    });
-
-    const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
-    const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
-        const scoresData: ScoreData[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data()} as ScoreData));
+      }),
+      
+      onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
+        const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data()} as ScoreData));
         setAllScores(scoresData);
-    });
-    
-    setLoading(false); // Stop initial loading
+      })
+    ];
 
-    return () => {
-        unsubscribeSettings();
-        unsubscribeRounds();
-        unsubscribeScores();
-    };
+    Promise.all([
+      getDoc(doc(db, "settings", SETTINGS_DOC_ID)),
+      getDoc(query(collection(db, "rounds"))),
+      getDoc(query(collection(db, "scores"))),
+    ]).then(() => {
+        setLoading(false);
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
   }, []);
 
-  // Effect to handle tab changes and load/reset state for that tab
+  const loadTabState = useCallback(async () => {
+    let eligibleTeams: Team[] = [];
+    let eligibleRounds: RoundData[] = [];
+
+    if (activeTab === "groups") {
+        eligibleRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        eligibleTeams = allTeams.map(t => ({...t, round: null}));
+    } else if (activeTab === "quarters") {
+        eligibleRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
+        const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
+        eligibleTeams = allTeams
+            .filter(t => qualifiedTeamNames.includes(t.name))
+            .map(t => ({...t, round: null}));
+    }
+
+    const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+    const docSnap = await getDoc(drawStateRef);
+
+    if (docSnap.exists() && docSnap.data().activeTab === activeTab) {
+        const data = docSnap.data();
+        setTeams(data.teams || eligibleTeams);
+        setRounds(data.rounds || eligibleRounds);
+        setIsDrawing(data.isDrawing || false);
+        setIsFinished(data.isFinished || false);
+    } else {
+        setTeams(eligibleTeams);
+        setRounds(eligibleRounds);
+        setIsDrawing(false);
+        setIsFinished(false);
+    }
+  }, [activeTab, allTeams, allRounds, allScores]);
+
   useEffect(() => {
-    if (loading) return; // Don't run if initial data is still loading
-
-    const resetAndLoadTabState = async () => {
-        let eligibleTeams: Team[] = [];
-        let eligibleRounds: RoundData[] = [];
-
-        if (activeTab === "groups") {
-            eligibleRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-            eligibleTeams = allTeams.map(t => ({...t, round: null}));
-        } else if (activeTab === "quarters") {
-            eligibleRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
-            const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-            const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
-            const teamsSource = allTeams.filter(t => qualifiedTeamNames.includes(t.name));
-            eligibleTeams = teamsSource.map(t => ({...t, round: null}));
-        }
-
-        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-        const docSnap = await getDoc(drawStateRef);
-
-        if (docSnap.exists() && docSnap.data().activeTab === activeTab) {
-            const data = docSnap.data();
-            setTeams(data.teams || eligibleTeams);
-            setRounds(data.rounds || eligibleRounds);
-            setIsDrawing(data.isDrawing || false);
-            setIsFinished(data.isFinished || false);
-        } else {
-            setTeams(eligibleTeams);
-            setRounds(eligibleRounds);
-            setIsDrawing(false);
-            setIsFinished(false);
-        }
-        setIsFixing(false);
-    };
-
-    resetAndLoadTabState();
-
-  }, [activeTab, allTeams, allRounds, allScores, loading]);
-
-
+    if (!loading) {
+      loadTabState();
+    }
+  }, [activeTab, loading, loadTabState]);
+  
   const updateLiveDrawState = async (state: any) => {
       try {
         const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
@@ -241,33 +230,9 @@ export function DrawAnimation() {
   };
   
   const resetDraw = () => {
-    let eligibleTeams: Team[] = [];
-    let eligibleRounds: RoundData[] = [];
-    
-    if (activeTab === "groups") {
-        eligibleRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        eligibleTeams = allTeams.map(t => ({...t, round: null}));
-    } else if (activeTab === "quarters") {
-        eligibleRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
-        const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
-        const teamsSource = allTeams.filter(t => qualifiedTeamNames.includes(t.name));
-        eligibleTeams = teamsSource.map(t => ({...t, round: null}));
-    }
-
-    const finalState = {
-        teams: eligibleTeams,
-        rounds: eligibleRounds,
-        isDrawing: false,
-        isFinished: false,
-        activeTab
-    };
-
-    updateLiveDrawState(finalState);
-    setTeams(finalState.teams);
-    setRounds(finalState.rounds);
-    setIsDrawing(finalState.isDrawing);
-    setIsFinished(finalState.isFinished);
+    loadTabState();
+    setIsDrawing(false);
+    setIsFinished(false);
     setIsFixing(false);
   }
 
