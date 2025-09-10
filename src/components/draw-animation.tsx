@@ -166,6 +166,16 @@ export function DrawAnimation() {
         currentTeams = allTeams
             .filter(t => qualifiedTeamNames.includes(t.name))
             .map(t => ({...t, round: null}));
+    } else if (activeTab === "semis") {
+        currentRounds = allRounds.filter(r => r.phase === "Semifinal");
+        // Logic to get quarter final winners... (assuming a function getWinnersOfPhase exists)
+        // const qualifiedTeamNames = getWinnersOfPhase("Cuartos de Final", allScores, allRounds);
+        // For now, let's keep it simple
+        currentTeams = [];
+    } else if (activeTab === "final") {
+        currentRounds = allRounds.filter(r => r.phase === "Final");
+        // Logic to get semifinal winners...
+        currentTeams = [];
     }
     
     let stateToSet;
