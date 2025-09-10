@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -11,7 +12,6 @@ import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
-const SETTINGS_DOC_ID = "competition";
 
 type Team = {
   id: string;

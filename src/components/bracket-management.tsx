@@ -24,7 +24,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const BRACKET_DOC_ID = "liveBracket";
 const SETTINGS_DOC_ID = "competition";
-const DRAW_STATE_DOC_ID = "liveDraw";
 
 type Team = {
   id: string;
@@ -46,12 +45,6 @@ type BracketRound = {
   id: string;
   title: string;
   matches: Match[];
-};
-
-type DrawTeam = {
-  id: string;
-  name: string;
-  round: string | null;
 };
 
 type ScoreData = {
@@ -87,7 +80,6 @@ export function BracketManagement() {
     const { toast } = useToast();
     const [allAvailableTeams, setAllAvailableTeams] = useState<Team[]>([]);
     const [bracketRounds, setBracketRounds] = useState<BracketRound[]>([]);
-    const [drawState, setDrawState] = useState<{ teams: DrawTeam[] } | null>(null);
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,13 +116,6 @@ export function BracketManagement() {
             }
             setLoading(false);
         });
-
-        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-        const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setDrawState(docSnap.data() as { teams: DrawTeam[] });
-            }
-        });
         
         const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
         const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
@@ -142,52 +127,10 @@ export function BracketManagement() {
         return () => {
             unsubscribeSettings();
             unsubscribeBracket();
-            unsubscribeDrawState();
             unsubscribeScores();
         };
     }, []);
     
-    const processedBracketRounds = useMemo(() => {
-        if (!drawState || drawState.teams.length === 0) return bracketRounds;
-
-        return bracketRounds.map(round => {
-            const teamsDrawnForRound = drawState.teams.filter(t => t.round === round.title);
-            if (teamsDrawnForRound.length === 0) return round;
-
-            const newMatches = [...round.matches];
-            let teamIndex = 0;
-            
-            for (let i = 0; i < newMatches.length; i++) {
-                for (let j = 0; j < newMatches[i].participants.length; j++) {
-                    // Only fill if the slot is currently empty
-                    if (newMatches[i].participants[j] === null) {
-                        if (teamIndex < teamsDrawnForRound.length) {
-                            const drawnTeam = teamsDrawnForRound[teamIndex];
-                            const fullTeamInfo = allAvailableTeams.find(t => t.name === drawnTeam.name);
-                            newMatches[i].participants[j] = fullTeamInfo ? { id: fullTeamInfo.id, name: fullTeamInfo.name } : null;
-                            teamIndex++;
-                        }
-                    }
-                }
-            }
-            // Fill remaining drawn teams into new matches if needed
-            while(teamIndex < teamsDrawnForRound.length) {
-                const participants = [];
-                for(let k=0; k<2 && teamIndex < teamsDrawnForRound.length; k++){
-                     const drawnTeam = teamsDrawnForRound[teamIndex];
-                     const fullTeamInfo = allAvailableTeams.find(t => t.name === drawnTeam.name);
-                     participants.push(fullTeamInfo ? { id: fullTeamInfo.id, name: fullTeamInfo.name } : null);
-                     teamIndex++;
-                }
-                if (participants.length > 0) {
-                     newMatches.push({ id: nanoid(), participants });
-                }
-            }
-
-            return { ...round, matches: newMatches };
-        });
-
-    }, [bracketRounds, drawState, allAvailableTeams]);
 
     const getMatchTieInfo = (match: Match): { isTie: boolean, tiedTeams: string[] } => {
         const participantNames = match.participants.map(p => p?.name).filter(Boolean) as string[];
@@ -220,10 +163,6 @@ export function BracketManagement() {
 
         return { isTie: false, tiedTeams: [] };
     };
-
-    const isRoundLocked = (roundTitle: string) => {
-        return drawState?.teams.some(t => t.round === roundTitle) ?? false;
-    }
     
     const hasScores = (match: Match) => {
         const participantNames = match.participants.map(p => p?.name).filter(Boolean) as string[];
@@ -364,11 +303,10 @@ export function BracketManagement() {
 
     const handleSaveBracket = async () => {
         setIsSubmitting(true);
-        const finalBracketRounds = processedBracketRounds;
         
-        const linkedRounds = finalBracketRounds.map((round, roundIndex) => {
-            if (roundIndex < finalBracketRounds.length - 1) {
-                const nextRound = finalBracketRounds[roundIndex + 1];
+        const linkedRounds = bracketRounds.map((round, roundIndex) => {
+            if (roundIndex < bracketRounds.length - 1) {
+                const nextRound = bracketRounds[roundIndex + 1];
                 return { ...round, matches: round.matches.map((match, matchIndex) => ({ ...match, nextMatchId: nextRound.matches[Math.floor(matchIndex / 2)]?.id || null })) };
             }
             return round;
@@ -396,13 +334,11 @@ export function BracketManagement() {
             </CardHeader>
             <CardContent>
                 <div className="flex flex-col gap-8">
-                    {processedBracketRounds.map(round => (
+                    {bracketRounds.map(round => (
                         <div key={round.id} className="space-y-4 p-4 border rounded-lg">
                             <div className="flex items-center gap-4 justify-between">
-                                <Input value={round.title} onChange={(e) => handleRoundTitleChange(round.id, e.target.value)} className="text-lg font-bold flex-grow" disabled={isRoundLocked(round.title)} />
-                                 {!isRoundLocked(round.title) && (
-                                    <Button size="icon" variant="ghost" onClick={() => handleRemoveRound(round.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                 )}
+                                <Input value={round.title} onChange={(e) => handleRoundTitleChange(round.id, e.target.value)} className="text-lg font-bold flex-grow" />
+                                <Button size="icon" variant="ghost" onClick={() => handleRemoveRound(round.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {round.matches.map(match => {
@@ -459,50 +395,40 @@ export function BracketManagement() {
                                             {match.participants.map((participant, index) => (
                                                 <div key={index} className="flex items-center gap-1">
                                                     <Popover>
-                                                        <PopoverTrigger asChild disabled={isRoundLocked(round.title)}>
+                                                        <PopoverTrigger asChild>
                                                             <Button variant="outline" className="w-full justify-start font-normal text-left h-10 truncate disabled:opacity-100 disabled:cursor-default">
                                                                 {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo...</span>}
                                                             </Button>
                                                         </PopoverTrigger>
-                                                        {!isRoundLocked(round.title) && (
-                                                            <PopoverContent className="p-0 w-auto">
-                                                                {participant ? (
-                                                                    <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
-                                                                ) : (
-                                                                    <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
-                                                                )}
-                                                            </PopoverContent>
-                                                        )}
+                                                        <PopoverContent className="p-0 w-auto">
+                                                            {participant ? (
+                                                                <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
+                                                            ) : (
+                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
+                                                            )}
+                                                        </PopoverContent>
                                                     </Popover>
-                                                    {!isRoundLocked(round.title) && (
-                                                        <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleRemoveParticipantSlot(round.id, match.id, index)}>
-                                                            <X className="h-4 w-4 text-destructive" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {!isRoundLocked(round.title) && (
-                                                <>
-                                                    <Button size="xs" variant="ghost" className="w-full mt-2 text-xs" onClick={() => handleAddParticipantSlot(round.id, match.id)}>
-                                                        <PlusCircle className="h-3 w-3 mr-1" /> Añadir Equipo al Partido
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-6 w-6" onClick={() => handleRemoveMatch(round.id, match.id)}>
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleRemoveParticipantSlot(round.id, match.id, index)}>
                                                         <X className="h-4 w-4 text-destructive" />
                                                     </Button>
-                                                </>
-                                            )}
+                                                </div>
+                                            ))}
+                                            <Button size="xs" variant="ghost" className="w-full mt-2 text-xs" onClick={() => handleAddParticipantSlot(round.id, match.id)}>
+                                                <PlusCircle className="h-3 w-3 mr-1" /> Añadir Equipo al Partido
+                                            </Button>
+                                            <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-6 w-6" onClick={() => handleRemoveMatch(round.id, match.id)}>
+                                                <X className="h-4 w-4 text-destructive" />
+                                            </Button>
                                         </Card>
                                     )
                                 })}
                             </div>
-                             {!isRoundLocked(round.title) && (
-                                <div className="flex items-center gap-2 mt-4">
-                                    <Button variant="outline" size="sm" onClick={() => handleAddMatch(round.id)}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Partido</Button>
-                                    {round.matches.length > 0 && round.matches.every(m => m.participants.every(p => p !== null)) && (
-                                        <Button variant="secondary" size="sm" onClick={() => handleShuffleTeams(round.id)}><Shuffle className="mr-2 h-4 w-4" /> Mezclar Equipos</Button>
-                                    )}
-                                </div>
-                             )}
+                            <div className="flex items-center gap-2 mt-4">
+                                <Button variant="outline" size="sm" onClick={() => handleAddMatch(round.id)}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Partido</Button>
+                                {round.matches.length > 0 && round.matches.every(m => m.participants.every(p => p !== null)) && (
+                                    <Button variant="secondary" size="sm" onClick={() => handleShuffleTeams(round.id)}><Shuffle className="mr-2 h-4 w-4" /> Mezclar Equipos</Button>
+                                )}
+                            </div>
                         </div>
                     ))}
                     <div className="pt-4">
@@ -525,4 +451,3 @@ export function BracketManagement() {
         </Card>
     );
 }
-
