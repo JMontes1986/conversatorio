@@ -215,15 +215,14 @@ export function GroupStageResults() {
                                 </Badge>
                              </div>
                            ) : result.match.teams.length > 0 && result.match.teams.every(t => t.total === 0) ? (
-                            <div className="text-sm h-24 flex flex-col items-center justify-center gap-2">
-                                {result.match.teams.map((team, index) => (
-                                    <React.Fragment key={team.name}>
-                                        <p className="font-semibold">{team.name}</p>
-                                        {index < result.match.teams.length - 1 && <Swords className="h-4 w-4 text-muted-foreground"/>}
-                                    </React.Fragment>
-                                ))}
-                                <Badge variant="outline" className="mt-2">Pendiente</Badge>
-                            </div>
+                                <div className="text-sm h-24 flex flex-col items-center justify-center text-center">
+                                    <div className="flex items-center gap-2 font-semibold">
+                                        <span>{result.match.teams[0]?.name || 'Equipo 1'}</span>
+                                        <Swords className="h-4 w-4 text-muted-foreground"/>
+                                        <span>{result.match.teams[1]?.name || 'Equipo 2'}</span>
+                                    </div>
+                                    <Badge variant="outline" className="mt-3">Pendiente</Badge>
+                                </div>
                            ) : (
                             <Table>
                                 <TableHeader>
