@@ -161,22 +161,34 @@ export function TournamentBracket() {
         setWinners(winnersMap);
     });
 
+    const debateStateRef = doc(db, "debateState", "current");
+    const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setBracketSettings(prev => ({
+                ...prev,
+                bracketTitle: data.bracketTitle,
+                bracketSubtitle: data.bracketSubtitle,
+                bracketTitleSize: data.bracketTitleSize,
+            }));
+        }
+    });
+
     const settingsRef = doc(db, "settings", "competition");
     const unsubscribeSettings = onSnapshot(settingsRef, (doc) => {
         if (doc.exists()) {
             const data = doc.data();
-            setBracketSettings({
-                bracketTitle: data.bracketTitle,
-                bracketSubtitle: data.bracketSubtitle,
-                bracketTitleSize: data.bracketTitleSize,
+            setBracketSettings(prev => ({
+                ...prev,
                 resultsPublished: data.resultsPublished || false,
-            });
+            }));
         }
     });
 
     return () => {
         unsubscribeBracket();
         unsubscribeScores();
+        unsubscribeDebateState();
         unsubscribeSettings();
     };
   }, []);
