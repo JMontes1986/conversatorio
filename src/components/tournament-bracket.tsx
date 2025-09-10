@@ -7,7 +7,7 @@ import Image from "next/image";
 import { Loader2, Trophy, ArrowDown, Users, Swords } from "lucide-react";
 import React, { useEffect, useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, doc, orderBy, writeBatch, getDoc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, doc, orderBy, writeBatch, getDoc, setDoc, getDocs } from "firebase/firestore";
 
 // --- TYPES ---
 type Participant = {
@@ -140,7 +140,7 @@ export function TournamentBracket() {
     const drawStateRef = doc(db, "drawState", "liveDraw");
     
     const [roundsSnapshot, drawStateSnap] = await Promise.all([
-      getDoc(roundsQuery),
+      getDocs(roundsQuery),
       getDoc(drawStateRef)
     ]);
 
@@ -405,5 +405,3 @@ export function TournamentBracket() {
     </div>
   );
 }
-
-    
