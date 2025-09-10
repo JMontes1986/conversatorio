@@ -226,13 +226,13 @@ export function DrawAnimation() {
     setIsFinished(false);
 
     const shuffledTeams = shuffleArray([...teams]);
-    const shuffledRounds = shuffleArray([...rounds]);
+    // The rounds are now fixed, not shuffled.
     let assignedTeams = teams.map(t => ({...t, round: null}));
     setTeams(assignedTeams);
 
     const initialState = {
         teams: assignedTeams,
-        rounds,
+        rounds, // Use the original, ordered rounds
         isDrawing: true,
         isFinished: false,
         activeTab
@@ -245,8 +245,9 @@ export function DrawAnimation() {
         const team = shuffledTeams[i];
         await new Promise(resolve => setTimeout(resolve, i * 200));
 
+        // Assign team to a round in a cyclical manner from the fixed rounds list
         assignedTeams = assignedTeams.map(t => 
-            t.id === team.id ? { ...t, round: shuffledRounds[i % shuffledRounds.length].name } : t
+            t.id === team.id ? { ...t, round: rounds[i % rounds.length].name } : t
         );
 
         setTeams([...assignedTeams]);
@@ -257,7 +258,8 @@ export function DrawAnimation() {
 
     setIsDrawing(false);
     setIsFinished(true);
-    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds: shuffledRounds, activeTab });
+    // Persist the final state with the fixed rounds
+    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds, activeTab });
   };
   
   const fixToBlockchain = () => {
