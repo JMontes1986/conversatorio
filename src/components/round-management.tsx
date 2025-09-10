@@ -28,7 +28,7 @@ interface RoundData {
     phase: string;
 }
 
-const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
+const competitionPhases = ["Fase de Grupos", "Fase de Finales"];
 
 export function RoundManagement() {
     const { toast } = useToast();
@@ -65,8 +65,7 @@ export function RoundManagement() {
     }, {} as Record<string, RoundData[]>);
     
      const sortedPhases = Object.keys(roundsByPhase).sort((a, b) => {
-        const order = ["Fase de Grupos", ...knockoutPhases];
-        return order.indexOf(a) - order.indexOf(b);
+        return competitionPhases.indexOf(a) - competitionPhases.indexOf(b);
     });
 
 
@@ -132,9 +131,7 @@ export function RoundManagement() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Fase de Grupos">Fase de Grupos</SelectItem>
-                                        {knockoutPhases.map(phase => (
-                                            <SelectItem key={phase} value={phase}>{phase}</SelectItem>
-                                        ))}
+                                        <SelectItem value="Fase de Finales">Fase de Finales</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
