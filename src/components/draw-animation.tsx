@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -59,7 +59,7 @@ function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData
     });
 
     return Object.entries(teamTotals)
-        .sort(([, scoreA], [, scoreB]) => scoreB - a)
+        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
         .slice(0, limit)
         .map(([teamName]) => teamName);
 }
@@ -81,67 +81,58 @@ export function DrawAnimation() {
   const [activeTab, setActiveTab] = useState("groups");
 
   useEffect(() => {
-    setLoading(true);
+    let unsubTeams: () => void;
 
-    const unsubscribes = [
-      onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), async (settingsSnap) => {
+    const unsubSettings = onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), (settingsSnap) => {
         const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
         let teamsQuery;
-        if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
-          const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
-          teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
-        } else {
-          teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-        }
-        
-        return onSnapshot(teamsQuery, (snapshot) => {
-          const fetchedTeams = snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().teamName,
-            round: null
-          }));
-          setAllTeams(fetchedTeams);
-        });
-      }),
 
-      onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
-        const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-        setAllRounds(roundsData);
-      }),
-      
-      onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
-        const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data()} as ScoreData));
-        setAllScores(scoresData);
-      })
-    ];
-    
-    // Check when all initial data is loaded
-    const initialLoadCheck = async () => {
-        const settingsSnap = await getDoc(doc(db, "settings", SETTINGS_DOC_ID));
-        const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
-        let teamsQuery;
         if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
             const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
-            if (lockedInTeamIds.length === 0) { // No teams locked in
-                 setAllTeams([]); // Set empty and continue
-            } else {
-                 teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
-            }
+            teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
         } else {
             teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         }
+        
+        if (unsubTeams) unsubTeams();
 
-        if (teamsQuery) await getDoc(teamsQuery);
+        unsubTeams = onSnapshot(teamsQuery, (snapshot) => {
+            const fetchedTeams = snapshot.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().teamName,
+                round: null
+            }));
+            setAllTeams(fetchedTeams);
+        });
+    });
+
+    const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
+        const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+        setAllRounds(roundsData);
+    });
+    
+    const unsubScores = onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
+        const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data()} as ScoreData));
+        setAllScores(scoresData);
+    });
+    
+    const checkInitialLoad = async () => {
+        // Wait for all three data sources to have at least one onSnapshot fire
+        // This is a simple way to check for initial load.
+        await getDocs(query(collection(db, "schools")));
         await getDocs(query(collection(db, "rounds")));
         await getDocs(query(collection(db, "scores")));
-
         setLoading(false);
+    }
+    
+    checkInitialLoad();
+
+    return () => {
+        if (unsubTeams) unsubTeams();
+        unsubSettings();
+        unsubRounds();
+        unsubScores();
     };
-
-    initialLoadCheck();
-
-
-    return () => unsubscribes.forEach(unsub => unsub());
   }, []);
 
   const updateTabState = useCallback(async () => {
