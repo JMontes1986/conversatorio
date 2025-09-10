@@ -25,12 +25,6 @@ type RoundData = {
     phase: string;
 }
 
-type ScoreData = {
-    id: string;
-    matchId: string;
-    teams: { name: string; total: number }[];
-}
-
 const shuffleArray = (array: any[]) => {
   let currentIndex = array.length, randomIndex;
   const newArray = [...array];
@@ -56,66 +50,41 @@ export function DrawAnimation() {
   const [isFixing, setIsFixing] = useState(false);
 
  useEffect(() => {
-    const fetchInitialData = async () => {
-        setLoading(true);
-
-        const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
-        const settingsSnap = await getDoc(settingsDocRef);
-        const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
-
-        let teamsQuery;
-        if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
-          const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
-          teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
-        } else {
-          teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-        }
-        
-        const teamsSnapshot = await getDocs(teamsQuery);
-        const fetchedTeams = teamsSnapshot.docs.map(doc => ({
+    setLoading(true);
+    
+    const teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+    const unsubTeams = onSnapshot(teamsQuery, (snapshot) => {
+        const fetchedTeams = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().teamName,
             round: null
         }));
-        
-        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-        const roundsSnapshot = await getDocs(roundsQuery);
-        const roundsData = roundsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-
-        const groupRounds = roundsData.filter(r => r.phase === "Fase de Grupos");
         setAllTeams(fetchedTeams);
+        setTeams(fetchedTeams);
+    });
+
+    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+    const unsubRounds = onSnapshot(roundsQuery, (snapshot) => {
+        const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+        const groupRounds = roundsData.filter(r => r.phase === "Fase de Grupos");
         setAllRounds(groupRounds);
-
-        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-        const drawDocSnap = await getDoc(drawStateRef);
-        if (drawDocSnap.exists()) {
-            const data = drawDocSnap.data();
-            setTeams(data.teams || fetchedTeams);
-            setRounds(data.rounds || groupRounds);
-            setIsDrawing(data.isDrawing || false);
-            setIsFinished(data.isFinished || false);
-        } else {
-            setTeams(fetchedTeams);
-            setRounds(groupRounds);
-        }
-
-        setLoading(false);
-    };
-
-    fetchInitialData();
+        setRounds(groupRounds);
+    });
     
-    // Set up listeners for real-time updates
     const unsubDrawState = onSnapshot(doc(db, "drawState", DRAW_STATE_DOC_ID), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            setTeams(data.teams || allTeams);
-            setRounds(data.rounds || allRounds);
+            if (data.teams && data.teams.length > 0) setTeams(data.teams);
+            if (data.rounds && data.rounds.length > 0) setRounds(data.rounds);
             setIsDrawing(data.isDrawing || false);
             setIsFinished(data.isFinished || false);
         }
+        setLoading(false);
     });
 
     return () => {
+      unsubTeams();
+      unsubRounds();
       unsubDrawState();
     };
   }, []);
@@ -187,18 +156,17 @@ export function DrawAnimation() {
   
   const resetDraw = async () => {
     setLoading(true);
-    const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
     const initialTeams = allTeams.map(t => ({ ...t, round: null }));
 
     setTeams(initialTeams);
-    setRounds(groupRounds);
+    setRounds(allRounds);
     setIsDrawing(false);
     setIsFinished(false);
     setIsFixing(false);
 
     await updateLiveDrawState({
         teams: initialTeams,
-        rounds: groupRounds,
+        rounds: allRounds,
         isDrawing: false,
         isFinished: false,
     });
@@ -228,7 +196,7 @@ export function DrawAnimation() {
   return (
     <div className="w-full max-w-6xl mx-auto">
         <div className="space-y-1 mb-8">
-            <h1 className="font-headline text-3xl font-bold">Sorteo Automático de Grupos</h1>
+            <h1 className="font-headline text-3xl font-bold">Sorteo Automático</h1>
             <p className="text-muted-foreground">Realice el sorteo para la Fase de Grupos. El resultado se reflejará para el público.</p>
         </div>
 
