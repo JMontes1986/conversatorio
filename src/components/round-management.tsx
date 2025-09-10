@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from './ui/dropdown-menu';
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from './ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface RoundData {
     id: string;
@@ -69,15 +70,15 @@ export function RoundManagement() {
 
     const handleAddRound = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newRoundName.trim()) {
-            toast({ variant: "destructive", title: "Error", description: "El nombre de la ronda es requerido." });
+        if (!newRoundName.trim() || !newRoundPhase.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "El nombre de la ronda y la fase son requeridos." });
             return;
         }
         setIsSubmitting(true);
         try {
             await addDoc(collection(db, "rounds"), {
                 name: newRoundName,
-                phase: newRoundPhase.trim() || 'General',
+                phase: newRoundPhase,
                 createdAt: serverTimestamp(),
             });
             toast({ title: "Ronda Creada", description: `La ronda "${newRoundName}" ha sido creada.` });
@@ -122,14 +123,16 @@ export function RoundManagement() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="round-phase">Fase del Torneo (Opcional)</Label>
-                                <Input 
-                                    id="round-phase" 
-                                    value={newRoundPhase} 
-                                    onChange={(e) => setNewRoundPhase(e.target.value)} 
-                                    placeholder="Ej: Fase de Grupos, Eliminatorias" 
-                                    disabled={isSubmitting}
-                                />
+                                <Label htmlFor="round-phase">Fase del Torneo</Label>
+                                <Select onValueChange={setNewRoundPhase} value={newRoundPhase} disabled={isSubmitting}>
+                                    <SelectTrigger id="round-phase">
+                                        <SelectValue placeholder="Seleccione una fase" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Fase de Grupos">Fase de Grupos</SelectItem>
+                                        <SelectItem value="Fase Finales">Fase Finales</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <Button type="submit" className="w-full" disabled={isSubmitting}>
                                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -225,4 +228,3 @@ export function RoundManagement() {
         </div>
     );
 }
-
