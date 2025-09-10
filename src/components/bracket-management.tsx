@@ -108,22 +108,6 @@ export function BracketManagement() {
             unsubscribeBracket();
         };
     }, []);
-
-    const assignedTeamIds = useMemo(() => {
-        const ids = new Set<string>();
-        bracketRounds.forEach(round => {
-            round.matches.forEach(match => {
-                match.participants.forEach(p => {
-                    if (p) ids.add(p.id);
-                });
-            });
-        });
-        return ids;
-    }, [bracketRounds]);
-
-    const unassignedTeams = useMemo(() => {
-        return allAvailableTeams.filter(t => !assignedTeamIds.has(t.id));
-    }, [allAvailableTeams, assignedTeamIds]);
     
     const handleAddRound = () => setBracketRounds([...bracketRounds, { id: nanoid(), title: `Ronda ${bracketRounds.length + 1}`, matches: [] }]);
     const handleRemoveRound = (roundId: string) => setBracketRounds(bracketRounds.filter(r => r.id !== roundId));
@@ -182,6 +166,11 @@ export function BracketManagement() {
             if (r.id === roundId) {
                 return { ...r, matches: r.matches.map(m => {
                     if (m.id === matchId) {
+                        // Prevent removing slots if it would leave fewer than 2
+                        if (m.participants.length <= 2) {
+                            toast({ variant: "destructive", title: "Acción no permitida", description: "Un partido debe tener al menos 2 participantes." });
+                            return m;
+                        }
                         const newParticipants = [...m.participants];
                         newParticipants.splice(participantIndex, 1);
                         return { ...m, participants: newParticipants };
@@ -241,6 +230,14 @@ export function BracketManagement() {
             setIsSubmitting(false);
         }
     };
+    
+    // This function returns available teams for a SPECIFIC slot, excluding teams already in the SAME match.
+    const getAvailableTeamsForSlot = (roundId: string, matchId: string) => {
+        const currentMatch = bracketRounds.find(r => r.id === roundId)?.matches.find(m => m.id === matchId);
+        const teamsInCurrentMatch = new Set(currentMatch?.participants.map(p => p?.id).filter(Boolean));
+        return allAvailableTeams.filter(t => !teamsInCurrentMatch.has(t.id));
+    };
+
 
     if (loading) {
         return <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -275,7 +272,7 @@ export function BracketManagement() {
                                                         {participant ? (
                                                             <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
                                                         ) : (
-                                                            <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={unassignedTeams} />
+                                                            <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={getAvailableTeamsForSlot(round.id, match.id)} />
                                                         )}
                                                     </PopoverContent>
                                                 </Popover>
@@ -322,35 +319,4 @@ export function BracketManagement() {
     );
 }
 
-// Add size 'xs' to buttonVariants
-import { cva } from "class-variance-authority";
-
-const originalButtonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
-        xs: "h-8 px-2 rounded-md",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-);
+    
