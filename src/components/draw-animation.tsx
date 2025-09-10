@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -58,7 +59,7 @@ function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData
     });
 
     return Object.entries(teamTotals)
-        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
+        .sort(([, scoreA], [, scoreB]) => scoreB - a)
         .slice(0, limit)
         .map(([teamName]) => teamName);
 }
@@ -93,7 +94,7 @@ export function DrawAnimation() {
           teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         }
         
-        onSnapshot(teamsQuery, (snapshot) => {
+        return onSnapshot(teamsQuery, (snapshot) => {
           const fetchedTeams = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().teamName,
@@ -113,19 +114,37 @@ export function DrawAnimation() {
         setAllScores(scoresData);
       })
     ];
+    
+    // Check when all initial data is loaded
+    const initialLoadCheck = async () => {
+        const settingsSnap = await getDoc(doc(db, "settings", SETTINGS_DOC_ID));
+        const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
+        let teamsQuery;
+        if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
+            const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
+            if (lockedInTeamIds.length === 0) { // No teams locked in
+                 setAllTeams([]); // Set empty and continue
+            } else {
+                 teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
+            }
+        } else {
+            teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+        }
 
-    Promise.all([
-      getDoc(doc(db, "settings", SETTINGS_DOC_ID)),
-      getDocs(query(collection(db, "rounds"))),
-      getDocs(query(collection(db, "scores"))),
-    ]).then(() => {
+        if (teamsQuery) await getDoc(teamsQuery);
+        await getDocs(query(collection(db, "rounds")));
+        await getDocs(query(collection(db, "scores")));
+
         setLoading(false);
-    });
+    };
+
+    initialLoadCheck();
+
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, []);
 
-  const loadTabState = useCallback(async () => {
+  const updateTabState = useCallback(async () => {
     let eligibleTeams: Team[] = [];
     let eligibleRounds: RoundData[] = [];
 
@@ -160,9 +179,9 @@ export function DrawAnimation() {
 
   useEffect(() => {
     if (!loading) {
-      loadTabState();
+      updateTabState();
     }
-  }, [activeTab, loading, loadTabState]);
+  }, [activeTab, loading, updateTabState]);
   
   const updateLiveDrawState = async (state: any) => {
       try {
@@ -230,7 +249,7 @@ export function DrawAnimation() {
   };
   
   const resetDraw = () => {
-    loadTabState();
+    updateTabState();
     setIsDrawing(false);
     setIsFinished(false);
     setIsFixing(false);
