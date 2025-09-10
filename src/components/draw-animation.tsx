@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -116,8 +116,8 @@ export function DrawAnimation() {
 
     Promise.all([
       getDoc(doc(db, "settings", SETTINGS_DOC_ID)),
-      getDoc(query(collection(db, "rounds"))),
-      getDoc(query(collection(db, "scores"))),
+      getDocs(query(collection(db, "rounds"))),
+      getDocs(query(collection(db, "scores"))),
     ]).then(() => {
         setLoading(false);
     });
