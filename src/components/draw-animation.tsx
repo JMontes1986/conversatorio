@@ -155,22 +155,20 @@ export function DrawAnimation() {
   const resetDraw = useCallback(async (isTabChange = false) => {
     let currentTeams: Team[] = [];
     let currentRounds: RoundData[] = [];
-    let targetPhase = "";
-    let teamsSource: Team[] = allTeams;
-
+    
     if (activeTab === "groups") {
-        targetPhase = "Fase de Grupos";
-        teamsSource = allTeams;
+        const targetPhase = "Fase de Grupos";
+        currentRounds = allRounds.filter(r => r.phase === targetPhase);
+        currentTeams = allTeams.map(t => ({...t, round: null}));
     } else if (activeTab === "quarters") {
-        targetPhase = "Cuartos de Final";
+        const targetPhase = "Cuartos de Final";
+        currentRounds = allRounds.filter(r => r.phase === targetPhase);
         const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
         const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
-        teamsSource = allTeams.filter(t => qualifiedTeamNames.includes(t.name));
+        const teamsSource = allTeams.filter(t => qualifiedTeamNames.includes(t.name));
+        currentTeams = teamsSource.map(t => ({...t, round: null}));
     }
     
-    currentRounds = allRounds.filter(r => r.phase === targetPhase);
-    currentTeams = teamsSource.map(t => ({...t, round: null}));
-
     let stateToSet;
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
     const docSnap = await getDoc(drawStateRef);
