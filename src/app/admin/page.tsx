@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home, UserPlus, Projector } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home, UserPlus, Projector, HelpCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -81,7 +81,9 @@ interface MatchResults {
     matchId: string;
     scores: ScoreData[];
     teamTotals: Record<string, number>;
-    winner: string;
+    winner: string | null;
+    isTie: boolean;
+    tiedTeams: string[];
 }
 
 
@@ -107,6 +109,9 @@ function AdminDashboard() {
 
   const [isSchoolEditDialogOpen, setIsSchoolEditDialogOpen] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
+
+  const [isBreakingTie, setIsBreakingTie] = useState<string | null>(null);
+
 
   useEffect(() => {
     const schoolsQuery = query(collection(db, "schools"), orderBy("createdAt", "desc"));
@@ -281,6 +286,31 @@ function AdminDashboard() {
     setCopiedTokenId(id);
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
+
+  const breakTie = async (matchId: string, winner: string, tiedTeams: string[]) => {
+      setIsBreakingTie(matchId);
+      try {
+          const tieBreakerScore = {
+              matchId,
+              judgeName: 'Sistema-Desempate',
+              teams: tiedTeams.map(name => ({
+                  name,
+                  total: name === winner ? 1 : 0
+              })),
+              createdAt: serverTimestamp(),
+          };
+          await addDoc(collection(db, "scores"), tieBreakerScore);
+          toast({
+              title: "¡Empate Resuelto!",
+              description: `${winner} ha sido declarado ganador.`,
+          });
+      } catch (error) {
+          console.error("Error breaking tie:", error);
+          toast({ variant: "destructive", title: "Error", description: "No se pudo resolver el empate." });
+      } finally {
+          setIsBreakingTie(null);
+      }
+  }
  
  const scoresByMatch = scores.reduce((acc, score) => {
     if (!acc[score.matchId]) {
@@ -302,13 +332,20 @@ function AdminDashboard() {
         });
     });
 
-    let winner = 'Empate';
+    let winner: string | null = null;
+    let isTie = false;
+    let tiedTeams: string[] = [];
     const totals = Object.values(teamTotals);
+
     if (totals.length > 0) {
         const maxScore = Math.max(...totals);
         const winners = Object.entries(teamTotals).filter(([, score]) => score === maxScore);
+        
         if (winners.length === 1) {
             winner = winners[0][0];
+        } else if (winners.length > 1) {
+            isTie = true;
+            tiedTeams = winners.map(w => w[0]);
         }
     }
     
@@ -317,6 +354,8 @@ function AdminDashboard() {
         scores: matchScores,
         teamTotals,
         winner,
+        isTie,
+        tiedTeams,
     };
  });
 
@@ -717,9 +756,16 @@ function AdminDashboard() {
                                         </div>
                                         <div className="text-center">
                                             <div className="text-xs text-muted-foreground font-semibold">GANADOR</div>
-                                            <Badge variant={result.winner === 'Empate' ? 'secondary' : 'default'} className="text-lg px-4 py-1 mt-1">
-                                                {result.winner}
-                                            </Badge>
+                                             {result.isTie ? (
+                                                <Badge variant="destructive" className="text-lg px-4 py-1 mt-1">
+                                                    <HelpCircle className="mr-2 h-4 w-4" />
+                                                    EMPATE PENDIENTE
+                                                </Badge>
+                                             ) : (
+                                                <Badge variant={result.winner ? 'default' : 'secondary'} className="text-lg px-4 py-1 mt-1">
+                                                    {result.winner || 'N/A'}
+                                                </Badge>
+                                             )}
                                         </div>
                                     </div>
                                 </AccordionTrigger>
@@ -750,6 +796,37 @@ function AdminDashboard() {
                                         </TableRow>
                                     </TableBody>
                                 </Table>
+                                {result.isTie && (
+                                     <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                                        <h4 className="font-bold text-amber-800">Acción Requerida: Resolver Empate</h4>
+                                        <p className="text-sm text-amber-700 mt-1">Seleccione un método para determinar el ganador de esta partida.</p>
+                                        <div className="flex flex-wrap gap-2 mt-3">
+                                            <Button 
+                                                size="sm" 
+                                                variant="secondary"
+                                                disabled={isBreakingTie === result.matchId}
+                                                onClick={() => {
+                                                    const winner = result.tiedTeams[Math.floor(Math.random() * result.tiedTeams.length)];
+                                                    breakTie(result.matchId, winner, result.tiedTeams);
+                                                }}
+                                            >
+                                                <Shuffle className="mr-2 h-4 w-4"/>
+                                                Sorteo Aleatorio
+                                            </Button>
+                                            {result.tiedTeams.map(team => (
+                                                 <Button 
+                                                    key={team} 
+                                                    size="sm"
+                                                    disabled={isBreakingTie === result.matchId}
+                                                    onClick={() => breakTie(result.matchId, team, result.tiedTeams)}
+                                                >
+                                                     {isBreakingTie === result.matchId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trophy className="mr-2 h-4 w-4"/>}
+                                                     Declarar Ganador a {team}
+                                                 </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 </AccordionContent>
                             </AccordionItem>
                         ))}
@@ -777,3 +854,5 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
+
+    
