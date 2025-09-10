@@ -3,10 +3,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Shuffle, ShieldCheck, Loader2 } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc, getDocs } from "firebase/firestore";
+import { Shuffle, ShieldCheck, Loader2, Users } from "lucide-react";
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -80,58 +80,58 @@ export function DrawAnimation() {
   const [isFixing, setIsFixing] = useState(false);
   const [activeTab, setActiveTab] = useState("groups");
 
-  useEffect(() => {
+ useEffect(() => {
+    setLoading(true);
     let unsubTeams: () => void;
+    let unsubRounds: () => void;
+    let unsubScores: () => void;
+    let unsubSettings: () => void;
 
-    const unsubSettings = onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), (settingsSnap) => {
+    const fetchData = async () => {
+      unsubSettings = onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), (settingsSnap) => {
         const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
         let teamsQuery;
 
         if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
-            const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
-            teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
+          const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
+          teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
         } else {
-            teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+          teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         }
-        
+
         if (unsubTeams) unsubTeams();
-
         unsubTeams = onSnapshot(teamsQuery, (snapshot) => {
-            const fetchedTeams = snapshot.docs.map(doc => ({
-                id: doc.id,
-                name: doc.data().teamName,
-                round: null
-            }));
-            setAllTeams(fetchedTeams);
+          const fetchedTeams = snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().teamName,
+            round: null
+          }));
+          setAllTeams(fetchedTeams);
         });
-    });
+      });
 
-    const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
+      unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
         const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
         setAllRounds(roundsData);
-    });
-    
-    const unsubScores = onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
-        const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data()} as ScoreData));
+      });
+
+      unsubScores = onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
+        const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScoreData));
         setAllScores(scoresData);
-    });
-    
-    const checkInitialLoad = async () => {
-        // Wait for all three data sources to have at least one onSnapshot fire
-        // This is a simple way to check for initial load.
-        await getDocs(query(collection(db, "schools")));
-        await getDocs(query(collection(db, "rounds")));
-        await getDocs(query(collection(db, "scores")));
-        setLoading(false);
-    }
-    
-    checkInitialLoad();
+      });
+      
+      // A simple way to wait for the first batch of data to come in.
+      // This is not perfect but helps avoid the initial empty state.
+      setTimeout(() => setLoading(false), 1500); 
+    };
+
+    fetchData();
 
     return () => {
-        if (unsubTeams) unsubTeams();
-        unsubSettings();
-        unsubRounds();
-        unsubScores();
+      if (unsubTeams) unsubTeams();
+      if (unsubRounds) unsubRounds();
+      if (unsubScores) unsubScores();
+      if (unsubSettings) unsubSettings();
     };
   }, []);
 
@@ -276,10 +276,32 @@ export function DrawAnimation() {
                 <TabsTrigger value="groups">Fase de Grupos</TabsTrigger>
                 <TabsTrigger value="quarters">Cuartos de Final</TabsTrigger>
             </TabsList>
+
+            <Card className="mb-8">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Equipos Elegibles para el Sorteo</CardTitle>
+                    <CardDescription>Esta es la lista de equipos que participarán en el sorteo para la fase seleccionada.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                         <p className="text-muted-foreground">Cargando equipos...</p>
+                    ) : teams.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                            {teams.map(team => (
+                                <div key={team.id} className="p-2 bg-secondary rounded-md text-secondary-foreground font-medium text-sm">
+                                    {team.name}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-muted-foreground">No hay equipos elegibles para esta fase.</p>
+                    )}
+                </CardContent>
+            </Card>
             
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                 <div className="space-y-1">
-                    <h2 className="font-headline text-2xl font-bold capitalize">{activeTab === 'groups' ? 'Sorteo de Grupos' : 'Sorteo de Cuartos'}</h2>
+                    <h2 className="font-headline text-2xl font-bold capitalize">{activeTab === 'groups' ? 'Rondas de Grupos' : 'Rondas de Cuartos'}</h2>
                     <p className="text-muted-foreground">
                         {activeTab === 'groups' 
                         ? 'Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.'
