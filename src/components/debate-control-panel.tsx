@@ -761,7 +761,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                question: "Esperando la pregunta del moderador...",
+                question: "Esperando pregunta del moderador...",
                 videoUrl: "",
                 temporaryMessage: ""
             }, { merge: true });
