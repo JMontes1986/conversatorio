@@ -81,10 +81,14 @@ export function BracketManagement() {
     const [isBreakingTie, setIsBreakingTie] = useState<string | null>(null);
 
     useEffect(() => {
+        setLoading(true);
         const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
             const schoolsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().teamName }));
             setAllAvailableTeams(schoolsData);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching verified schools: ", error);
             setLoading(false);
         });
 
@@ -107,7 +111,7 @@ export function BracketManagement() {
             unsubscribeBracket();
             unsubscribeScores();
         };
-    }, []);
+    }, [loading]);
     
 
     const getMatchTieInfo = (match: Match): { isTie: boolean, tiedTeams: string[] } => {
@@ -437,5 +441,3 @@ export function BracketManagement() {
         </Card>
     );
 }
-
-    
