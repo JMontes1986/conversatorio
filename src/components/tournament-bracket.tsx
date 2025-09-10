@@ -85,7 +85,7 @@ const ParticipantCard = ({ participant, showScore, winner }: { participant: Part
 
 const MatchCard = ({ match, showScore, winner }: { match: Match, showScore: boolean, winner: string | null }) => {
     return (
-        <div className="flex flex-col items-center gap-2 relative">
+        <div id={`match-${match.id}`} className="flex flex-col items-center gap-2 relative">
             <ParticipantCard participant={match.participants[0]} showScore={showScore} winner={winner} />
             <span className="text-xs font-bold text-muted-foreground">VS</span>
             <ParticipantCard participant={match.participants[1]} showScore={showScore} winner={winner} />
@@ -133,11 +133,12 @@ const ConnectorLines = ({ rounds, populatedBracket }: { rounds: BracketRound[], 
 
                     if (!startEl || !endEl) return null;
 
-                    const startRect = startEl.getBoundingClientRect();
-                    const endRect = endEl.getBoundingClientRect();
                     const containerRect = startEl.closest('.bracket-container')?.getBoundingClientRect();
 
                     if (!containerRect) return null;
+                    
+                    const startRect = startEl.getBoundingClientRect();
+                    const endRect = endEl.getBoundingClientRect();
 
                     const startX = startRect.right - containerRect.left;
                     const startY = startRect.top + startRect.height / 2 - containerRect.top;
@@ -202,7 +203,7 @@ export function TournamentBracket() {
                     const teamsInRound = drawnTeams.filter(t => t.round === round.name);
                      if(teamsInRound.length >= 2) {
                         matches.push({
-                            id: round.id,
+                            id: round.name, // Use round name as match ID for group stage
                             participants: [
                                 {id: teamsInRound[0].id, name: teamsInRound[0].name},
                                 {id: teamsInRound[1].id, name: teamsInRound[1].name}
@@ -254,6 +255,7 @@ export function TournamentBracket() {
     const unsubscribeBracket = onSnapshot(bracketDocRef, (docSnap) => {
         if (docSnap.exists() && docSnap.data().bracketRounds?.length > 0) {
             setBracketData(docSnap.data().bracketRounds || []);
+             setTimeout(() => forceRender(c => c + 1), 100);
         } else {
             generateBracketFromScratch();
         }
@@ -267,15 +269,10 @@ export function TournamentBracket() {
         
         const scoresByMatchId: Record<string, ScoreData[]> = {};
         allScores.forEach(score => {
-             // Handle bye rounds
             if (score.matchId.includes('-bye-')) {
                 const roundName = score.matchId.split('-bye-')[0];
-                const teamName = score.matchId.split('-bye-')[1];
-                 // Find the corresponding group stage round ID
-                const roundDoc = bracketData.find(r => r.id === "Fase de Grupos")?.matches.find(m => m.id === roundName);
-                if(roundDoc) {
-                    winnersMap[roundDoc.id] = teamName;
-                }
+                const teamName = score.teams[0].name;
+                winnersMap[roundName] = teamName;
                 return;
             }
             
@@ -356,8 +353,6 @@ export function TournamentBracket() {
                          const winnerParticipant = match.participants.find(p => p?.name === winnerName);
                          if(winnerParticipant) {
                             nextMatch.participants[emptySlotIndex] = winnerParticipant;
-                         } else { // Winner might be a bye, find them in all teams
-                             // This part might need better logic if byes are more complex
                          }
                     }
                 }
@@ -396,7 +391,6 @@ export function TournamentBracket() {
 
   const finalRound = populatedBracket[populatedBracket.length - 1];
   const championName = finalRound.matches.length === 1 ? (winners[finalRound.matches[0].id] || null) : null;
-  const champion = championName ? finalRound.matches[0].participants.find(p => p?.name === championName) : null;
 
 
   return (
@@ -407,7 +401,7 @@ export function TournamentBracket() {
         </div>
         
         <div className="overflow-x-auto pb-8">
-            <div className="relative inline-flex flex-nowrap items-start space-x-12 px-4 bracket-container">
+            <div className="relative inline-flex flex-nowrap items-start space-x-12 px-4 bracket-container min-w-max">
                 {populatedBracket.map((round, index) => (
                     <RoundColumn 
                         key={round.id} 
@@ -417,7 +411,7 @@ export function TournamentBracket() {
                         isFinalRound={index === populatedBracket.length - 1} 
                     />
                 ))}
-                {/* Connector lines are now absolutely positioned and will be implemented later if needed */}
+                <ConnectorLines rounds={bracketData} populatedBracket={populatedBracket} />
             </div>
         </div>
         
