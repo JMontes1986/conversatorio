@@ -547,7 +547,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                         {Object.keys(questionsByRound).length > 0 && Object.keys(roundsByPhase).map((phase) => (
                             Object.values(roundsByPhase[phase]).map((round : RoundData) => (
                                 (questionsByRound[round.name]?.length > 0) && (
-                                <AccordionItem value={round.name} key={round.id}>
+                                <AccordionItem value={round.id} key={round.id}>
                                     <AccordionTrigger>{round.name}</AccordionTrigger>
                                     <AccordionContent className="space-y-4">
                                         {questionsByRound[round.name].map((q: Question) => (
