@@ -221,76 +221,56 @@ export function BracketManagement() {
                 <CardDescription>Organice visualmente los enfrentamientos del torneo. Asigne equipos a cada partido en las diferentes rondas.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="md:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2"><Users className="h-5 w-5" />Equipos Disponibles</CardTitle>
-                                <CardDescription>{unassignedTeams.length} equipos por asignar.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ScrollArea className="h-96">
-                                    <div className="space-y-2 pr-4">
-                                        {unassignedTeams.map(team => (
-                                            <div key={team.id} className="text-sm p-2 bg-secondary rounded-md">{team.name}</div>
+                <div className="w-full">
+                    <ScrollArea className="w-full whitespace-nowrap">
+                        <div className="flex gap-6 pb-4">
+                            {bracketRounds.map(round => (
+                                <div key={round.id} className="w-64 flex-shrink-0 space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <Input value={round.title} onChange={(e) => handleRoundTitleChange(round.id, e.target.value)} className="text-lg font-bold" />
+                                        <Button size="icon" variant="ghost" onClick={() => handleRemoveRound(round.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {round.matches.map(match => (
+                                            <Card key={match.id} className="p-2 space-y-2 bg-secondary/30 relative group">
+                                                {[0, 1].map(index => {
+                                                    const participant = match.participants[index];
+                                                    return (
+                                                        <Popover key={index}>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant="outline" className="w-full justify-start font-normal text-left h-10 truncate">
+                                                                    {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo {index + 1}...</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            {participant ? (
+                                                                    <PopoverContent className="p-2 w-auto">
+                                                                    <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
+                                                                </PopoverContent>
+                                                            ) : (
+                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={unassignedTeams} />
+                                                            )}
+                                                        </Popover>
+                                                    );
+                                                })}
+                                                    <Button size="icon" variant="ghost" className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleRemoveMatch(round.id, match.id)}>
+                                                    <X className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </Card>
                                         ))}
                                     </div>
-                                </ScrollArea>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <ScrollArea className="w-full whitespace-nowrap">
-                            <div className="flex gap-6 pb-4">
-                                {bracketRounds.map(round => (
-                                    <div key={round.id} className="w-64 flex-shrink-0 space-y-4">
-                                        <div className="flex items-center gap-2">
-                                            <Input value={round.title} onChange={(e) => handleRoundTitleChange(round.id, e.target.value)} className="text-lg font-bold" />
-                                            <Button size="icon" variant="ghost" onClick={() => handleRemoveRound(round.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                        </div>
-                                        <div className="space-y-4">
-                                            {round.matches.map(match => (
-                                                <Card key={match.id} className="p-2 space-y-2 bg-secondary/30 relative group">
-                                                    {[0, 1].map(index => {
-                                                        const participant = match.participants[index];
-                                                        return (
-                                                            <Popover key={index}>
-                                                                <PopoverTrigger asChild>
-                                                                    <Button variant="outline" className="w-full justify-start font-normal text-left h-10 truncate">
-                                                                        {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo {index + 1}...</span>}
-                                                                    </Button>
-                                                                </PopoverTrigger>
-                                                                {participant ? (
-                                                                     <PopoverContent className="p-2 w-auto">
-                                                                        <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
-                                                                    </PopoverContent>
-                                                                ) : (
-                                                                    <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={unassignedTeams} />
-                                                                )}
-                                                            </Popover>
-                                                        );
-                                                    })}
-                                                     <Button size="icon" variant="ghost" className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleRemoveMatch(round.id, match.id)}>
-                                                        <X className="h-4 w-4 text-destructive" />
-                                                    </Button>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => handleAddMatch(round.id)}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Partido</Button>
-                                             {round.matches.length > 0 && round.matches.every(m => m.participants[0] && m.participants[1]) && (
-                                                <Button variant="secondary" size="sm" onClick={() => handleShuffleTeams(round.id)}><Shuffle className="mr-2 h-4 w-4" /> Mezclar Partidos</Button>
-                                            )}
-                                        </div>
+                                    <div className="flex flex-col gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => handleAddMatch(round.id)}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Partido</Button>
+                                            {round.matches.length > 0 && round.matches.every(m => m.participants[0] && m.participants[1]) && (
+                                            <Button variant="secondary" size="sm" onClick={() => handleShuffleTeams(round.id)}><Shuffle className="mr-2 h-4 w-4" /> Mezclar Partidos</Button>
+                                        )}
                                     </div>
-                                ))}
-                                <div className="flex-shrink-0 flex items-center">
-                                    <Button variant="secondary" onClick={handleAddRound}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Ronda</Button>
                                 </div>
+                            ))}
+                            <div className="flex-shrink-0 flex items-center">
+                                <Button variant="secondary" onClick={handleAddRound}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Ronda</Button>
                             </div>
-                        </ScrollArea>
-                    </div>
+                        </div>
+                    </ScrollArea>
                 </div>
                  <Separator className="my-8" />
                  <div className="flex items-center justify-between">
@@ -307,5 +287,3 @@ export function BracketManagement() {
         </Card>
     );
 }
-
-    
