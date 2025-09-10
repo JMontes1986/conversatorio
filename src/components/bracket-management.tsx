@@ -47,13 +47,15 @@ type BracketRound = {
 };
 
 type ScoreData = {
+    id: string;
     matchId: string;
     teams: { name: string; total: number }[];
 };
 
-interface MatchWithTieInfo extends Match {
-    isTie: boolean;
-    tiedTeams: string[];
+type RoundData = {
+    id: string;
+    name: string;
+    phase: string;
 }
 
 const TeamSelector = ({ onSelectTeam, availableTeams }: { onSelectTeam: (team: Team) => void, availableTeams: Team[] }) => (
@@ -78,17 +80,26 @@ const TeamSelector = ({ onSelectTeam, availableTeams }: { onSelectTeam: (team: T
 export function BracketManagement() {
     const { toast } = useToast();
     const [allAvailableTeams, setAllAvailableTeams] = useState<Team[]>([]);
+    const [groupStageWinners, setGroupStageWinners] = useState<Team[]>([]);
     const [bracketRounds, setBracketRounds] = useState<BracketRound[]>([]);
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
+    const [allRounds, setAllRounds] = useState<RoundData[]>([]);
+    const [allSchools, setAllSchools] = useState<Team[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isBreakingTie, setIsBreakingTie] = useState<string | null>(null);
 
     useEffect(() => {
-        const teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-        const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
-            const teamsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().teamName }));
-            setAllAvailableTeams(teamsData);
+        const schoolsQuery = query(collection(db, "schools"));
+        const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
+            const schoolsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().teamName }));
+            setAllSchools(schoolsData);
+        });
+
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            setAllRounds(roundsData);
         });
 
         const bracketDocRef = doc(db, "bracketState", BRACKET_DOC_ID);
@@ -101,17 +112,42 @@ export function BracketManagement() {
         
         const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
         const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
-            const scoresData = snapshot.docs.map(doc => doc.data() as ScoreData);
+            const scoresData = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()} as ScoreData));
             setAllScores(scoresData);
         });
 
 
         return () => {
-            unsubscribeTeams();
+            unsubscribeSchools();
+            unsubscribeRounds();
             unsubscribeBracket();
             unsubscribeScores();
         };
     }, []);
+
+    useEffect(() => {
+        if (loading || allRounds.length === 0 || allScores.length === 0 || allSchools.length === 0) return;
+
+        const groupPhaseRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+        const groupPhaseRoundNames = groupPhaseRounds.map(r => r.name);
+        const groupScores = allScores.filter(s => groupPhaseRoundNames.includes(s.matchId));
+
+        const teamTotals: Record<string, number> = {};
+        groupScores.forEach(score => {
+            score.teams.forEach(team => {
+                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                teamTotals[team.name] += team.total;
+            });
+        });
+
+        const winners = Object.entries(teamTotals)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name]) => name);
+        
+        const winnerTeams = allSchools.filter(school => winners.includes(school.name));
+
+        setGroupStageWinners(winnerTeams);
+    }, [allRounds, allScores, allSchools, loading]);
     
 
     const getMatchTieInfo = (match: Match): { isTie: boolean, tiedTeams: string[] } => {
@@ -313,6 +349,14 @@ export function BracketManagement() {
             <CardHeader>
                 <CardTitle>Gestión del Bracket</CardTitle>
                 <CardDescription>Organice visualmente los enfrentamientos del torneo. Asigne equipos a cada partido en las diferentes rondas.</CardDescription>
+                 <div className="pt-2">
+                    <p className="text-sm text-muted-foreground">
+                        {groupStageWinners.length > 0 
+                            ? `${groupStageWinners.length} equipos han clasificado de la Fase de Grupos y están disponibles para ser asignados.`
+                            : "Aún no hay equipos clasificados de la Fase de Grupos."
+                        }
+                    </p>
+                </div>
             </CardHeader>
             <CardContent>
                 <div className="flex flex-col gap-8">
@@ -386,7 +430,7 @@ export function BracketManagement() {
                                                             {participant ? (
                                                                 <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
                                                             ) : (
-                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
+                                                                <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={groupStageWinners} />
                                                             )}
                                                         </PopoverContent>
                                                     </Popover>
