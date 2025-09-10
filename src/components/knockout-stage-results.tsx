@@ -22,6 +22,11 @@ type ScoreData = {
   judgeName: string;
 }
 
+type DebateState = {
+    currentRound: string;
+    teams: { name: string }[];
+}
+
 type MatchResult = {
     id: string;
     teams: { name: string; total: number }[];
@@ -29,6 +34,7 @@ type MatchResult = {
     isTie: boolean;
     judges: number;
     isBye?: boolean;
+    isPending?: boolean;
 }
 
 const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
@@ -36,6 +42,7 @@ const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
 export function KnockoutStageResults() {
     const [knockoutRounds, setKnockoutRounds] = useState<RoundData[]>([]);
     const [scores, setScores] = useState<ScoreData[]>([]);
+    const [debateState, setDebateState] = useState<DebateState | null>(null);
     const [resultsPublished, setResultsPublished] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -55,6 +62,13 @@ export function KnockoutStageResults() {
             setScores(scoresData);
         });
         
+        const debateStateRef = doc(db, "debateState", "current");
+        const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setDebateState(docSnap.data() as DebateState);
+            }
+        });
+        
         const settingsRef = doc(db, "settings", "competition");
         const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -67,6 +81,7 @@ export function KnockoutStageResults() {
             unsubscribeRounds();
             unsubscribeScores();
             unsubscribeSettings();
+            unsubscribeDebateState();
         };
     }, []);
 
@@ -88,7 +103,7 @@ export function KnockoutStageResults() {
                 matches[matchIdentifier].scores.push(score);
             });
             
-            const matchResults: MatchResult[] = Object.entries(matches).map(([matchId, data]) => {
+            let matchResults: MatchResult[] = Object.entries(matches).map(([matchId, data]) => {
                 const isBye = matchId.includes('-bye-');
                 if (isBye) {
                      const winnerTeam = data.scores[0].teams[0];
@@ -119,13 +134,29 @@ export function KnockoutStageResults() {
                 return { id: matchId, teams, winner, isTie, judges: judges.size };
             });
 
+            // Add pending match from debateState
+            if (debateState && debateState.currentRound && roundNamesInPhase.includes(debateState.currentRound)) {
+                const isAlreadyScored = scores.some(s => s.matchId === debateState.currentRound);
+                if (!isAlreadyScored && debateState.teams.length > 0) {
+                     matchResults.push({
+                        id: debateState.currentRound,
+                        teams: debateState.teams.map(t => ({ name: t.name, total: 0 })),
+                        winner: null,
+                        isTie: false,
+                        judges: 0,
+                        isPending: true,
+                    });
+                }
+            }
+
+
             if(matchResults.length > 0) {
                 phases[phase] = matchResults.sort((a,b) => a.id.localeCompare(b.id));
             }
         });
 
         return phases;
-    }, [knockoutRounds, scores]);
+    }, [knockoutRounds, scores, debateState]);
 
     if (loading) {
         return (
@@ -178,31 +209,34 @@ export function KnockoutStageResults() {
                                         <CardTitle className="text-base text-center capitalize">{match.id.replace(/-/g, ' ')}</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        {match ? (
-                                            match.isBye ? (
-                                                <div className="text-center text-sm h-16 flex flex-col items-center justify-center">
-                                                    <p className="font-bold flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" />{match.winner}</p>
-                                                    <Badge variant="secondary" className="mt-2"><CheckCircle className="h-3 w-3 mr-1"/>Avance Automático</Badge>
-                                                </div>
-                                            ) : (
-                                                <Table>
-                                                    <TableBody>
-                                                    {match.teams.sort((a, b) => b.total - a.total).map(team => (
-                                                        <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
-                                                            <TableCell className="flex items-center gap-2">
-                                                                {team.name}
-                                                                {team.name === match.winner && <Trophy className="h-4 w-4 text-amber-500" />}
-                                                            </TableCell>
-                                                            <TableCell className="text-right text-lg">{team.total}</TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                    </TableBody>
-                                                </Table>
-                                            )
-                                        ) : (
-                                            <div className="text-center text-sm text-muted-foreground h-16 flex flex-col items-center justify-center">
-                                                <Badge variant="outline">Pendiente</Badge>
+                                        {match.isBye ? (
+                                            <div className="text-center text-sm h-16 flex flex-col items-center justify-center">
+                                                <p className="font-bold flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" />{match.winner}</p>
+                                                <Badge variant="secondary" className="mt-2"><CheckCircle className="h-3 w-3 mr-1"/>Avance Automático</Badge>
                                             </div>
+                                        ) : match.isPending ? (
+                                            <div className="text-sm h-16 flex flex-col items-center justify-center text-center">
+                                                <div className="flex items-center gap-2 font-semibold">
+                                                    <span>{match.teams[0]?.name || 'Equipo 1'}</span>
+                                                    <Swords className="h-4 w-4 text-muted-foreground"/>
+                                                    <span>{match.teams[1]?.name || 'Equipo 2'}</span>
+                                                </div>
+                                                <Badge variant="outline" className="mt-3">Pendiente</Badge>
+                                            </div>
+                                        ) : (
+                                            <Table>
+                                                <TableBody>
+                                                {match.teams.sort((a, b) => b.total - a.total).map(team => (
+                                                    <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
+                                                        <TableCell className="flex items-center gap-2">
+                                                            {team.name}
+                                                            {team.name === match.winner && <Trophy className="h-4 w-4 text-amber-500" />}
+                                                        </TableCell>
+                                                        <TableCell className="text-right text-lg">{team.total}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                </TableBody>
+                                            </Table>
                                         )}
                                     </CardContent>
                                 </Card>
