@@ -71,55 +71,59 @@ export function KnockoutStageResults() {
     }, []);
 
     const resultsByPhase = useMemo(() => {
-        const phases: Record<string, { id: string, name: string, match: MatchResult | null }[]> = {};
-
+        const phases: Record<string, MatchResult[]> = {};
+        
         knockoutPhases.forEach(phase => {
-            const roundsInPhase = knockoutRounds
-                .filter(r => r.phase === phase)
-                .sort((a, b) => a.name.localeCompare(b.name));
+            const roundsInPhase = knockoutRounds.filter(r => r.phase === phase);
+            const roundNamesInPhase = roundsInPhase.map(r => r.name);
+            const phaseScores = scores.filter(s => roundNamesInPhase.includes(s.matchId.split('-bye-')[0]));
             
-            if (roundsInPhase.length > 0) {
-                phases[phase] = roundsInPhase.map(round => {
-                    // Handle bye score first
-                    const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
-                    if (byeScore) {
-                        const winnerTeam = byeScore.teams[0];
-                        return {
-                            id: round.id,
-                            name: round.name,
-                            match: { id: round.name, teams: [winnerTeam], winner: winnerTeam.name, isTie: false, judges: 0, isBye: true }
-                        };
-                    }
-                    
-                    const roundScores = scores.filter(s => s.matchId === round.name);
-                    if (roundScores.length > 0) {
-                        const teamTotals: Record<string, number> = {};
-                        const judges = new Set<string>();
-                        roundScores.forEach(score => {
-                            judges.add(score.judgeName);
-                            score.teams.forEach(team => {
-                                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-                                teamTotals[team.name] += team.total;
-                            });
-                        });
+            const matches: Record<string, { scores: ScoreData[], roundName: string }> = {};
 
-                        const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
-                        let winner: string | null = null;
-                        let isTie = false;
-                        if (teams.length > 0) {
-                            const maxScore = Math.max(...teams.map(t => t.total));
-                            const winners = teams.filter(t => t.total === maxScore);
-                            if (winners.length === 1) winner = winners[0].name;
-                            else isTie = true;
-                        }
+            phaseScores.forEach(score => {
+                const matchIdentifier = score.matchId;
+                if (!matches[matchIdentifier]) {
+                    matches[matchIdentifier] = { scores: [], roundName: score.matchId };
+                }
+                matches[matchIdentifier].scores.push(score);
+            });
+            
+            const matchResults: MatchResult[] = Object.entries(matches).map(([matchId, data]) => {
+                const isBye = matchId.includes('-bye-');
+                if (isBye) {
+                     const winnerTeam = data.scores[0].teams[0];
+                     return { id: matchId, teams: [winnerTeam], winner: winnerTeam.name, isTie: false, judges: 0, isBye: true };
+                }
 
-                        return { id: round.id, name: round.name, match: { id: round.name, teams, winner, isTie, judges: judges.size } };
-                    }
-                    
-                    return { id: round.id, name: round.name, match: null }; // No scores yet
+                const teamTotals: Record<string, number> = {};
+                const judges = new Set<string>();
+
+                data.scores.forEach(score => {
+                    judges.add(score.judgeName);
+                    score.teams.forEach(team => {
+                        if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                        teamTotals[team.name] += team.total;
+                    });
                 });
+
+                const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
+                let winner: string | null = null;
+                let isTie = false;
+
+                if (teams.length > 0) {
+                    const maxScore = Math.max(...teams.map(t => t.total));
+                    const winners = teams.filter(t => t.total === maxScore);
+                    if (winners.length === 1) winner = winners[0].name;
+                    else isTie = true;
+                }
+                return { id: matchId, teams, winner, isTie, judges: judges.size };
+            });
+
+            if(matchResults.length > 0) {
+                phases[phase] = matchResults.sort((a,b) => a.id.localeCompare(b.id));
             }
         });
+
         return phases;
     }, [knockoutRounds, scores]);
 
@@ -168,10 +172,10 @@ export function KnockoutStageResults() {
                         </AccordionTrigger>
                         <AccordionContent className="p-6 pt-0">
                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {resultsByPhase[phase].map(({ id, name, match }) => (
-                                <Card key={id} className="bg-secondary/50">
+                            {resultsByPhase[phase].map((match) => (
+                                <Card key={match.id} className="bg-secondary/50">
                                     <CardHeader>
-                                        <CardTitle className="text-base text-center">{name}</CardTitle>
+                                        <CardTitle className="text-base text-center capitalize">{match.id.replace(/-/g, ' ')}</CardTitle>
                                     </CardHeader>
                                     <CardContent>
                                         {match ? (
