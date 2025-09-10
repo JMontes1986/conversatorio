@@ -163,6 +163,37 @@ export function BracketManagement() {
         }));
     };
 
+    const handleAddParticipantSlot = (roundId: string, matchId: string) => {
+         setBracketRounds(bracketRounds.map(r => {
+            if (r.id === roundId) {
+                return { ...r, matches: r.matches.map(m => {
+                    if (m.id === matchId) {
+                        return { ...m, participants: [...m.participants, null] };
+                    }
+                    return m;
+                })};
+            }
+            return r;
+        }));
+    }
+
+    const handleRemoveParticipantSlot = (roundId: string, matchId: string, participantIndex: number) => {
+         setBracketRounds(bracketRounds.map(r => {
+            if (r.id === roundId) {
+                return { ...r, matches: r.matches.map(m => {
+                    if (m.id === matchId) {
+                        const newParticipants = [...m.participants];
+                        newParticipants.splice(participantIndex, 1);
+                        return { ...m, participants: newParticipants };
+                    }
+                    return m;
+                })};
+            }
+            return r;
+        }));
+    }
+
+
     const handleShuffleTeams = (roundId: string) => {
         const teamsForThisRound = bracketRounds
             .find(r => r.id === roundId)?.matches
@@ -177,10 +208,11 @@ export function BracketManagement() {
                 return {
                     ...r,
                     matches: r.matches.map(m => {
-                        const newParticipants: (Participant | null)[] = [null, null];
-                        if (shuffled[teamIndex]) newParticipants[0] = shuffled[teamIndex];
-                        if (shuffled[teamIndex + 1]) newParticipants[1] = shuffled[teamIndex + 1];
-                        teamIndex += 2;
+                        const newParticipants = m.participants.map(() => {
+                           const team = shuffled[teamIndex];
+                           teamIndex++;
+                           return team || null;
+                        });
                         return { ...m, participants: newParticipants };
                     })
                 };
@@ -221,7 +253,7 @@ export function BracketManagement() {
                 <CardDescription>Organice visualmente los enfrentamientos del torneo. Asigne equipos a cada partido en las diferentes rondas.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="space-y-8">
+                <div className="flex flex-col gap-8">
                     {bracketRounds.map(round => (
                         <div key={round.id} className="space-y-4 p-4 border rounded-lg">
                             <div className="flex items-center gap-4 justify-between">
@@ -230,27 +262,32 @@ export function BracketManagement() {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {round.matches.map(match => (
-                                    <Card key={match.id} className="p-2 space-y-2 bg-secondary/30 relative group">
-                                        {[0, 1].map(index => {
-                                            const participant = match.participants[index];
-                                            return (
-                                                <Popover key={index}>
+                                    <Card key={match.id} className="p-4 pt-8 space-y-2 bg-secondary/30 relative group">
+                                        {match.participants.map((participant, index) => (
+                                            <div key={index} className="flex items-center gap-1">
+                                                <Popover>
                                                     <PopoverTrigger asChild>
                                                         <Button variant="outline" className="w-full justify-start font-normal text-left h-10 truncate">
-                                                            {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo {index + 1}...</span>}
+                                                            {participant ? participant.name : <span className="text-muted-foreground">Asignar Equipo...</span>}
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    {participant ? (
-                                                            <PopoverContent className="p-2 w-auto">
+                                                     <PopoverContent className="p-0 w-auto">
+                                                        {participant ? (
                                                             <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
-                                                        </PopoverContent>
-                                                    ) : (
-                                                        <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={unassignedTeams} />
-                                                    )}
+                                                        ) : (
+                                                            <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={unassignedTeams} />
+                                                        )}
+                                                    </PopoverContent>
                                                 </Popover>
-                                            );
-                                        })}
-                                        <Button size="icon" variant="ghost" className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleRemoveMatch(round.id, match.id)}>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => handleRemoveParticipantSlot(round.id, match.id, index)}>
+                                                    <X className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                         <Button size="xs" variant="ghost" className="w-full mt-2 text-xs" onClick={() => handleAddParticipantSlot(round.id, match.id)}>
+                                            <PlusCircle className="h-3 w-3 mr-1" /> Añadir Equipo al Partido
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-6 w-6" onClick={() => handleRemoveMatch(round.id, match.id)}>
                                             <X className="h-4 w-4 text-destructive" />
                                         </Button>
                                     </Card>
@@ -258,8 +295,8 @@ export function BracketManagement() {
                             </div>
                             <div className="flex items-center gap-2 mt-4">
                                 <Button variant="outline" size="sm" onClick={() => handleAddMatch(round.id)}><PlusCircle className="mr-2 h-4 w-4" /> Añadir Partido</Button>
-                                {round.matches.length > 0 && round.matches.every(m => m.participants[0] && m.participants[1]) && (
-                                    <Button variant="secondary" size="sm" onClick={() => handleShuffleTeams(round.id)}><Shuffle className="mr-2 h-4 w-4" /> Mezclar Partidos</Button>
+                                {round.matches.length > 0 && round.matches.every(m => m.participants.every(p => p !== null)) && (
+                                    <Button variant="secondary" size="sm" onClick={() => handleShuffleTeams(round.id)}><Shuffle className="mr-2 h-4 w-4" /> Mezclar Equipos</Button>
                                 )}
                             </div>
                         </div>
@@ -284,3 +321,36 @@ export function BracketManagement() {
         </Card>
     );
 }
+
+// Add size 'xs' to buttonVariants
+import { cva } from "class-variance-authority";
+
+const originalButtonVariants = cva(
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline:
+          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+        icon: "h-10 w-10",
+        xs: "h-8 px-2 rounded-md",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+);
