@@ -47,7 +47,7 @@ import { DrawAnimation } from '@/components/draw-animation';
 import { RubricManagement } from '@/components/rubric-management';
 import { HomePageEditor } from '@/components/home-page-editor';
 import { CompetitionSettings } from '@/components/competition-settings';
-import { BracketManagement } from '@/components/bracket-management';
+import { TournamentBracket } from '@/components/tournament-bracket';
 
 
 interface SchoolData {
@@ -511,7 +511,17 @@ function AdminDashboard() {
                 <RoundManagement />
             </TabsContent>
             <TabsContent value="bracket">
-                <BracketManagement />
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Vista del Bracket del Torneo</CardTitle>
+                        <CardDescription>
+                            Visualización de las rondas eliminatorias tal como se muestran al público.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="w-full overflow-x-auto">
+                        <TournamentBracket />
+                    </CardContent>
+                </Card>
             </TabsContent>
             <TabsContent value="rubric">
                 <RubricManagement />
