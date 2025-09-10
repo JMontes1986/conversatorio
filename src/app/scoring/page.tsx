@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info } from 'lucide-react';
+import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
@@ -303,7 +303,8 @@ function ScoringPanel() {
                     <CardDescription>Seleccione una puntuación de 1 a 5 para cada criterio.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                    <div className="w-full overflow-x-auto">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block w-full overflow-x-auto">
                         <Table>
                             <TableHeader>
                             <TableRow>
@@ -340,7 +341,7 @@ function ScoringPanel() {
                                     <TableCell key={team.name} className="text-center font-bold text-lg text-primary">{calculateTotal(team.name)}</TableCell>
                                 ))}
                             </TableRow>
-                            <TableRow>
+                             <TableRow>
                                 <TableCell className="font-medium text-xs text-muted-foreground flex items-center gap-2"><Hash className="h-3 w-3"/>Checksum</TableCell>
                                 {debateState.teams.map(team => (
                                     <TableCell key={team.name} className="text-center font-mono text-xs text-muted-foreground">{calculateChecksum(team.name)}</TableCell>
@@ -348,6 +349,38 @@ function ScoringPanel() {
                             </TableRow>
                             </TableBody>
                         </Table>
+                    </div>
+                     {/* Mobile Stacked View */}
+                    <div className="md:hidden space-y-6">
+                        {rubricCriteria.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-4">
+                                No hay criterios de evaluación definidos. Contacte al administrador.
+                            </p>
+                        ) : (
+                        debateState.teams.map(team => (
+                            <Card key={team.name} className="bg-secondary/50">
+                                <CardHeader>
+                                    <CardTitle className="text-center text-primary flex items-center justify-center gap-2">
+                                        <User className="h-5 w-5"/> {team.name}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {rubricCriteria.map(criterion => (
+                                        <div key={criterion.id} className="border-b pb-4 last:border-b-0">
+                                            <div className='text-center mb-2'>
+                                                <p className="font-medium">{criterion.name}</p>
+                                                <p className="text-xs text-muted-foreground">{criterion.description}</p>
+                                            </div>
+                                            <ScoreButtons teamName={team.name} criteriaId={criterion.id} />
+                                        </div>
+                                    ))}
+                                     <div className="pt-4 flex justify-between items-center font-bold text-lg">
+                                        <span>Total:</span>
+                                        <span className="text-primary">{calculateTotal(team.name)}</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )))}
                     </div>
                     </CardContent>
                 </Card>
@@ -437,3 +470,4 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
+
