@@ -143,7 +143,7 @@ export function GroupStageResults() {
     
     if (!resultsPublished) {
          return (
-            <div className="text-center text-muted-foreground p-8 col-span-1 md:col-span-2 lg:col-span-3">
+            <div className="text-center text-muted-foreground p-8">
                 <Card className="max-w-md mx-auto">
                     <CardHeader>
                         <CardTitle className="flex items-center justify-center gap-2"><EyeOff /> Resultados Ocultos</CardTitle>
@@ -165,7 +165,7 @@ export function GroupStageResults() {
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:col-span-3 gap-6">
+        <div className="space-y-6">
            {resultsByRound.map(result => (
                 <Card key={result.id}>
                     <CardHeader>
