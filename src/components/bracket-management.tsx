@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Save, AlertTriangle, PlusCircle, Trash2, Users, Shuffle, X, CheckCircle2, HelpCircle } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, doc, setDoc, getDoc, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, setDoc, getDoc, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { nanoid } from 'nanoid';
 import { Input } from './ui/input';
@@ -130,16 +130,21 @@ export function BracketManagement() {
 
         const groupPhaseRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
         const groupPhaseRoundNames = groupPhaseRounds.map(r => r.name);
-        const groupScores = allScores.filter(s => groupPhaseRoundNames.includes(s.matchId));
-
+        
         const teamTotals: Record<string, number> = {};
-        groupScores.forEach(score => {
-            score.teams.forEach(team => {
-                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-                teamTotals[team.name] += team.total;
-            });
-        });
 
+        allScores.forEach(score => {
+            // Check if the score's matchId starts with any of the group phase round names
+            const isInGroupPhase = groupPhaseRoundNames.some(roundName => score.matchId.startsWith(roundName));
+
+            if (isInGroupPhase) {
+                score.teams.forEach(team => {
+                    if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                    teamTotals[team.name] += team.total;
+                });
+            }
+        });
+        
         const winners = Object.entries(teamTotals)
             .sort((a, b) => b[1] - a[1])
             .map(([name]) => name);
