@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2, Users } from "lucide-react";
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, setDoc, getDoc, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
@@ -43,33 +42,10 @@ const shuffleArray = (array: any[]) => {
   return newArray;
 };
 
-function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
-    const phaseRoundNames = phaseRounds.map(r => r.name);
-    const phaseScores = scores.filter(s => phaseRoundNames.some(name => s.matchId.startsWith(name)));
-
-    const teamTotals: Record<string, number> = {};
-
-    phaseScores.forEach(score => {
-        score.teams.forEach(team => {
-            if (!teamTotals[team.name]) {
-                teamTotals[team.name] = 0;
-            }
-            teamTotals[team.name] += team.total;
-        });
-    });
-
-    return Object.entries(teamTotals)
-        .sort(([, scoreA], [, scoreB]) => scoreB - scoreA)
-        .slice(0, limit)
-        .map(([teamName]) => teamName);
-}
-
-
 export function DrawAnimation() {
   const { toast } = useToast();
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [allRounds, setAllRounds] = useState<RoundData[]>([]);
-  const [allScores, setAllScores] = useState<ScoreData[]>([]);
   
   const [teams, setTeams] = useState<Team[]>([]);
   const [rounds, setRounds] = useState<RoundData[]>([]);
@@ -78,107 +54,72 @@ export function DrawAnimation() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
-  const [activeTab, setActiveTab] = useState("groups");
 
  useEffect(() => {
-    setLoading(true);
-    let unsubTeams: () => void;
-    
-    const unsubSettings = onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), (settingsSnap) => {
-        const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
-        let teamsQuery;
+    const fetchInitialData = async () => {
+        setLoading(true);
 
+        const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
+        const settingsSnap = await getDoc(settingsDocRef);
+        const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
+
+        let teamsQuery;
         if (settingsData.registrationsClosed && settingsData.lockedInTeams?.length > 0) {
           const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
           teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
         } else {
           teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         }
-
-        if (unsubTeams) unsubTeams(); 
-        unsubTeams = onSnapshot(teamsQuery, (snapshot) => {
-          const fetchedTeams = snapshot.docs.map(doc => ({
+        
+        const teamsSnapshot = await getDocs(teamsQuery);
+        const fetchedTeams = teamsSnapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().teamName,
             round: null
-          }));
-          setAllTeams(fetchedTeams);
-        });
-    });
+        }));
+        
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const roundsSnapshot = await getDocs(roundsQuery);
+        const roundsData = roundsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
 
-    const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
-        const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-        setAllRounds(roundsData);
-    });
+        const groupRounds = roundsData.filter(r => r.phase === "Fase de Grupos");
+        setAllTeams(fetchedTeams);
+        setAllRounds(groupRounds);
 
-    const unsubScores = onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
-        const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScoreData));
-        setAllScores(scoresData);
-    });
+        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+        const drawDocSnap = await getDoc(drawStateRef);
+        if (drawDocSnap.exists()) {
+            const data = drawDocSnap.data();
+            setTeams(data.teams || fetchedTeams);
+            setRounds(data.rounds || groupRounds);
+            setIsDrawing(data.isDrawing || false);
+            setIsFinished(data.isFinished || false);
+        } else {
+            setTeams(fetchedTeams);
+            setRounds(groupRounds);
+        }
+
+        setLoading(false);
+    };
+
+    fetchInitialData();
     
+    // Set up listeners for real-time updates
     const unsubDrawState = onSnapshot(doc(db, "drawState", DRAW_STATE_DOC_ID), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // This is just to load existing state, tab update will handle the logic
-            if (data.activeTab === activeTab) {
-                setTeams(data.teams || []);
-                setRounds(data.rounds || []);
-                setIsDrawing(data.isDrawing || false);
-                setIsFinished(data.isFinished || false);
-            }
+            setTeams(data.teams || allTeams);
+            setRounds(data.rounds || allRounds);
+            setIsDrawing(data.isDrawing || false);
+            setIsFinished(data.isFinished || false);
         }
     });
 
-    // A simple way to wait for the first batch of data to come in.
-    setTimeout(() => setLoading(false), 2000); 
-
     return () => {
-      if (unsubTeams) unsubTeams();
-      if (unsubRounds) unsubRounds();
-      if (unsubScores) unsubScores();
-      if (unsubSettings) unsubSettings();
-      if(unsubDrawState) unsubDrawState();
+      unsubDrawState();
     };
   }, []);
 
-  const updateTabState = useCallback(async () => {
-    let eligibleTeams: Team[] = [];
-    let eligibleRounds: RoundData[] = [];
-
-    if (activeTab === "groups") {
-        eligibleRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        eligibleTeams = allTeams.map(t => ({...t, round: null}));
-    } else if (activeTab === "quarters") {
-        eligibleRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
-        const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
-        eligibleTeams = allTeams
-            .filter(t => qualifiedTeamNames.includes(t.name))
-            .map(t => ({...t, round: null}));
-    }
-
-    const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-    const docSnap = await getDoc(drawStateRef);
-
-    if (docSnap.exists() && docSnap.data().activeTab === activeTab) {
-        const data = docSnap.data();
-        setTeams(data.teams || eligibleTeams);
-        setRounds(data.rounds || eligibleRounds);
-        setIsDrawing(data.isDrawing || false);
-        setIsFinished(data.isFinished || false);
-    } else {
-        setTeams(eligibleTeams);
-        setRounds(eligibleRounds);
-        setIsDrawing(false);
-        setIsFinished(false);
-    }
-  }, [activeTab, allTeams, allRounds, allScores]);
-
-  useEffect(() => {
-    if (!loading) {
-      updateTabState();
-    }
-  }, [activeTab, loading, updateTabState]);
   
   const updateLiveDrawState = async (state: any) => {
       try {
@@ -209,7 +150,6 @@ export function DrawAnimation() {
         rounds,
         isDrawing: true,
         isFinished: false,
-        activeTab
     };
     await updateLiveDrawState(initialState);
     
@@ -231,7 +171,7 @@ export function DrawAnimation() {
 
     setIsDrawing(false);
     setIsFinished(true);
-    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds, activeTab });
+    await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds });
   };
   
   const fixToBlockchain = () => {
@@ -245,12 +185,26 @@ export function DrawAnimation() {
     }, 2000);
   };
   
-  const resetDraw = () => {
-    updateTabState();
+  const resetDraw = async () => {
+    setLoading(true);
+    const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+    const initialTeams = allTeams.map(t => ({ ...t, round: null }));
+
+    setTeams(initialTeams);
+    setRounds(groupRounds);
     setIsDrawing(false);
     setIsFinished(false);
     setIsFixing(false);
+
+    await updateLiveDrawState({
+        teams: initialTeams,
+        rounds: groupRounds,
+        isDrawing: false,
+        isFinished: false,
+    });
+    setLoading(false);
   }
+
 
   const getRoundTeams = (roundName: string) => {
     return teams.filter(t => t.round === roundName);
@@ -274,20 +228,14 @@ export function DrawAnimation() {
   return (
     <div className="w-full max-w-6xl mx-auto">
         <div className="space-y-1 mb-8">
-            <h1 className="font-headline text-3xl font-bold">Sorteo Automático</h1>
-            <p className="text-muted-foreground">Seleccione la fase, realice el sorteo y se reflejará para el público.</p>
+            <h1 className="font-headline text-3xl font-bold">Sorteo Automático de Grupos</h1>
+            <p className="text-muted-foreground">Realice el sorteo para la Fase de Grupos. El resultado se reflejará para el público.</p>
         </div>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
-            <TabsList>
-                <TabsTrigger value="groups">Fase de Grupos</TabsTrigger>
-                <TabsTrigger value="quarters">Cuartos de Final</TabsTrigger>
-            </TabsList>
-        </Tabs>
 
         <Card className="mb-8">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Equipos Elegibles para el Sorteo</CardTitle>
-                <CardDescription>Esta es la lista de equipos que participarán en el sorteo para la fase seleccionada.</CardDescription>
+                <CardDescription>Esta es la lista de equipos que participarán en el sorteo de la Fase de Grupos.</CardDescription>
             </CardHeader>
             <CardContent>
                 {loading ? (
@@ -301,18 +249,16 @@ export function DrawAnimation() {
                         ))}
                     </div>
                 ) : (
-                    <p className="text-muted-foreground">No hay equipos elegibles para esta fase.</p>
+                    <p className="text-muted-foreground">No hay equipos elegibles para esta fase. Verifique que los colegios estén 'Verificados'.</p>
                 )}
             </CardContent>
         </Card>
         
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
             <div className="space-y-1">
-                <h2 className="font-headline text-2xl font-bold capitalize">{activeTab === 'groups' ? 'Rondas de Grupos' : 'Rondas de Cuartos'}</h2>
+                <h2 className="font-headline text-2xl font-bold">Rondas de Grupos</h2>
                 <p className="text-muted-foreground">
-                    {activeTab === 'groups' 
-                    ? 'Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.'
-                    : 'Los equipos clasificados serán sorteados para los enfrentamientos de cuartos de final.'}
+                    Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.
                 </p>
             </div>
             <div className="flex gap-2">
@@ -334,8 +280,8 @@ export function DrawAnimation() {
             <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
                 <p className="text-muted-foreground text-center px-4">
                     {teams.length === 0 
-                        ? (activeTab === 'groups' ? "No hay colegios verificados para el sorteo." : "No hay equipos clasificados para esta fase.")
-                        : (activeTab === 'groups' ? "No hay rondas de 'Fase de Grupos' configuradas." : "No hay rondas de 'Cuartos de Final' configuradas.")
+                        ? "No hay colegios verificados para el sorteo."
+                        : "No hay rondas de 'Fase de Grupos' configuradas."
                     }
                 </p>
             </div>
