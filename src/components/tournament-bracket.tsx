@@ -5,9 +5,9 @@
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { Loader2, Trophy, ArrowDown } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, doc, orderBy, where } from "firebase/firestore";
+import { collection, onSnapshot, query, doc, orderBy } from "firebase/firestore";
 
 // --- TYPES ---
 type Participant = {
@@ -40,13 +40,13 @@ type BracketSettings = {
 };
 
 // --- UI COMPONENTS ---
-const ParticipantCard = ({ participant, showScore, winner }: { participant: Participant | null, showScore: boolean, winner?: string | null }) => {
+const ParticipantCard = ({ participant, showScore, winner, isTripleThreatWinner }: { participant: Participant | null, showScore: boolean, winner?: string | null, isTripleThreatWinner?: boolean }) => {
     if (!participant || !participant.name) {
         return <div className="flex items-center justify-center w-40 text-sm h-10 px-2 rounded-md bg-secondary/50 text-muted-foreground italic">Por definir</div>;
     }
 
-    const isWinner = showScore && participant.name === winner;
-    const hasLost = showScore && winner && participant.name !== winner;
+    const isWinner = showScore && (participant.name === winner || isTripleThreatWinner);
+    const hasLost = showScore && winner && !isWinner;
 
     return (
         <div className={cn("flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md", 
@@ -69,26 +69,38 @@ const ParticipantCard = ({ participant, showScore, winner }: { participant: Part
     );
 };
 
-const MatchCard = ({ match, showScore, winner }: { match: Match, showScore: boolean, winner?: string | null }) => (
-    <div className="flex flex-col items-center gap-2 relative">
-        <ParticipantCard participant={match.participants[0]} showScore={showScore} winner={winner} />
-        <span className="text-xs font-bold text-muted-foreground">VS</span>
-        <ParticipantCard participant={match.participants[1]} showScore={showScore} winner={winner} />
-        {showScore && winner && (
-            <div className="absolute top-1/2 -right-6">
-                <ArrowDown className="h-5 w-5 text-muted-foreground" />
+const MatchCard = ({ match, showScore, winners }: { match: Match, showScore: boolean, winners: (string | null)[] }) => {
+    const isTripleThreat = match.participants.length === 3;
+
+    if (isTripleThreat) {
+         return (
+            <div className="flex flex-col items-center gap-2 relative">
+                {match.participants.map((p, i) => (
+                    <React.Fragment key={p?.id || i}>
+                        <ParticipantCard participant={p} showScore={showScore} isTripleThreatWinner={winners.includes(p?.name || '')} />
+                        {i < match.participants.length - 1 && <span className="text-xs font-bold text-muted-foreground">VS</span>}
+                    </React.Fragment>
+                ))}
             </div>
-        )}
-    </div>
-);
+         )
+    }
+
+    return (
+        <div className="flex flex-col items-center gap-2 relative">
+            <ParticipantCard participant={match.participants[0]} showScore={showScore} winner={winners[0]} />
+            <span className="text-xs font-bold text-muted-foreground">VS</span>
+            <ParticipantCard participant={match.participants[1]} showScore={showScore} winner={winners[0]} />
+        </div>
+    )
+};
 
 
-const RoundRow = ({ round, showScore, winners }: { round: BracketRound, showScore: boolean, winners: Record<string, string | null> }) => (
+const RoundRow = ({ round, showScore, winners }: { round: BracketRound, showScore: boolean, winners: Record<string, (string | null)[]> }) => (
     <div className="flex flex-col items-center gap-8 w-full">
         <h3 className="text-center font-headline text-lg font-bold text-primary uppercase tracking-wider">{round.title}</h3>
         <div className="flex flex-wrap justify-center gap-x-12 gap-y-8">
             {round.matches.map((match) => (
-                <MatchCard key={match.id} match={match} showScore={showScore} winner={winners[match.id]} />
+                <MatchCard key={match.id} match={match} showScore={showScore} winners={winners[match.id] || []} />
             ))}
         </div>
     </div>
@@ -98,7 +110,7 @@ const RoundRow = ({ round, showScore, winners }: { round: BracketRound, showScor
 export function TournamentBracket() {
   const [bracketData, setBracketData] = useState<BracketRound[]>([]);
   const [loading, setLoading] = useState(true);
-  const [winners, setWinners] = useState<Record<string, string | null>>({});
+  const [winners, setWinners] = useState<Record<string, (string | null)[]>>({});
   const [bracketSettings, setBracketSettings] = useState<BracketSettings>({});
 
   useEffect(() => {
@@ -114,7 +126,7 @@ export function TournamentBracket() {
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
     const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
         const allScores = snapshot.docs.map(doc => doc.data() as ScoreData);
-        const winnersMap: Record<string, string | null> = {};
+        const winnersMap: Record<string, (string | null)[]> = {};
         
         const scoresByMatch = allScores.reduce((acc, score) => {
             if (!acc[score.matchId]) acc[score.matchId] = [];
@@ -135,8 +147,15 @@ export function TournamentBracket() {
 
             const entries = Object.entries(teamTotals);
             if (entries.length > 0) {
-                 const winnerEntry = entries.length === 1 ? entries[0] : entries.reduce((a, b) => a[1] > b[1] ? a : b);
-                 winnersMap[matchId] = winnerEntry[0];
+                 if (matchId.includes('-bye-')) { // Handle Bye
+                     winnersMap[matchId] = [entries[0][0]];
+                 } else if (entries.length === 3) { // Triple threat
+                     const sorted = entries.sort((a,b) => b[1] - a[1]);
+                     winnersMap[matchId] = [sorted[0][0], sorted[1][0]]; // Top 2 win
+                 } else { // Standard match
+                     const winner = entries.reduce((a, b) => a[1] > b[1] ? a : b);
+                     winnersMap[matchId] = [winner[0]];
+                 }
             }
         }
         setWinners(winnersMap);
@@ -172,17 +191,20 @@ export function TournamentBracket() {
         const nextRound = newBracketData[i+1];
 
         currentRound.matches.forEach(match => {
-            const winnerName = winners[match.id];
-            if (winnerName && match.nextMatchId) {
+            const matchWinners = winners[match.id] || [];
+            if (matchWinners.length > 0 && match.nextMatchId) {
                 const nextMatch = nextRound.matches.find(m => m.id === match.nextMatchId);
                 if (nextMatch) {
-                    const emptySlotIndex = nextMatch.participants.findIndex(p => p === null);
-                    if (emptySlotIndex !== -1) {
-                         const winnerParticipant = match.participants.find(p => p?.name === winnerName);
-                         if(winnerParticipant) {
-                            nextMatch.participants[emptySlotIndex] = winnerParticipant;
-                         }
-                    }
+                    matchWinners.forEach(winnerName => {
+                        if (!winnerName) return;
+                        const emptySlotIndex = nextMatch.participants.findIndex(p => p === null);
+                        if (emptySlotIndex !== -1) {
+                             const winnerParticipant = match.participants.find(p => p?.name === winnerName);
+                             if(winnerParticipant) {
+                                nextMatch.participants[emptySlotIndex] = winnerParticipant;
+                             }
+                        }
+                    })
                 }
             }
         });
@@ -218,7 +240,7 @@ export function TournamentBracket() {
   }
 
   const finalRound = populatedBracket[populatedBracket.length - 1];
-  const championName = finalRound.matches.length === 1 ? winners[finalRound.matches[0].id] : null;
+  const championName = finalRound.matches.length === 1 ? (winners[finalRound.matches[0].id] || [null])[0] : null;
   const champion = championName ? finalRound.matches[0].participants.find(p => p?.name === championName) : null;
 
 

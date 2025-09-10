@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -272,7 +273,7 @@ export function BracketManagement() {
                                                         {participant ? (
                                                             <Button variant="destructive" size="sm" className="w-full" onClick={() => handleUnassignTeam(round.id, match.id, index)}>Desasignar</Button>
                                                         ) : (
-                                                            <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={getAvailableTeamsForSlot(round.id, match.id)} />
+                                                            <TeamSelector onSelectTeam={(team) => handleAssignTeam(round.id, match.id, index, team)} availableTeams={allAvailableTeams} />
                                                         )}
                                                     </PopoverContent>
                                                 </Popover>
@@ -318,5 +319,3 @@ export function BracketManagement() {
         </Card>
     );
 }
-
-    
