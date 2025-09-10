@@ -83,12 +83,8 @@ export function DrawAnimation() {
  useEffect(() => {
     setLoading(true);
     let unsubTeams: () => void;
-    let unsubRounds: () => void;
-    let unsubScores: () => void;
-    let unsubSettings: () => void;
-
-    const fetchData = async () => {
-      unsubSettings = onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), (settingsSnap) => {
+    
+    const unsubSettings = onSnapshot(doc(db, "settings", SETTINGS_DOC_ID), (settingsSnap) => {
         const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
         let teamsQuery;
 
@@ -99,7 +95,7 @@ export function DrawAnimation() {
           teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
         }
 
-        if (unsubTeams) unsubTeams();
+        if (unsubTeams) unsubTeams(); 
         unsubTeams = onSnapshot(teamsQuery, (snapshot) => {
           const fetchedTeams = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -108,30 +104,40 @@ export function DrawAnimation() {
           }));
           setAllTeams(fetchedTeams);
         });
-      });
+    });
 
-      unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
+    const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
         const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
         setAllRounds(roundsData);
-      });
+    });
 
-      unsubScores = onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
+    const unsubScores = onSnapshot(query(collection(db, "scores"), orderBy("createdAt", "desc")), (snapshot) => {
         const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScoreData));
         setAllScores(scoresData);
-      });
-      
-      // A simple way to wait for the first batch of data to come in.
-      // This is not perfect but helps avoid the initial empty state.
-      setTimeout(() => setLoading(false), 1500); 
-    };
+    });
+    
+    const unsubDrawState = onSnapshot(doc(db, "drawState", DRAW_STATE_DOC_ID), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            // This is just to load existing state, tab update will handle the logic
+            if (data.activeTab === activeTab) {
+                setTeams(data.teams || []);
+                setRounds(data.rounds || []);
+                setIsDrawing(data.isDrawing || false);
+                setIsFinished(data.isFinished || false);
+            }
+        }
+    });
 
-    fetchData();
+    // A simple way to wait for the first batch of data to come in.
+    setTimeout(() => setLoading(false), 2000); 
 
     return () => {
       if (unsubTeams) unsubTeams();
       if (unsubRounds) unsubRounds();
       if (unsubScores) unsubScores();
       if (unsubSettings) unsubSettings();
+      if(unsubDrawState) unsubDrawState();
     };
   }, []);
 
@@ -271,86 +277,86 @@ export function DrawAnimation() {
             <h1 className="font-headline text-3xl font-bold">Sorteo Automático</h1>
             <p className="text-muted-foreground">Seleccione la fase, realice el sorteo y se reflejará para el público.</p>
         </div>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
+            <TabsList>
                 <TabsTrigger value="groups">Fase de Grupos</TabsTrigger>
                 <TabsTrigger value="quarters">Cuartos de Final</TabsTrigger>
             </TabsList>
-
-            <Card className="mb-8">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Equipos Elegibles para el Sorteo</CardTitle>
-                    <CardDescription>Esta es la lista de equipos que participarán en el sorteo para la fase seleccionada.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                         <p className="text-muted-foreground">Cargando equipos...</p>
-                    ) : teams.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                            {teams.map(team => (
-                                <div key={team.id} className="p-2 bg-secondary rounded-md text-secondary-foreground font-medium text-sm">
-                                    {team.name}
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-muted-foreground">No hay equipos elegibles para esta fase.</p>
-                    )}
-                </CardContent>
-            </Card>
-            
-            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                <div className="space-y-1">
-                    <h2 className="font-headline text-2xl font-bold capitalize">{activeTab === 'groups' ? 'Rondas de Grupos' : 'Rondas de Cuartos'}</h2>
-                    <p className="text-muted-foreground">
-                        {activeTab === 'groups' 
-                        ? 'Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.'
-                        : 'Los equipos clasificados serán sorteados para los enfrentamientos de cuartos de final.'}
-                    </p>
-                </div>
-                <div className="flex gap-2">
-                    <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0 || rounds.length === 0}>
-                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
-                        {loading ? "Cargando..." : "Iniciar Sorteo"}
-                    </Button>
-                    <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
-                        Reiniciar
-                    </Button>
-                </div>
-            </div>
-
-            {loading ? (
-                <div className="flex justify-center items-center min-h-[400px]">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                </div>
-            ) : teams.length === 0 || rounds.length === 0 ? (
-                <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
-                    <p className="text-muted-foreground text-center px-4">
-                        {teams.length === 0 
-                            ? (activeTab === 'groups' ? "No hay colegios verificados para el sorteo." : "No hay equipos clasificados para esta fase.")
-                            : (activeTab === 'groups' ? "No hay rondas de 'Fase de Grupos' configuradas." : "No hay rondas de 'Cuartos de Final' configuradas.")
-                        }
-                    </p>
-                </div>
-            ) : (
-                <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.max(1, rounds.length)} gap-6 min-h-[400px]`}>
-                {rounds.map(round => (
-                    <Card key={round.id} className="flex flex-col">
-                    <CardHeader>
-                        <CardTitle className="font-headline text-center">{round.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-grow space-y-2 relative">
-                        {getRoundTeams(round.name).map((team, index) => (
-                        <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
-                            {team.name}
-                        </div>
-                        ))}
-                    </CardContent>
-                    </Card>
-                ))}
-                </div>
-            )}
         </Tabs>
+
+        <Card className="mb-8">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Equipos Elegibles para el Sorteo</CardTitle>
+                <CardDescription>Esta es la lista de equipos que participarán en el sorteo para la fase seleccionada.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                     <p className="text-muted-foreground">Cargando equipos...</p>
+                ) : teams.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {teams.map(team => (
+                            <div key={team.id} className="p-2 bg-secondary rounded-md text-secondary-foreground font-medium text-sm">
+                                {team.name}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-muted-foreground">No hay equipos elegibles para esta fase.</p>
+                )}
+            </CardContent>
+        </Card>
+        
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div className="space-y-1">
+                <h2 className="font-headline text-2xl font-bold capitalize">{activeTab === 'groups' ? 'Rondas de Grupos' : 'Rondas de Cuartos'}</h2>
+                <p className="text-muted-foreground">
+                    {activeTab === 'groups' 
+                    ? 'Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.'
+                    : 'Los equipos clasificados serán sorteados para los enfrentamientos de cuartos de final.'}
+                </p>
+            </div>
+            <div className="flex gap-2">
+                <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0 || rounds.length === 0}>
+                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
+                    {loading ? "Cargando..." : "Iniciar Sorteo"}
+                </Button>
+                <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
+                    Reiniciar
+                </Button>
+            </div>
+        </div>
+
+        {loading ? (
+            <div className="flex justify-center items-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        ) : teams.length === 0 || rounds.length === 0 ? (
+            <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
+                <p className="text-muted-foreground text-center px-4">
+                    {teams.length === 0 
+                        ? (activeTab === 'groups' ? "No hay colegios verificados para el sorteo." : "No hay equipos clasificados para esta fase.")
+                        : (activeTab === 'groups' ? "No hay rondas de 'Fase de Grupos' configuradas." : "No hay rondas de 'Cuartos de Final' configuradas.")
+                    }
+                </p>
+            </div>
+        ) : (
+            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.max(1, rounds.length)} gap-6 min-h-[400px]`}>
+            {rounds.map(round => (
+                <Card key={round.id} className="flex flex-col">
+                <CardHeader>
+                    <CardTitle className="font-headline text-center">{round.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-grow space-y-2 relative">
+                    {getRoundTeams(round.name).map((team, index) => (
+                    <div key={team.id} className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500">
+                        {team.name}
+                    </div>
+                    ))}
+                </CardContent>
+                </Card>
+            ))}
+            </div>
+        )}
 
 
       <div className={cn(
