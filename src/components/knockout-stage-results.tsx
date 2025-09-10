@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -81,6 +80,7 @@ export function KnockoutStageResults() {
             
             if (roundsInPhase.length > 0) {
                 phases[phase] = roundsInPhase.map(round => {
+                    // Handle bye score first
                     const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
                     if (byeScore) {
                         const winnerTeam = byeScore.teams[0];
@@ -183,7 +183,7 @@ export function KnockoutStageResults() {
                                             ) : (
                                                 <Table>
                                                     <TableBody>
-                                                    {match.teams.map(team => (
+                                                    {match.teams.sort((a, b) => b.total - a.total).map(team => (
                                                         <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
                                                             <TableCell className="flex items-center gap-2">
                                                                 {team.name}
