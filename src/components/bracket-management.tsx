@@ -23,7 +23,6 @@ import { Separator } from './ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 const BRACKET_DOC_ID = "liveBracket";
-const SETTINGS_DOC_ID = "competition";
 
 type Team = {
   id: string;
@@ -86,27 +85,10 @@ export function BracketManagement() {
     const [isBreakingTie, setIsBreakingTie] = useState<string | null>(null);
 
     useEffect(() => {
-        const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
-        const unsubscribeSettings = onSnapshot(settingsRef, async (settingsSnap) => {
-            const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
-            let teamsQuery;
-            if (settingsData.registrationsClosed && settingsData.lockedInTeams) {
-                const lockedInTeamIds = settingsData.lockedInTeams.map((t: any) => t.id);
-                if (lockedInTeamIds.length > 0) {
-                    teamsQuery = query(collection(db, "schools"), where('__name__', 'in', lockedInTeamIds));
-                }
-            } else {
-                teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-            }
-
-            if (teamsQuery) {
-                onSnapshot(teamsQuery, (snapshot) => {
-                    const teamsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().teamName }));
-                    setAllAvailableTeams(teamsData);
-                });
-            } else {
-                setAllAvailableTeams([]);
-            }
+        const teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
+        const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
+            const teamsData = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().teamName }));
+            setAllAvailableTeams(teamsData);
         });
 
         const bracketDocRef = doc(db, "bracketState", BRACKET_DOC_ID);
@@ -125,7 +107,7 @@ export function BracketManagement() {
 
 
         return () => {
-            unsubscribeSettings();
+            unsubscribeTeams();
             unsubscribeBracket();
             unsubscribeScores();
         };
