@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -26,6 +27,8 @@ interface RoundData {
     name: string;
     phase: string;
 }
+
+const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
 
 export function RoundManagement() {
     const { toast } = useToast();
@@ -61,12 +64,9 @@ export function RoundManagement() {
         return acc;
     }, {} as Record<string, RoundData[]>);
     
-    const sortedPhases = Object.keys(roundsByPhase).sort((a,b) => {
-        if (a === 'Fase de Grupos') return -1;
-        if (b === 'Fase de Grupos') return 1;
-        if (a === 'Fase Finales') return 1;
-        if (b === 'Fase Finales') return -1;
-        return a.localeCompare(b);
+     const sortedPhases = Object.keys(roundsByPhase).sort((a, b) => {
+        const order = ["Fase de Grupos", ...knockoutPhases];
+        return order.indexOf(a) - order.indexOf(b);
     });
 
 
@@ -120,7 +120,7 @@ export function RoundManagement() {
                                     id="round-name" 
                                     value={newRoundName} 
                                     onChange={(e) => setNewRoundName(e.target.value)} 
-                                    placeholder="Ej: Grupo A - Fecha 1, Final" 
+                                    placeholder="Ej: Grupo A, Final" 
                                     disabled={isSubmitting}
                                 />
                             </div>
@@ -132,7 +132,9 @@ export function RoundManagement() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Fase de Grupos">Fase de Grupos</SelectItem>
-                                        <SelectItem value="Fase Finales">Fase Finales</SelectItem>
+                                        {knockoutPhases.map(phase => (
+                                            <SelectItem key={phase} value={phase}>{phase}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -230,3 +232,5 @@ export function RoundManagement() {
         </div>
     );
 }
+
+    

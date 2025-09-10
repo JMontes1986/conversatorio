@@ -4,10 +4,10 @@
 
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { Loader2, Trophy, ArrowDown } from "lucide-react";
+import { Loader2, Trophy, ArrowDown, Users, Swords } from "lucide-react";
 import React, { useEffect, useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, doc, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, doc, orderBy, writeBatch, getDoc, setDoc } from "firebase/firestore";
 
 // --- TYPES ---
 type Participant = {
@@ -25,6 +25,18 @@ type BracketRound = {
   id: string;
   title: string;
   matches: Match[];
+};
+
+type RoundData = {
+    id: string;
+    name: string;
+    phase: string;
+};
+
+type DrawnTeam = {
+  id: string;
+  name: string;
+  round: string | null;
 };
 
 type ScoreData = {
@@ -95,16 +107,26 @@ const MatchCard = ({ match, showScore, winners }: { match: Match, showScore: boo
 };
 
 
-const RoundRow = ({ round, showScore, winners }: { round: BracketRound, showScore: boolean, winners: Record<string, (string | null)[]> }) => (
-    <div className="flex flex-col items-center gap-8 w-full">
-        <h3 className="text-center font-headline text-lg font-bold text-primary uppercase tracking-wider">{round.title}</h3>
-        <div className="flex flex-wrap justify-center gap-x-12 gap-y-8">
-            {round.matches.map((match) => (
-                <MatchCard key={match.id} match={match} showScore={showScore} winners={winners[match.id] || []} />
-            ))}
+const RoundRow = ({ round, showScore, winners }: { round: BracketRound, showScore: boolean, winners: Record<string, (string | null)[]> }) => {
+    
+    // Determine the type of visual to show based on the title
+    const isGroupStage = round.title.toLowerCase().includes('grupo');
+    const Icon = isGroupStage ? Users : Swords;
+    const title = isGroupStage ? round.title : round.title;
+
+    return (
+        <div className="flex flex-col items-center gap-8 w-full">
+            <h3 className="text-center font-headline text-lg font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                <Icon className="h-5 w-5" /> {title}
+            </h3>
+            <div className="flex flex-wrap justify-center gap-x-12 gap-y-8">
+                {round.matches.map((match) => (
+                    <MatchCard key={match.id} match={match} showScore={showScore} winners={winners[match.id] || []} />
+                ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 
 export function TournamentBracket() {
@@ -113,14 +135,99 @@ export function TournamentBracket() {
   const [winners, setWinners] = useState<Record<string, (string | null)[]>>({});
   const [bracketSettings, setBracketSettings] = useState<BracketSettings>({});
 
+   const generateBracketFromScratch = async () => {
+    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+    const drawStateRef = doc(db, "drawState", "liveDraw");
+    
+    const [roundsSnapshot, drawStateSnap] = await Promise.all([
+      getDoc(roundsQuery),
+      getDoc(drawStateRef)
+    ]);
+
+    const allRounds = roundsSnapshot.docs.map(d => ({id: d.id, ...d.data()}) as RoundData);
+    const drawnTeams = drawStateSnap.exists() ? drawStateSnap.data().teams as DrawnTeam[] : [];
+    
+    if (allRounds.length === 0 || drawnTeams.length === 0) {
+        setLoading(false);
+        return;
+    }
+
+    let newBracketData: BracketRound[] = [];
+    
+    // 1. Group Stage
+    const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+    groupRounds.forEach(round => {
+        const teamsInRound = drawnTeams.filter(t => t.round === round.name);
+        if (teamsInRound.length > 0) {
+            newBracketData.push({
+                id: round.id,
+                title: round.name,
+                matches: [{
+                    id: round.name,
+                    participants: teamsInRound.map(t => ({ id: t.id, name: t.name })),
+                }]
+            });
+        }
+    });
+
+    // 2. Knockout Stages
+    const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
+    let previousRoundMatches: Match[] = [];
+
+    knockoutPhases.forEach(phase => {
+        const roundsInPhase = allRounds.filter(r => r.phase === phase);
+        if (roundsInPhase.length > 0) {
+            const currentPhaseMatches: Match[] = [];
+            
+            // For now, let's just create empty matches for the structure
+            const numMatches = roundsInPhase.length; // Assume 1 round = 1 match for knockouts
+            for (let i = 0; i < numMatches; i++) {
+                 currentPhaseMatches.push({
+                    id: roundsInPhase[i].name,
+                    participants: [null, null], // Start empty
+                 });
+            }
+
+            // Link previous round matches to current ones
+            if (previousRoundMatches.length > 0) {
+                for (let i = 0; i < previousRoundMatches.length; i++) {
+                    const match = previousRoundMatches[i];
+                    match.nextMatchId = currentPhaseMatches[Math.floor(i / 2)].id;
+                }
+            }
+
+            newBracketData.push({
+                id: phase,
+                title: phase,
+                matches: currentPhaseMatches,
+            });
+
+            previousRoundMatches = currentPhaseMatches;
+        }
+    });
+
+    const bracketDocRef = doc(db, "bracketState", "liveBracket");
+    await setDoc(bracketDocRef, { bracketRounds: newBracketData });
+
+    setBracketData(newBracketData);
+    setLoading(false);
+  };
+
+
   useEffect(() => {
     const bracketDocRef = doc(db, "bracketState", "liveBracket");
     const unsubscribeBracket = onSnapshot(bracketDocRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            setBracketData(data.bracketRounds || []);
+            if (data.bracketRounds && data.bracketRounds.length > 0) {
+              setBracketData(data.bracketRounds || []);
+              setLoading(false);
+            } else {
+              generateBracketFromScratch();
+            }
+        } else {
+            generateBracketFromScratch();
         }
-        setLoading(false);
     });
 
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
@@ -129,10 +236,13 @@ export function TournamentBracket() {
         const winnersMap: Record<string, (string | null)[]> = {};
         
         const scoresByMatch = allScores.reduce((acc, score) => {
-            if (!acc[score.matchId]) acc[score.matchId] = [];
-            acc[score.matchId].push(score);
+            const matchId = score.matchId.startsWith('Grupo') ? score.teams.map(t => t.name).sort().join(' vs ') : score.matchId;
+            
+            if (!acc[matchId]) acc[matchId] = [];
+            acc[matchId].push(score);
             return acc;
         }, {} as Record<string, ScoreData[]>);
+
 
         for (const matchId in scoresByMatch) {
             const matchScores = scoresByMatch[matchId];
@@ -182,6 +292,11 @@ export function TournamentBracket() {
                 ...prev,
                 resultsPublished: data.resultsPublished || false,
             }));
+        } else {
+             setBracketSettings(prev => ({
+                ...prev,
+                resultsPublished: false,
+            }));
         }
     });
 
@@ -196,6 +311,7 @@ export function TournamentBracket() {
   const populatedBracket = useMemo(() => {
     if (!bracketData || bracketData.length === 0) return [];
     
+    // Deep copy to avoid mutating state directly
     const newBracketData = JSON.parse(JSON.stringify(bracketData)) as BracketRound[];
 
     for (let i = 0; i < newBracketData.length - 1; i++) {
@@ -203,7 +319,12 @@ export function TournamentBracket() {
         const nextRound = newBracketData[i+1];
 
         currentRound.matches.forEach(match => {
-            const matchWinners = winners[match.id] || [];
+            // Adjust matchId for group stages to match winner calculation
+            const matchIdentifier = match.id.startsWith('Grupo') 
+                ? match.participants.map(p => p?.name || '').sort().join(' vs ')
+                : match.id;
+            
+            const matchWinners = winners[matchIdentifier] || [];
             if (matchWinners.length > 0 && match.nextMatchId) {
                 const nextMatch = nextRound.matches.find(m => m.id === match.nextMatchId);
                 if (nextMatch) {
@@ -234,7 +355,7 @@ export function TournamentBracket() {
     return (
         <div className="bg-card p-4 md:p-8 rounded-lg w-full min-h-[400px] flex justify-center items-center">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="ml-4">Cargando bracket del torneo...</p>
+            <p className="ml-4">Generando bracket del torneo...</p>
         </div>
     )
   }
@@ -245,7 +366,7 @@ export function TournamentBracket() {
             <div className="text-center">
                  <h2 className={cn("font-bold text-foreground", titleSizeMap[bracketSettings.bracketTitleSize || 3])}>{bracketSettings.bracketTitle || '¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?'}</h2>
                  <p className="text-lg text-muted-foreground mt-2">{bracketSettings.bracketSubtitle || 'Debate Intercolegial'}</p>
-                 <p className="text-lg text-muted-foreground mt-8">El administrador no ha configurado el bracket aún.</p>
+                 <p className="text-lg text-muted-foreground mt-8">Esperando el sorteo para generar el bracket.</p>
             </div>
         </div>
     )
@@ -284,3 +405,5 @@ export function TournamentBracket() {
     </div>
   );
 }
+
+    
