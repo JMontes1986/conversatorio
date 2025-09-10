@@ -46,7 +46,7 @@ const shuffleArray = (array: any[]) => {
 
 function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData[], limit: number): string[] {
     const phaseRoundNames = phaseRounds.map(r => r.name);
-    const phaseScores = scores.filter(s => phaseRoundNames.includes(s.matchId));
+    const phaseScores = scores.filter(s => phaseRoundNames.some(name => s.matchId.startsWith(name)));
 
     const teamTotals: Record<string, number> = {};
 
@@ -152,32 +152,25 @@ export function DrawAnimation() {
     };
   }, [activeTab]);
 
- const resetDraw = useCallback(async (isTabChange = false) => {
+  const resetDraw = useCallback(async (isTabChange = false) => {
     let currentTeams: Team[] = [];
     let currentRounds: RoundData[] = [];
+    let targetPhase = "";
+    let teamsSource: Team[] = allTeams;
 
     if (activeTab === "groups") {
-        currentRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-        currentTeams = allTeams.map(t => ({...t, round: null}));
+        targetPhase = "Fase de Grupos";
+        teamsSource = allTeams;
     } else if (activeTab === "quarters") {
-        currentRounds = allRounds.filter(r => r.phase === "Cuartos de Final");
+        targetPhase = "Cuartos de Final";
         const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
         const qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupRounds, 8);
-        currentTeams = allTeams
-            .filter(t => qualifiedTeamNames.includes(t.name))
-            .map(t => ({...t, round: null}));
-    } else if (activeTab === "semis") {
-        currentRounds = allRounds.filter(r => r.phase === "Semifinal");
-        // Logic to get quarter final winners... (assuming a function getWinnersOfPhase exists)
-        // const qualifiedTeamNames = getWinnersOfPhase("Cuartos de Final", allScores, allRounds);
-        // For now, let's keep it simple
-        currentTeams = [];
-    } else if (activeTab === "final") {
-        currentRounds = allRounds.filter(r => r.phase === "Final");
-        // Logic to get semifinal winners...
-        currentTeams = [];
+        teamsSource = allTeams.filter(t => qualifiedTeamNames.includes(t.name));
     }
     
+    currentRounds = allRounds.filter(r => r.phase === targetPhase);
+    currentTeams = teamsSource.map(t => ({...t, round: null}));
+
     let stateToSet;
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
     const docSnap = await getDoc(drawStateRef);
@@ -185,7 +178,7 @@ export function DrawAnimation() {
     if (isTabChange && docSnap.exists() && docSnap.data().activeTab === activeTab) {
         const data = docSnap.data();
         stateToSet = {
-            teams: data.teams || currentTeams.map(t => ({...t, round: null})),
+            teams: data.teams || currentTeams,
             rounds: data.rounds || currentRounds,
             isDrawing: data.isDrawing || false,
             isFinished: data.isFinished || false,
@@ -193,7 +186,7 @@ export function DrawAnimation() {
         };
     } else {
         stateToSet = {
-            teams: currentTeams.map(t => ({...t, round: null})),
+            teams: currentTeams,
             rounds: currentRounds,
             isDrawing: false,
             isFinished: false,
@@ -227,7 +220,7 @@ export function DrawAnimation() {
           description: "No se pudo actualizar el estado del sorteo en vivo."
         });
       }
-  }
+  };
 
   const startDraw = async () => {
     if (teams.length === 0 || rounds.length === 0) return;
@@ -236,13 +229,12 @@ export function DrawAnimation() {
     setIsFinished(false);
 
     const shuffledTeams = shuffleArray([...teams]);
-    // The rounds are now fixed, not shuffled.
     let assignedTeams = teams.map(t => ({...t, round: null}));
     setTeams(assignedTeams);
 
     const initialState = {
         teams: assignedTeams,
-        rounds, // Use the original, ordered rounds
+        rounds,
         isDrawing: true,
         isFinished: false,
         activeTab
@@ -255,7 +247,6 @@ export function DrawAnimation() {
         const team = shuffledTeams[i];
         await new Promise(resolve => setTimeout(resolve, i * 200));
 
-        // Assign team to a round in a cyclical manner from the fixed rounds list
         assignedTeams = assignedTeams.map(t => 
             t.id === team.id ? { ...t, round: rounds[i % rounds.length].name } : t
         );
@@ -268,7 +259,6 @@ export function DrawAnimation() {
 
     setIsDrawing(false);
     setIsFinished(true);
-    // Persist the final state with the fixed rounds
     await updateLiveDrawState({ isDrawing: false, isFinished: true, teams: assignedTeams, rounds, activeTab });
   };
   
