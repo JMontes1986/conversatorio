@@ -159,14 +159,28 @@ export function BracketManagement() {
             
             for (let i = 0; i < newMatches.length; i++) {
                 for (let j = 0; j < newMatches[i].participants.length; j++) {
-                    if (teamIndex < teamsDrawnForRound.length) {
-                        const drawnTeam = teamsDrawnForRound[teamIndex];
-                        const fullTeamInfo = allAvailableTeams.find(t => t.name === drawnTeam.name);
-                        newMatches[i].participants[j] = fullTeamInfo ? { id: fullTeamInfo.id, name: fullTeamInfo.name } : null;
-                        teamIndex++;
-                    } else {
-                         newMatches[i].participants[j] = null;
+                    // Only fill if the slot is currently empty
+                    if (newMatches[i].participants[j] === null) {
+                        if (teamIndex < teamsDrawnForRound.length) {
+                            const drawnTeam = teamsDrawnForRound[teamIndex];
+                            const fullTeamInfo = allAvailableTeams.find(t => t.name === drawnTeam.name);
+                            newMatches[i].participants[j] = fullTeamInfo ? { id: fullTeamInfo.id, name: fullTeamInfo.name } : null;
+                            teamIndex++;
+                        }
                     }
+                }
+            }
+            // Fill remaining drawn teams into new matches if needed
+            while(teamIndex < teamsDrawnForRound.length) {
+                const participants = [];
+                for(let k=0; k<2 && teamIndex < teamsDrawnForRound.length; k++){
+                     const drawnTeam = teamsDrawnForRound[teamIndex];
+                     const fullTeamInfo = allAvailableTeams.find(t => t.name === drawnTeam.name);
+                     participants.push(fullTeamInfo ? { id: fullTeamInfo.id, name: fullTeamInfo.name } : null);
+                     teamIndex++;
+                }
+                if (participants.length > 0) {
+                     newMatches.push({ id: nanoid(), participants });
                 }
             }
 
@@ -217,7 +231,8 @@ export function BracketManagement() {
 
         return allScores.some(score => {
              const scoreTeamNames = score.teams.map(t => t.name);
-             return participantNames.every(pName => scoreTeamNames.includes(pName)) && scoreTeamNames.every(sName => participantNames.includes(sName));
+             // Check if the teams in the score match the teams in the participant list
+             return participantNames.length === scoreTeamNames.length && participantNames.every(pName => scoreTeamNames.includes(pName));
         });
     }
 
@@ -349,9 +364,11 @@ export function BracketManagement() {
 
     const handleSaveBracket = async () => {
         setIsSubmitting(true);
-        const linkedRounds = processedBracketRounds.map((round, roundIndex) => {
-            if (roundIndex < processedBracketRounds.length - 1) {
-                const nextRound = processedBracketRounds[roundIndex + 1];
+        const finalBracketRounds = processedBracketRounds;
+        
+        const linkedRounds = finalBracketRounds.map((round, roundIndex) => {
+            if (roundIndex < finalBracketRounds.length - 1) {
+                const nextRound = finalBracketRounds[roundIndex + 1];
                 return { ...round, matches: round.matches.map((match, matchIndex) => ({ ...match, nextMatchId: nextRound.matches[Math.floor(matchIndex / 2)]?.id || null })) };
             }
             return round;

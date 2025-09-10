@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2, Users } from "lucide-react";
-import { collection, onSnapshot, query, where, doc, setDoc, getDoc, getDocs, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, setDoc, getDocs, orderBy, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,10 +50,7 @@ export function DrawAnimation() {
   const [isFixing, setIsFixing] = useState(false);
 
  useEffect(() => {
-    setLoading(true);
-    
-    const teamsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-    const unsubTeams = onSnapshot(teamsQuery, (snapshot) => {
+    const unsubTeams = onSnapshot(query(collection(db, "schools"), where("status", "==", "Verificado")), (snapshot) => {
         const fetchedTeams = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().teamName,
@@ -61,10 +58,13 @@ export function DrawAnimation() {
         }));
         setAllTeams(fetchedTeams);
         setTeams(fetchedTeams);
+        setLoading(false);
+    }, (error) => {
+        console.error("Error fetching teams: ", error);
+        setLoading(false);
     });
 
-    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-    const unsubRounds = onSnapshot(roundsQuery, (snapshot) => {
+    const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
         const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
         const groupRounds = roundsData.filter(r => r.phase === "Fase de Grupos");
         setAllRounds(groupRounds);
@@ -75,11 +75,9 @@ export function DrawAnimation() {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.teams && data.teams.length > 0) setTeams(data.teams);
-            if (data.rounds && data.rounds.length > 0) setRounds(data.rounds);
             setIsDrawing(data.isDrawing || false);
             setIsFinished(data.isFinished || false);
         }
-        setLoading(false);
     });
 
     return () => {
@@ -154,26 +152,6 @@ export function DrawAnimation() {
     }, 2000);
   };
   
-  const resetDraw = async () => {
-    setLoading(true);
-    const initialTeams = allTeams.map(t => ({ ...t, round: null }));
-
-    setTeams(initialTeams);
-    setRounds(allRounds);
-    setIsDrawing(false);
-    setIsFinished(false);
-    setIsFixing(false);
-
-    await updateLiveDrawState({
-        teams: initialTeams,
-        rounds: allRounds,
-        isDrawing: false,
-        isFinished: false,
-    });
-    setLoading(false);
-  }
-
-
   const getRoundTeams = (roundName: string) => {
     return teams.filter(t => t.round === roundName);
   }
@@ -208,16 +186,16 @@ export function DrawAnimation() {
             <CardContent>
                 {loading ? (
                      <p className="text-muted-foreground">Cargando equipos...</p>
-                ) : teams.length > 0 ? (
+                ) : allTeams.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                        {teams.map(team => (
+                        {allTeams.map(team => (
                             <div key={team.id} className="p-2 bg-secondary rounded-md text-secondary-foreground font-medium text-sm">
                                 {team.name}
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <p className="text-muted-foreground">No hay equipos elegibles para esta fase. Verifique que los colegios estén 'Verificados'.</p>
+                    <p className="text-muted-foreground">No hay equipos elegibles. Verifique que los colegios estén 'Verificado'.</p>
                 )}
             </CardContent>
         </Card>
@@ -233,9 +211,6 @@ export function DrawAnimation() {
                 <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || teams.length === 0 || rounds.length === 0}>
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
                     {loading ? "Cargando..." : "Iniciar Sorteo"}
-                </Button>
-                <Button onClick={resetDraw} variant="outline" disabled={isDrawing}>
-                    Reiniciar
                 </Button>
             </div>
         </div>

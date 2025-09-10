@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy, where, doc, getDoc } from "firebase/firestore";
-import { Loader2, Trophy, EyeOff, CheckCircle } from "lucide-react";
+import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -22,10 +22,17 @@ type ScoreData = {
   judgeName: string;
 }
 
+type DrawnTeam = {
+  id: string;
+  name: string;
+  round: string | null;
+}
+
 type MatchResult = {
     id: string;
     teams: { name: string; total: number }[];
-    winner: string;
+    winner: string | null;
+    isTie: boolean;
     judges: number;
     isBye?: boolean;
 }
@@ -33,6 +40,7 @@ type MatchResult = {
 export function GroupStageResults() {
     const [groupRounds, setGroupRounds] = useState<RoundData[]>([]);
     const [scores, setScores] = useState<ScoreData[]>([]);
+    const [drawnTeams, setDrawnTeams] = useState<DrawnTeam[]>([]);
     const [resultsPublished, setResultsPublished] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -43,7 +51,6 @@ export function GroupStageResults() {
         );
         const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
             const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-            // Sort client-side to avoid composite index
             rounds.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
             setGroupRounds(rounds);
         });
@@ -52,9 +59,16 @@ export function GroupStageResults() {
         const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
             const scoresData = snapshot.docs.map(doc => doc.data() as ScoreData);
             setScores(scoresData);
-            checkPublicationStatus();
         });
         
+        const drawStateRef = doc(db, "drawState", "liveDraw");
+        const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
+             if (docSnap.exists()) {
+                const data = docSnap.data();
+                setDrawnTeams(data.teams || []);
+            }
+        });
+
         const settingsRef = doc(db, "settings", "competition");
         const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -62,35 +76,21 @@ export function GroupStageResults() {
             }
             setLoading(false);
         });
-        
-        const checkPublicationStatus = async () => {
-             const settingsSnap = await getDoc(doc(db, "settings", "competition"));
-             if(settingsSnap.exists()){
-                setResultsPublished(settingsSnap.data().resultsPublished || false);
-             }
-             setLoading(false);
-        }
-
 
         return () => {
             unsubscribeRounds();
             unsubscribeScores();
             unsubscribeSettings();
+            unsubscribeDrawState();
         };
     }, []);
 
     const resultsByRound = groupRounds.map(round => {
         const roundScores = scores.filter(s => s.matchId === round.name);
+        const teamsForRound = drawnTeams.filter(t => t.round === round.name).map(t => t.name);
+        
+        // Handle bye score
         const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
-
-        if (roundScores.length === 0 && !byeScore) {
-            return {
-                id: round.id,
-                name: round.name,
-                match: null,
-            };
-        }
-
         if (byeScore) {
             const winnerTeam = byeScore.teams[0];
             return {
@@ -100,36 +100,65 @@ export function GroupStageResults() {
                     id: round.name,
                     teams: [winnerTeam],
                     winner: winnerTeam.name,
+                    isTie: false,
                     judges: 0,
                     isBye: true,
                 } as MatchResult
             }
         }
+        
+        // Handle scored match
+        if (roundScores.length > 0) {
+            const teamTotals: Record<string, number> = {};
+            const judges = new Set<string>();
 
-        const teamTotals: Record<string, number> = {};
-        const judges = new Set<string>();
-
-        roundScores.forEach(score => {
-            judges.add(score.judgeName);
-            score.teams.forEach(team => {
-                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-                teamTotals[team.name] += team.total;
+            roundScores.forEach(score => {
+                judges.add(score.judgeName);
+                score.teams.forEach(team => {
+                    if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                    teamTotals[team.name] += team.total;
+                });
             });
-        });
 
-        const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
-        const winner = teams.length === 0 ? 'N/A' : teams.reduce((a, b) => a.total > b.total ? a : b).name;
+            const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
+            let winner: string | null = null;
+            let isTie = false;
 
-        return {
-            id: round.id,
-            name: round.name,
-            match: {
-                id: round.name,
-                teams,
-                winner,
-                judges: judges.size,
-            } as MatchResult,
-        };
+            if (teams.length > 0) {
+                const maxScore = Math.max(...teams.map(t => t.total));
+                const winners = teams.filter(t => t.total === maxScore);
+                if (winners.length === 1) {
+                    winner = winners[0].name;
+                } else if (winners.length > 1) {
+                    isTie = true;
+                }
+            }
+
+            return {
+                id: round.id,
+                name: round.name,
+                match: { id: round.name, teams, winner, isTie, judges: judges.size } as MatchResult,
+            };
+        }
+
+        // Handle drawn but unscored match
+        if (teamsForRound.length > 0) {
+             return {
+                id: round.id,
+                name: round.name,
+                match: {
+                    id: round.name,
+                    teams: teamsForRound.map(name => ({name, total: 0})),
+                    winner: null,
+                    isTie: false,
+                    judges: 0,
+                } as MatchResult,
+             }
+        }
+
+
+        // No scores, no draw
+        return { id: round.id, name: round.name, match: null };
     });
 
     if (loading) {
@@ -156,10 +185,10 @@ export function GroupStageResults() {
         );
     }
 
-    if (resultsByRound.length === 0) {
+    if (resultsByRound.every(r => r.match === null)) {
         return (
             <div className="text-center text-muted-foreground p-8">
-                No hay rondas de fase de grupos configuradas o no se han registrado puntuaciones todavía.
+                No se ha realizado el sorteo de grupos o no se han registrado puntuaciones todavía.
             </div>
         );
     }
@@ -184,6 +213,16 @@ export function GroupStageResults() {
                                      Avance Automático
                                 </Badge>
                              </div>
+                           ) : result.match.teams.length > 0 && result.match.teams.every(t => t.total === 0) ? (
+                            <div className="text-sm h-24 flex flex-col items-center justify-center gap-2">
+                                {result.match.teams.map((team, index) => (
+                                    <React.Fragment key={team.name}>
+                                        <p className="font-semibold">{team.name}</p>
+                                        {index < result.match.teams.length - 1 && <Swords className="h-4 w-4 text-muted-foreground"/>}
+                                    </React.Fragment>
+                                ))}
+                                <Badge variant="outline" className="mt-2">Pendiente</Badge>
+                            </div>
                            ) : (
                             <Table>
                                 <TableHeader>
@@ -207,7 +246,7 @@ export function GroupStageResults() {
                            )
                        ) : (
                            <div className="text-center text-sm text-muted-foreground h-24 flex items-center justify-center">
-                                Esperando resultados...
+                                Esperando sorteo...
                            </div>
                        )}
                     </CardContent>
