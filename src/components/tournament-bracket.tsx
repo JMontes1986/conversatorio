@@ -7,7 +7,7 @@ import Image from "next/image";
 import { Loader2, Trophy, Users, Swords } from "lucide-react";
 import React, { useEffect, useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, doc, orderBy, getDocs, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, doc, orderBy, getDocs, setDoc, getDoc } from "firebase/firestore";
 
 // --- TYPES ---
 type Participant = {
@@ -269,13 +269,6 @@ export function TournamentBracket() {
         
         const scoresByMatchId: Record<string, ScoreData[]> = {};
         allScores.forEach(score => {
-            if (score.matchId.includes('-bye-')) {
-                const roundName = score.matchId.split('-bye-')[0];
-                const teamName = score.teams[0].name;
-                winnersMap[roundName] = teamName;
-                return;
-            }
-            
             if (!scoresByMatchId[score.matchId]) {
                 scoresByMatchId[score.matchId] = [];
             }
@@ -283,6 +276,14 @@ export function TournamentBracket() {
         });
 
         for (const matchId in scoresByMatchId) {
+            // Handle bye scores explicitly
+            if (matchId.includes('-bye-')) {
+                const teamName = scoresByMatchId[matchId][0].teams[0].name;
+                const roundNameForBye = matchId.split('-bye-')[0];
+                winnersMap[roundNameForBye] = teamName;
+                continue;
+            }
+
             const matchScores = scoresByMatchId[matchId];
             const teamTotals: Record<string, number> = {};
             
@@ -353,6 +354,9 @@ export function TournamentBracket() {
                          const winnerParticipant = match.participants.find(p => p?.name === winnerName);
                          if(winnerParticipant) {
                             nextMatch.participants[emptySlotIndex] = winnerParticipant;
+                         } else {
+                           // If winner isn't in the original participants (e.g. bye), create a new participant object
+                           nextMatch.participants[emptySlotIndex] = { id: winnerName, name: winnerName };
                          }
                     }
                 }
@@ -389,8 +393,8 @@ export function TournamentBracket() {
     )
   }
 
-  const finalRound = populatedBracket[populatedBracket.length - 1];
-  const championName = finalRound.matches.length === 1 ? (winners[finalRound.matches[0].id] || null) : null;
+  const finalRound = populatedBracket.find(r => r.id === "Final");
+  const championName = finalRound && finalRound.matches.length === 1 ? (winners[finalRound.matches[0].id] || null) : null;
 
 
   return (
@@ -425,5 +429,3 @@ export function TournamentBracket() {
     </div>
   );
 }
-
-    
