@@ -89,6 +89,7 @@ export function BracketManagement() {
             setLoading(false);
         }, (error) => {
             console.error("Error fetching verified schools: ", error);
+            toast({ variant: "destructive", title: "Error de Carga", description: "No se pudieron cargar los equipos verificados." });
             setLoading(false);
         });
 
@@ -97,7 +98,6 @@ export function BracketManagement() {
             if (docSnap.exists()) {
                 setBracketRounds(docSnap.data().bracketRounds || []);
             }
-             if(loading) setLoading(false);
         });
         
         const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
@@ -111,7 +111,7 @@ export function BracketManagement() {
             unsubscribeBracket();
             unsubscribeScores();
         };
-    }, [loading]);
+    }, []);
     
 
     const getMatchTieInfo = (match: Match): { isTie: boolean, tiedTeams: string[] } => {
