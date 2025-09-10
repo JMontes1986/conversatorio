@@ -62,8 +62,10 @@ export function RoundManagement() {
     }, {} as Record<string, RoundData[]>);
     
     const sortedPhases = Object.keys(roundsByPhase).sort((a,b) => {
-        if (a === 'General') return -1;
-        if (b === 'General') return 1;
+        if (a === 'Fase de Grupos') return -1;
+        if (b === 'Fase de Grupos') return 1;
+        if (a === 'Fase Finales') return 1;
+        if (b === 'Fase Finales') return -1;
         return a.localeCompare(b);
     });
 
