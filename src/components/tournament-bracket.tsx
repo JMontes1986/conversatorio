@@ -1,9 +1,10 @@
 
+
 "use client";
 
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { Loader2, Trophy, Users } from "lucide-react";
+import { Loader2, Trophy, ArrowDown } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, doc, orderBy, where } from "firebase/firestore";
@@ -12,8 +13,6 @@ import { collection, onSnapshot, query, doc, orderBy, where } from "firebase/fir
 type Participant = {
   id: string | null;
   name: string;
-  winner?: boolean;
-  score?: number;
 };
 
 type Match = {
@@ -43,7 +42,7 @@ type BracketSettings = {
 // --- UI COMPONENTS ---
 const ParticipantCard = ({ participant, showScore, winner }: { participant: Participant | null, showScore: boolean, winner?: string | null }) => {
     if (!participant || !participant.name) {
-        return <div className="flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md bg-secondary/50 text-muted-foreground italic">Por definir</div>;
+        return <div className="flex items-center justify-center w-40 text-sm h-10 px-2 rounded-md bg-secondary/50 text-muted-foreground italic">Por definir</div>;
     }
 
     const isWinner = showScore && participant.name === winner;
@@ -51,7 +50,7 @@ const ParticipantCard = ({ participant, showScore, winner }: { participant: Part
 
     return (
         <div className={cn("flex items-center gap-2 w-40 text-sm h-10 px-2 rounded-md", 
-            isWinner ? "bg-primary text-primary-foreground font-bold" : "bg-secondary text-secondary-foreground", 
+            isWinner ? "bg-primary text-primary-foreground font-bold ring-2 ring-amber-400" : "bg-secondary text-secondary-foreground", 
             hasLost && "opacity-50")}>
             <div className="relative h-6 w-6 rounded-full overflow-hidden bg-muted shrink-0">
                 <Image
@@ -71,17 +70,23 @@ const ParticipantCard = ({ participant, showScore, winner }: { participant: Part
 };
 
 const MatchCard = ({ match, showScore, winner }: { match: Match, showScore: boolean, winner?: string | null }) => (
-    <div className="flex flex-col gap-2">
-        {match.participants.map((p, pIndex) => (
-            <ParticipantCard key={p?.id || `p-${pIndex}`} participant={p} showScore={showScore} winner={winner} />
-        ))}
+    <div className="flex flex-col items-center gap-2 relative">
+        <ParticipantCard participant={match.participants[0]} showScore={showScore} winner={winner} />
+        <span className="text-xs font-bold text-muted-foreground">VS</span>
+        <ParticipantCard participant={match.participants[1]} showScore={showScore} winner={winner} />
+        {showScore && winner && (
+            <div className="absolute top-1/2 -right-6">
+                <ArrowDown className="h-5 w-5 text-muted-foreground" />
+            </div>
+        )}
     </div>
 );
 
-const RoundColumn = ({ round, showScore, winners }: { round: BracketRound, showScore: boolean, winners: Record<string, string | null> }) => (
-    <div className="flex flex-col justify-around flex-shrink-0 w-48">
-        <h3 className="text-center font-headline text-lg font-bold mb-8 text-primary uppercase h-10 flex items-center justify-center">{round.title}</h3>
-        <div className="flex flex-col justify-around gap-y-12 h-full">
+
+const RoundRow = ({ round, showScore, winners }: { round: BracketRound, showScore: boolean, winners: Record<string, string | null> }) => (
+    <div className="flex flex-col items-center gap-8 w-full">
+        <h3 className="text-center font-headline text-lg font-bold text-primary uppercase tracking-wider">{round.title}</h3>
+        <div className="flex flex-wrap justify-center gap-x-12 gap-y-8">
             {round.matches.map((match) => (
                 <MatchCard key={match.id} match={match} showScore={showScore} winner={winners[match.id]} />
             ))}
@@ -89,25 +94,6 @@ const RoundColumn = ({ round, showScore, winners }: { round: BracketRound, showS
     </div>
 );
 
-const ConnectorColumn = ({ numMatches }: { numMatches: number }) => {
-    return (
-        <div className="flex flex-col justify-around w-12 flex-shrink-0">
-             <div className="h-10 mb-8"></div>
-             <div className="flex flex-col justify-around h-full">
-                {Array.from({ length: numMatches }).map((_, i) => (
-                    <div key={i} className="relative flex-grow" style={{ height: '116px' }}>
-                       <>
-                         <div className="absolute top-1/4 left-0 w-1/2 h-px bg-border"></div>
-                         <div className="absolute bottom-1/4 left-0 w-1/2 h-px bg-border"></div>
-                         <div className="absolute top-1/4 left-1/2 w-px h-1/2 bg-border"></div>
-                         <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-border"></div>
-                       </>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
 
 export function TournamentBracket() {
   const [bracketData, setBracketData] = useState<BracketRound[]>([]);
@@ -237,30 +223,30 @@ export function TournamentBracket() {
 
 
   return (
-    <div className="bg-card p-4 md:p-8 rounded-lg w-full">
+    <div className="bg-card p-4 md:p-8 rounded-lg w-full overflow-x-auto">
         <div className="text-center mb-12">
             <h2 className={cn("font-bold text-foreground", titleSizeMap[bracketSettings.bracketTitleSize || 3])}>{bracketSettings.bracketTitle || '¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?'}</h2>
             <p className="text-lg text-muted-foreground mt-2">{bracketSettings.bracketSubtitle || 'Debate Intercolegial'}</p>
         </div>
         
+        <div className="flex flex-col items-center gap-8">
+            {populatedBracket.map((round, roundIndex) => (
+                <div key={round.id} className="flex flex-col items-center gap-8 w-full">
+                    <RoundRow round={round} showScore={showResults} winners={winners} />
+                    {roundIndex < populatedBracket.length - 1 && (
+                         <ArrowDown className="h-8 w-8 text-border animate-bounce" />
+                    )}
+                </div>
+            ))}
+        </div>
+        
         {showResults && champion && (
-          <div className="flex flex-col items-center mb-12 animate-in fade-in-50 duration-500">
+          <div className="flex flex-col items-center mt-12 animate-in fade-in-50 duration-500 border-t-2 border-dashed border-amber-400 pt-8">
             <Trophy className="h-16 w-16 text-amber-400"/>
-            <h3 className="font-headline text-2xl font-bold mt-2">GANADOR</h3>
+            <h3 className="font-headline text-2xl font-bold mt-2">GANADOR DEL TORNEO</h3>
             <p className="text-xl font-semibold text-primary">{champion.name}</p>
           </div>
         )}
-
-      <div className="flex items-start min-w-max">
-        {populatedBracket.map((round, roundIndex) => (
-            <div key={round.id} className="flex items-start">
-               <RoundColumn round={round} showScore={showResults} winners={winners} />
-               {roundIndex < populatedBracket.length - 1 && round.matches.length > 0 && populatedBracket[roundIndex+1].matches.length > 0 && (
-                   <ConnectorColumn numMatches={populatedBracket[roundIndex+1].matches.length} />
-               )}
-            </div>
-        ))}
-      </div>
     </div>
   );
 }
