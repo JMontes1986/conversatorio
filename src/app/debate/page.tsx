@@ -16,6 +16,7 @@ export default function DebatePage() {
     const [debateState, setDebateState] = useState({
         question: "Esperando la pregunta del moderador...",
         temporaryMessage: "",
+        temporaryImageUrl: "",
         timer: { duration: 300, lastUpdated: Date.now() },
         currentRound: "Ronda de Debate",
         videoUrl: ""
@@ -32,6 +33,7 @@ export default function DebatePage() {
                 setDebateState({
                     question: data.question || "Esperando la pregunta del moderador...",
                     temporaryMessage: data.temporaryMessage || "",
+                    temporaryImageUrl: data.temporaryImageUrl || "",
                     timer: data.timer ? { ...data.timer, lastUpdated: Date.now() } : { duration: 300, lastUpdated: Date.now() },
                     currentRound: data.currentRound || "Ronda de Debate",
                     videoUrl: data.videoUrl || ""
@@ -65,9 +67,9 @@ export default function DebatePage() {
         }
     };
 
-    const showVideo = debateState.videoUrl && !debateState.temporaryMessage;
-    const showQuestion = !showVideo && !debateState.temporaryMessage;
-    const showTemporaryMessage = !!debateState.temporaryMessage;
+    const showVideo = debateState.videoUrl && !debateState.temporaryMessage && !debateState.temporaryImageUrl;
+    const showQuestion = !showVideo && !debateState.temporaryMessage && !debateState.temporaryImageUrl;
+    const showTemporaryMessage = !!debateState.temporaryMessage || !!debateState.temporaryImageUrl;
     
     let displayText = debateState.question;
     if (showTemporaryMessage) {
@@ -121,16 +123,30 @@ export default function DebatePage() {
                     </Button>
                    <div className="space-y-6 w-full">
                         {showVideo && <VideoEmbed url={debateState.videoUrl} />}
-                        {(showQuestion || showTemporaryMessage) && (
+                        {showQuestion && (
                             <p className={cn(
                                 "font-medium leading-tight",
                                 isFullscreen
                                   ? "text-5xl md:text-7xl"
-                                  : "text-4xl md:text-5xl",
-                                showTemporaryMessage && "text-muted-foreground"
+                                  : "text-4xl md:text-5xl"
                               )}>
                                 {displayText}
                             </p>
+                        )}
+                        {showTemporaryMessage && (
+                            <div className="flex flex-col items-center justify-center gap-6">
+                                {debateState.temporaryImageUrl && (
+                                    <img src={debateState.temporaryImageUrl} alt="Mensaje Temporal" className="max-w-sm w-full rounded-lg shadow-lg"/>
+                                )}
+                                {debateState.temporaryMessage && (
+                                    <p className={cn(
+                                        "font-medium leading-tight text-muted-foreground",
+                                        isFullscreen ? "text-4xl md:text-6xl" : "text-3xl md:text-4xl"
+                                    )}>
+                                        {debateState.temporaryMessage}
+                                    </p>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

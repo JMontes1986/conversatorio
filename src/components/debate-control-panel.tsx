@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -610,7 +610,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [previewTempMessage, setPreviewTempMessage] = useState("");
+    const [previewTempImageUrl, setPreviewTempImageUrl] = useState("");
     const [tempMessageInput, setTempMessageInput] = useState("");
+    const [tempQrUrlInput, setTempQrUrlInput] = useState("");
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
@@ -628,6 +630,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
                 setPreviewTempMessage(data.temporaryMessage || "");
+                setPreviewTempImageUrl(data.temporaryImageUrl || "");
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
@@ -699,7 +702,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { 
                 question: question.text,
                 videoUrl: "", // Clear video when question is sent
-                temporaryMessage: "" // Clear temp message
+                temporaryMessage: "", // Clear temp message
+                temporaryImageUrl: ""
             }, { merge: true });
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
@@ -714,7 +718,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { 
                 videoUrl: videoInputs[question.id] || "",
                 question: "", // Clear question when video is sent
-                temporaryMessage: "" // Clear temp message
+                temporaryMessage: "", // Clear temp message
+                temporaryImageUrl: ""
             }, { merge: true });
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
         } catch (error) {
@@ -729,7 +734,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { 
                 question: "Esperando pregunta del moderador...",
                 videoUrl: "",
-                temporaryMessage: ""
+                temporaryMessage: "",
+                temporaryImageUrl: ""
             }, { merge: true });
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
         } catch (error) {
@@ -737,17 +743,14 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             toast({ variant: "destructive", title: "Error", description: "No se pudo limpiar la pantalla." });
         }
     }
-
-    const handleSendTemporaryMessage = async () => {
-        if (!tempMessageInput.trim()) {
-            toast({ variant: "destructive", title: "Error", description: "El mensaje no puede estar vacío." });
-            return;
-        }
+    
+    const sendTempMessage = async (message: string, imageUrl?: string) => {
         setIsSendingTempMessage(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                temporaryMessage: tempMessageInput,
+                temporaryMessage: message,
+                temporaryImageUrl: imageUrl || "",
                 question: "",
                 videoUrl: ""
             }, { merge: true });
@@ -758,13 +761,32 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         } finally {
             setIsSendingTempMessage(false);
         }
+    };
+
+    const handleSendTemporaryMessage = () => {
+        if (!tempMessageInput.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "El mensaje no puede estar vacío." });
+            return;
+        }
+        sendTempMessage(tempMessageInput);
     }
+    
+    const handleSendQrCode = () => {
+        if (!tempQrUrlInput.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "La URL para el QR no puede estar vacía." });
+            return;
+        }
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tempQrUrlInput)}`;
+        sendTempMessage("¡Escanea para ver en tiempo real!", qrApiUrl);
+    };
+
 
     const handleClearTemporaryMessage = async () => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { temporaryMessage: "" }, { merge: true });
+            await setDoc(docRef, { temporaryMessage: "", temporaryImageUrl: "" }, { merge: true });
             setTempMessageInput("");
+            setTempQrUrlInput("");
             toast({ title: "Mensaje Temporal Limpiado" });
         } catch (error) {
             console.error("Error clearing temporary message:", error);
@@ -887,11 +909,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     <CardContent>
                          <div className="space-y-4">
                             <h3 className="font-medium text-lg">Pantalla Pública:</h3>
-                            <div className="text-xl p-4 bg-secondary rounded-md min-h-[100px] flex items-center justify-center text-center">
-                                {!previewVideoUrl && !previewQuestion && !previewTempMessage && "Pantalla Limpia"}
-                                {previewTempMessage && <span className="text-muted-foreground">{previewTempMessage}</span>}
-                                {previewVideoUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
-                                {previewQuestion && !previewTempMessage && previewQuestion}
+                            <div className="text-xl p-4 bg-secondary rounded-md min-h-[150px] flex flex-col items-center justify-center text-center gap-4">
+                                {previewTempImageUrl && <img src={previewTempImageUrl} alt="Mensaje temporal" className="max-w-xs max-h-48 object-contain"/>}
+                                <span className="text-muted-foreground">{previewTempMessage}</span>
+                                {previewVideoUrl && !previewTempImageUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
+                                {previewQuestion && !previewTempImageUrl && !previewTempMessage && previewQuestion}
+                                {!previewVideoUrl && !previewQuestion && !previewTempMessage && !previewTempImageUrl && "Pantalla Limpia"}
                             </div>
                         </div>
                     </CardContent>
@@ -899,28 +922,41 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 
                 <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} />
 
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
-                        <CardDescription>Muestre un mensaje temporal en la pantalla pública.</CardDescription>
+                        <CardDescription>Muestre un mensaje de texto o un código QR en la pantalla pública.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                        <Textarea 
-                            placeholder="Ej: En breves momentos, la siguiente pregunta..."
-                            value={tempMessageInput}
-                            onChange={(e) => setTempMessageInput(e.target.value)}
-                            rows={3}
-                        />
-                        <div className="flex gap-2">
+                    <CardContent className="space-y-6">
+                        <div className="space-y-3">
+                             <Label>Mensaje de solo texto</Label>
+                            <Textarea 
+                                placeholder="Ej: En breves momentos, la siguiente pregunta..."
+                                value={tempMessageInput}
+                                onChange={(e) => setTempMessageInput(e.target.value)}
+                                rows={2}
+                            />
                             <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage} className="w-full">
                                 {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                Enviar Mensaje
-                            </Button>
-                             <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full">
-                                <Eraser className="mr-2 h-4 w-4"/>
-                                Limpiar Mensaje
+                                Enviar solo Texto
                             </Button>
                         </div>
+                        <div className="space-y-3">
+                             <Label>Generador de Código QR</Label>
+                             <Input 
+                                placeholder="Pegue la URL para generar el QR (ej: https://...)"
+                                value={tempQrUrlInput}
+                                onChange={(e) => setTempQrUrlInput(e.target.value)}
+                             />
+                            <Button onClick={handleSendQrCode} disabled={isSendingTempMessage} className="w-full">
+                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4"/>}
+                                Generar y Enviar QR
+                            </Button>
+                        </div>
+                         <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full">
+                            <Eraser className="mr-2 h-4 w-4"/>
+                            Limpiar Mensaje
+                        </Button>
                     </CardContent>
                 </Card>
 
