@@ -174,15 +174,10 @@ export function TournamentBracket() {
 
    const generateBracketFromScratch = async () => {
     const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-    const drawStateRef = doc(db, "drawState", "liveDraw");
     
-    const [roundsSnapshot, drawStateSnap] = await Promise.all([
-      getDocs(roundsQuery),
-      getDoc(drawStateRef)
-    ]);
+    const roundsSnapshot = await getDocs(roundsQuery);
 
     const allRounds = roundsSnapshot.docs.map(d => ({id: d.id, ...d.data()}) as RoundData);
-    const drawnTeams = drawStateSnap.exists() ? drawStateSnap.data().teams as DrawnTeam[] : [];
     
     if (allRounds.length === 0) {
         setLoading(false);
@@ -192,81 +187,37 @@ export function TournamentBracket() {
     let newBracketData: BracketRound[] = [];
     let matchCounter = 0;
     
-    // Group Stage - This round is now purely for display logic of who played.
-    const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
-    if (groupRounds.length > 0 && drawnTeams.length > 0) {
-        const groupMatches: Match[] = [];
-        groupRounds.forEach(round => {
-            const teamsInRound = drawnTeams.filter(t => t.round === round.name);
-            if(teamsInRound.length >= 2) { // Assuming pairs
-                for (let i = 0; i < teamsInRound.length; i += 2) {
-                     groupMatches.push({
-                        id: `${round.name}-${i/2}`, 
-                        participants: [
-                            {id: teamsInRound[i]?.id || null, name: teamsInRound[i]?.name || ''},
-                            {id: teamsInRound[i+1]?.id || null, name: teamsInRound[i+1]?.name || ''}
-                        ],
-                        matchNumber: matchCounter++,
-                        roundNumber: 0,
-                    });
-                }
-            } else if (teamsInRound.length === 1) { // Handle byes from draw
-                 groupMatches.push({
-                    id: `${round.name}-bye`,
-                    participants: [{id: teamsInRound[0].id, name: teamsInDrawnTeam[0].name}, null],
-                    matchNumber: matchCounter++,
-                    roundNumber: 0
-                });
-            }
-        });
-        
-        if (groupMatches.length > 0) {
-             newBracketData.push({
-                id: "Fase de Grupos",
-                title: "Fase de Grupos",
-                matches: groupMatches,
-            });
-        }
-    }
-
-
     // Knockout Stage
     const knockoutRounds = allRounds.filter(r => r.phase === "Fase de Finales");
-    if (knockoutRounds.length > 0) {
-        let matchesForThisRound = 0;
-        
-        // This is a heuristic. If we have group matches, we can deduce quarter-final size.
-        // Otherwise, we have to guess based on number of knockout rounds.
-        if (newBracketData.length > 0 && newBracketData[0].matches.length > 0) {
-             matchesForThisRound = Math.ceil(newBracketData[0].matches.length / 2);
-        } else {
-             // Guess based on number of rounds. E.g. 3 rounds = QF, SF, F. So 4 matches.
-             matchesForThisRound = 2 ** (knockoutRounds.length - 1);
-        }
 
+    if (knockoutRounds.length > 0) {
+        // Start with an assumption for quarter-finals if it's the first knockout round
+        // Let's assume 8 teams -> 4 matches. This can be adjusted based on your tournament structure.
+        let matchesForThisRound = 4;
 
         knockoutRounds.forEach((round, index) => {
             const roundMatches: Match[] = [];
             for (let i = 0; i < matchesForThisRound; i++) {
                 roundMatches.push({
-                    id: `${round.name}-${i}`, // Unique ID for each match
+                    id: `${round.name}-${i}`,
                     participants: [null, null],
                     matchNumber: matchCounter++,
-                    roundNumber: newBracketData.length,
+                    roundNumber: index,
                 });
             }
             
             newBracketData.push({
                 id: round.id,
-                title: round.name, // Use the specific round name
+                title: round.name, // Use the specific round name from DB
                 matches: roundMatches,
             });
+
+            // For the next round, halve the number of matches
             matchesForThisRound = Math.ceil(matchesForThisRound / 2);
         });
     }
 
-
-    // Link matches
+    // Link matches to their next match
      for (let i = 0; i < newBracketData.length - 1; i++) {
         const currentRound = newBracketData[i];
         const nextRound = newBracketData[i+1];
@@ -308,11 +259,7 @@ export function TournamentBracket() {
         
         const scoresByMatchId: Record<string, ScoreData[]> = {};
         allScores.forEach(score => {
-            // Normalize bye scores to their round name for winner propagation
-            const matchId = score.matchId.includes('-bye-') 
-                ? score.matchId.split('-bye-')[0] 
-                : score.matchId;
-
+            const matchId = score.matchId;
             if (!scoresByMatchId[matchId]) {
                 scoresByMatchId[matchId] = [];
             }
@@ -320,8 +267,9 @@ export function TournamentBracket() {
         });
 
         for (const matchId in scoresByMatchId) {
-            // Handle bye scores explicitly
             const matchScores = scoresByMatchId[matchId];
+            
+            // Handle bye scores explicitly
             if (matchScores.some(s => s.matchId.includes('-bye-'))) {
                 winnersMap[matchId] = matchScores[0].teams[0].name;
                 continue;
@@ -428,15 +376,11 @@ export function TournamentBracket() {
             <div className="text-center">
                  <h2 className={cn("font-bold text-foreground", titleSizeMap[bracketSettings.bracketTitleSize || 3])}>{bracketSettings.bracketTitle || '¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?'}</h2>
                  <p className="text-lg text-muted-foreground mt-2">{bracketSettings.bracketSubtitle || 'Debate Intercolegial'}</p>
-                 <p className="text-lg text-muted-foreground mt-8">Esperando el sorteo para generar el bracket.</p>
+                 <p className="text-lg text-muted-foreground mt-8">Esperando la configuración de rondas para generar el bracket.</p>
             </div>
         </div>
     )
   }
-
-  const finalRound = populatedBracket.length > 0 ? populatedBracket[populatedBracket.length - 1] : null;
-  const championName = finalRound && finalRound.matches.length === 1 ? (winners[finalRound.matches[0].id] || null) : null;
-
 
   return (
     <div className="bg-card p-4 md:p-8 rounded-lg w-full">
@@ -459,14 +403,6 @@ export function TournamentBracket() {
                 <ConnectorLines rounds={bracketData} populatedBracket={populatedBracket} />
             </div>
         </div>
-        
-        {showResults && championName && (
-          <div className="flex flex-col items-center mt-12 animate-in fade-in-50 duration-500 border-t-2 border-dashed border-amber-400 pt-8">
-            <Trophy className="h-16 w-16 text-amber-400"/>
-            <h3 className="font-headline text-2xl font-bold mt-2">GANADOR DEL TORNEO</h3>
-            <p className="text-xl font-semibold text-primary">{championName}</p>
-          </div>
-        )}
     </div>
   );
 }
