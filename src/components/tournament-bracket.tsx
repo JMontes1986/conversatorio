@@ -43,7 +43,7 @@ type DrawnTeam = {
 
 type ScoreData = {
     matchId: string;
-    teams: { name: string; total: number }[];
+    teams: { name:string; total: number }[];
 };
 
 type BracketSettings = {
@@ -125,7 +125,10 @@ const ConnectorLines = ({ rounds, populatedBracket }: { rounds: BracketRound[], 
 
                 return round.matches.map((match, matchIndex) => {
                     const nextMatchIndex = Math.floor(matchIndex / 2);
-                    const nextMatch = rounds[roundIndex + 1]?.matches[nextMatchIndex];
+                    const nextRound = rounds[roundIndex + 1];
+                    if (!nextRound) return null;
+
+                    const nextMatch = nextRound.matches[nextMatchIndex];
                     if (!nextMatch) return null;
                     
                     const startEl = document.getElementById(`match-${match.id}`);
@@ -181,64 +184,82 @@ export function TournamentBracket() {
     const allRounds = roundsSnapshot.docs.map(d => ({id: d.id, ...d.data()}) as RoundData);
     const drawnTeams = drawStateSnap.exists() ? drawStateSnap.data().teams as DrawnTeam[] : [];
     
-    if (allRounds.length === 0 || drawnTeams.length === 0) {
+    if (allRounds.length === 0) { // Don't require drawnTeams to generate empty bracket
         setLoading(false);
         return;
     }
 
     let newBracketData: BracketRound[] = [];
     
-    const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
-    const phaseOrder = ["Fase de Grupos", ...knockoutPhases];
-
-    let matchCounter = 0;
-    
-    phaseOrder.forEach((phase, phaseIndex) => {
-        const roundsInPhase = allRounds.filter(r => r.phase === phase);
-        if (roundsInPhase.length > 0) {
-            const matches: Match[] = [];
-            
-            if (phase === "Fase de Grupos") {
-                roundsInPhase.forEach(round => {
-                    const teamsInRound = drawnTeams.filter(t => t.round === round.name);
-                     if(teamsInRound.length >= 2) {
-                        matches.push({
-                            id: round.name, // Use round name as match ID for group stage
-                            participants: [
-                                {id: teamsInRound[0].id, name: teamsInRound[0].name},
-                                {id: teamsInRound[1].id, name: teamsInRound[1].name}
-                            ],
-                            matchNumber: matchCounter++,
-                            roundNumber: phaseIndex,
-                        });
-                    }
+    // Group Stage
+    const groupRounds = allRounds.filter(r => r.phase === "Fase de Grupos");
+    if (groupRounds.length > 0 && drawnTeams.length > 0) {
+        const groupMatches: Match[] = [];
+        let matchCounter = 0;
+        groupRounds.forEach(round => {
+            const teamsInRound = drawnTeams.filter(t => t.round === round.name);
+            if(teamsInRound.length >= 2) {
+                groupMatches.push({
+                    id: round.name, 
+                    participants: [
+                        {id: teamsInRound[0].id, name: teamsInRound[0].name},
+                        {id: teamsInRound[1].id, name: teamsInRound[1].name}
+                    ],
+                    matchNumber: matchCounter++,
+                    roundNumber: 0,
                 });
-            } else {
-                 const numMatches = roundsInPhase.length;
-                 for (let i = 0; i < numMatches; i++) {
-                     matches.push({
-                        id: roundsInPhase[i].name,
-                        participants: [null, null], // Start empty
-                        matchNumber: matchCounter++,
-                        roundNumber: phaseIndex,
-                     });
-                 }
             }
-            
+        });
+        if (groupMatches.length > 0) {
             newBracketData.push({
-                id: phase,
-                title: phase,
-                matches: matches,
+                id: "Fase de Grupos",
+                title: "Fase de Grupos",
+                matches: groupMatches,
             });
         }
-    });
+    }
+
+    // Knockout Stage
+    const knockoutRounds = allRounds.filter(r => r.phase === "Fase de Finales");
+    if (knockoutRounds.length > 0) {
+        let matchCounter = newBracketData[0]?.matches.length || 0;
+        const totalMatchesInPreviousRound = newBracketData[0]?.matches.length || knockoutRounds.length * 2;
+        let matchesForNextRound = Math.ceil(totalMatchesInPreviousRound / 2);
+
+        knockoutRounds.forEach((round, index) => {
+            const roundMatches: Match[] = [];
+            
+            // This logic assumes knockout rounds are ordered correctly.
+            // And that each name in knockoutRounds corresponds to one match.
+            roundMatches.push({
+                id: round.name,
+                participants: [null, null],
+                matchNumber: matchCounter++,
+                roundNumber: newBracketData.length,
+            });
+
+            newBracketData.push({
+                id: round.id,
+                title: round.name, // Use the specific round name
+                matches: roundMatches,
+            });
+            matchesForNextRound = Math.ceil(matchesForNextRound / 2);
+        });
+    }
+
 
     // Link matches
      for (let i = 0; i < newBracketData.length - 1; i++) {
         const currentRound = newBracketData[i];
         const nextRound = newBracketData[i+1];
+        if(!nextRound) continue;
+
         currentRound.matches.forEach((match, index) => {
-            match.nextMatchId = nextRound.matches[Math.floor(index/2)]?.id;
+            const nextMatchIndex = Math.floor(index/2);
+            const nextMatch = nextRound.matches[nextMatchIndex];
+            if (nextMatch) {
+              match.nextMatchId = nextMatch.id;
+            }
         });
      }
 
@@ -338,24 +359,30 @@ export function TournamentBracket() {
   const populatedBracket = useMemo(() => {
     if (!bracketData || bracketData.length === 0) return [];
     
-    const newBracketData = JSON.parse(JSON.stringify(bracketData)) as BracketRound[];
+    let newBracketData = JSON.parse(JSON.stringify(bracketData)) as BracketRound[];
+
+    // Ensure it's a fresh copy for modification
+    newBracketData = newBracketData.map(round => ({
+        ...round,
+        matches: round.matches.map(match => ({ ...match, participants: [...match.participants] }))
+    }));
 
     for (let i = 0; i < newBracketData.length - 1; i++) {
         const currentRound = newBracketData[i];
         const nextRound = newBracketData[i+1];
+        if (!nextRound) continue;
 
         currentRound.matches.forEach(match => {
             const winnerName = winners[match.id];
             if (winnerName && match.nextMatchId) {
                 const nextMatch = nextRound.matches.find(m => m.id === match.nextMatchId);
                 if (nextMatch) {
-                    const emptySlotIndex = nextMatch.participants.findIndex(p => p === null);
+                    const emptySlotIndex = nextMatch.participants.findIndex(p => p === null || p.name === '');
                     if (emptySlotIndex !== -1) {
                          const winnerParticipant = match.participants.find(p => p?.name === winnerName);
                          if(winnerParticipant) {
-                            nextMatch.participants[emptySlotIndex] = winnerParticipant;
+                            nextMatch.participants[emptySlotIndex] = { ...winnerParticipant };
                          } else {
-                           // If winner isn't in the original participants (e.g. bye), create a new participant object
                            nextMatch.participants[emptySlotIndex] = { id: winnerName, name: winnerName };
                          }
                     }
@@ -393,7 +420,7 @@ export function TournamentBracket() {
     )
   }
 
-  const finalRound = populatedBracket.find(r => r.id === "Final");
+  const finalRound = populatedBracket[populatedBracket.length - 1];
   const championName = finalRound && finalRound.matches.length === 1 ? (winners[finalRound.matches[0].id] || null) : null;
 
 
