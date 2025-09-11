@@ -4,15 +4,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Loader2 } from 'lucide-react';
 
 const DEBATE_STATE_DOC_ID = "current";
 
 export function TournamentBracket() {
-  const [refreshKey, setRefreshKey] = useState(Date.now());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [canvaUrl, setCanvaUrl] = useState("https://www.canva.com/design/DAGyhqwb22E/W2iKUebuBwmvLcRraqzKGg/view?embed");
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +19,6 @@ export function TournamentBracket() {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().bracketCanvaUrl) {
-        // Ensure we use the embeddable version of the URL
         const rawUrl = docSnap.data().bracketCanvaUrl;
         const url = new URL(rawUrl);
         const embedUrl = `${url.origin}${url.pathname}/view?embed`;
@@ -29,10 +27,9 @@ export function TournamentBracket() {
       setLoading(false);
     });
 
-    // Auto-refresh interval
     const interval = setInterval(() => {
-      setRefreshKey(Date.now());
-    }, 60000);
+      handleRefresh();
+    }, 60000); // Auto-refresh every minute
 
     return () => {
         unsubscribe();
@@ -40,11 +37,12 @@ export function TournamentBracket() {
     };
   }, []);
 
-
   const handleRefresh = () => {
-    setRefreshKey(Date.now());
+    setIsRefreshing(true);
+    // This short timeout forces React to unmount and then remount the iframe,
+    // which is a more aggressive way to clear the cache.
+    setTimeout(() => setIsRefreshing(false), 100);
   };
-
 
   return (
     <Card>
@@ -53,8 +51,8 @@ export function TournamentBracket() {
                 <CardTitle className="font-headline">Bracket del Torneo</CardTitle>
                 <CardDescription>Visualización de las rondas eliminatorias.</CardDescription>
             </div>
-            <Button variant="outline" size="icon" onClick={handleRefresh}>
-                <RefreshCw className="h-4 w-4" />
+            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
+                {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 <span className="sr-only">Actualizar Bracket</span>
             </Button>
         </CardHeader>
@@ -78,23 +76,24 @@ export function TournamentBracket() {
                         willChange: 'transform',
                         }}
                     >
-                        <iframe
-                        key={refreshKey}
-                        loading="lazy"
-                        style={{
-                            position: 'absolute',
-                            width: '100%',
-                            height: '100%',
-                            top: '0',
-                            left: '0',
-                            border: 'none',
-                            padding: '0',
-                            margin: '0',
-                        }}
-                        src={`${canvaUrl}&r=${refreshKey}`}
-                        allowFullScreen
-                        allow="fullscreen"
-                        ></iframe>
+                        {!isRefreshing && (
+                            <iframe
+                                loading="lazy"
+                                style={{
+                                    position: 'absolute',
+                                    width: '100%',
+                                    height: '100%',
+                                    top: '0',
+                                    left: '0',
+                                    border: 'none',
+                                    padding: '0',
+                                    margin: '0',
+                                }}
+                                src={canvaUrl}
+                                allowFullScreen
+                                allow="fullscreen"
+                            ></iframe>
+                        )}
                     </div>
                 </div>
             )}
