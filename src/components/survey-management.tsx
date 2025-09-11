@@ -450,4 +450,3 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
         </div>
     );
 }
-
