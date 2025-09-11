@@ -48,6 +48,7 @@ import { RubricManagement } from '@/components/rubric-management';
 import { HomePageEditor } from '@/components/home-page-editor';
 import { CompetitionSettings } from '@/components/competition-settings';
 import { TournamentBracket } from '@/components/tournament-bracket';
+import { BracketEditor } from '@/components/bracket-editor';
 
 
 interface SchoolData {
@@ -511,7 +512,10 @@ function AdminDashboard() {
                 <RoundManagement />
             </TabsContent>
             <TabsContent value="bracket">
+              <div className="space-y-6">
+                <BracketEditor />
                 <TournamentBracket />
+              </div>
             </TabsContent>
             <TabsContent value="rubric">
                 <RubricManagement />

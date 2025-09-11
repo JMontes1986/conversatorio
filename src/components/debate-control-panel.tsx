@@ -640,12 +640,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [currentRound, setCurrentRound] = useState('');
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
 
-    const [bracketTitle, setBracketTitle] = useState("¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
-    const [bracketSubtitle, setBracketSubtitle] = useState("Debate Intercolegial");
-    const [bracketTitleSize, setBracketTitleSize] = useState([3]);
-    const [bracketCanvaUrl, setBracketCanvaUrl] = useState("");
-    const [isSavingBracketSettings, setIsSavingBracketSettings] = useState(false);
-
     useEffect(() => {
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
         const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
@@ -662,10 +656,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     }));
                 }
                 setCurrentRound(data.currentRound || '');
-                setBracketTitle(data.bracketTitle || "¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
-                setBracketSubtitle(data.bracketSubtitle || "Debate Intercolegial");
-                setBracketTitleSize([data.bracketTitleSize || 3]);
-                setBracketCanvaUrl(data.bracketCanvaUrl || "");
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
@@ -853,25 +843,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         toast({ title: "Subida Completa", description: "El video se ha subido y enlazado correctamente." });
     };
 
-    const handleSaveBracketSettings = async () => {
-        setIsSavingBracketSettings(true);
-        try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { 
-                bracketTitle,
-                bracketSubtitle,
-                bracketCanvaUrl,
-                bracketTitleSize: bracketTitleSize[0]
-            }, { merge: true });
-            toast({ title: "Ajustes del Bracket Guardados" });
-        } catch (error) {
-            console.error("Error saving bracket settings:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los ajustes del bracket." });
-        } finally {
-            setIsSavingBracketSettings(false);
-        }
-    };
-
     const TimerSettings = () => {
         const [minutes, setMinutes] = useState(Math.floor(mainTimer.duration / 60));
         const [seconds, setSeconds] = useState(mainTimer.duration % 60);
@@ -923,14 +894,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 </PopoverContent>
             </Popover>
         )
-    };
-
-    const titleSizeMap: Record<number, string> = {
-        1: "text-xl",
-        2: "text-2xl",
-        3: "text-3xl",
-        4: "text-4xl",
-        5: "text-5xl"
     };
 
     return (
@@ -1013,45 +976,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                         <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
                             <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Pública
                        </Button>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><PenLine className="h-5 w-5"/>Ajustes del Bracket</CardTitle>
-                        <CardDescription>Personalice los títulos y el enlace de Canva que aparecen en el marcador del torneo.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="bracket-canva-url">URL del Bracket de Canva</Label>
-                            <Input id="bracket-canva-url" placeholder="Pegue el enlace para compartir de Canva" value={bracketCanvaUrl} onChange={(e) => setBracketCanvaUrl(e.target.value)} />
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="bracket-title">Título Principal</Label>
-                            <Input id="bracket-title" value={bracketTitle} onChange={(e) => setBracketTitle(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="bracket-subtitle">Subtítulo</Label>
-                            <Input id="bracket-subtitle" value={bracketSubtitle} onChange={(e) => setBracketSubtitle(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="bracket-title-size">Tamaño del Título</Label>
-                            <div className="flex items-center gap-4">
-                                <Slider
-                                    id="bracket-title-size"
-                                    min={1}
-                                    max={5}
-                                    step={1}
-                                    value={bracketTitleSize}
-                                    onValueChange={setBracketTitleSize}
-                                />
-                                <span className={`font-bold ${titleSizeMap[bracketTitleSize[0]]}`}>Aa</span>
-                            </div>
-                        </div>
-                        <Button className="w-full" onClick={handleSaveBracketSettings} disabled={isSavingBracketSettings}>
-                            {isSavingBracketSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
-                            Guardar Ajustes del Bracket
-                        </Button>
                     </CardContent>
                 </Card>
             </div>
