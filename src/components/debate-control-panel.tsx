@@ -777,7 +777,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             return;
         }
         const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tempQrUrlInput)}`;
-        sendTempMessage("¡Escanea para ver en tiempo real!", qrApiUrl);
+        const message = tempMessageInput.trim() || "¡Escanea para ver en tiempo real!";
+        sendTempMessage(message, qrApiUrl);
     };
 
 
@@ -927,30 +928,32 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
                         <CardDescription>Muestre un mensaje de texto o un código QR en la pantalla pública.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-3">
-                             <Label>Mensaje de solo texto</Label>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Texto (para mensaje o QR)</Label>
                             <Textarea 
-                                placeholder="Ej: En breves momentos, la siguiente pregunta..."
+                                placeholder="Ej: ¡Escanea para ver en tiempo real!"
                                 value={tempMessageInput}
                                 onChange={(e) => setTempMessageInput(e.target.value)}
                                 rows={2}
                             />
-                            <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage} className="w-full">
-                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                Enviar solo Texto
-                            </Button>
                         </div>
-                        <div className="space-y-3">
-                             <Label>Generador de Código QR</Label>
+                        <div className="space-y-2">
+                             <Label>URL para Código QR</Label>
                              <Input 
                                 placeholder="Pegue la URL para generar el QR (ej: https://...)"
                                 value={tempQrUrlInput}
                                 onChange={(e) => setTempQrUrlInput(e.target.value)}
                              />
-                            <Button onClick={handleSendQrCode} disabled={isSendingTempMessage} className="w-full">
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage || !tempMessageInput.trim()}>
+                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                Enviar solo Texto
+                            </Button>
+                             <Button onClick={handleSendQrCode} disabled={isSendingTempMessage || !tempQrUrlInput.trim()}>
                                 {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4"/>}
-                                Generar y Enviar QR
+                                Enviar Texto y QR
                             </Button>
                         </div>
                          <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full">
