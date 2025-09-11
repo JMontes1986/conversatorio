@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send, TrendingUp, TrendingDown, FileDown } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import Image from "next/image";
 import Link from "next/link";
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 
 const questionSchema = z.object({
@@ -287,6 +289,99 @@ export function SurveyManagement() {
         });
   }
 
+  const handleDownloadCSV = () => {
+    const allQuestions = form.getValues('sections').flatMap(s => s.questions);
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    const headers = ["Fecha de Envío", "Es Admin", ...allQuestions.map(q => q.text.replace(/,/g, ''))];
+    csvContent += headers.join(",") + "\r\n";
+
+    responses.forEach(response => {
+        const row = [
+            response.createdAt.toDate().toLocaleString(),
+            response.isAdminSubmission ? "Sí" : "No",
+            ...allQuestions.map(q => {
+                const answer = response.answers[q.id] || "";
+                return `"${String(answer).replace(/"/g, '""')}"`;
+            })
+        ];
+        csvContent += row.join(",") + "\r\n";
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "resultados_encuesta.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+    const handleDownloadPDF = () => {
+        const doc = new jsPDF();
+        const surveyConfig = form.getValues();
+        const allQuestions = surveyConfig.sections.flatMap(s => s.questions);
+        const textResponses = getTextResponses();
+
+        doc.text(surveyConfig.title, 14, 16);
+        doc.setFontSize(12);
+        doc.text(`Total de Respuestas: ${responses.length}`, 14, 24);
+
+        const tableData = responses.map(r => {
+            const row: (string | number)[] = [r.createdAt.toDate().toLocaleDateString()];
+            allQuestions.forEach(q => {
+                row.push(r.answers[q.id] || '-');
+            });
+            return row;
+        });
+
+        (doc as any).autoTable({
+            startY: 30,
+            head: [['Fecha', ...allQuestions.map(q => q.text)]],
+            body: tableData,
+            headStyles: { fontSize: 8 },
+            bodyStyles: { fontSize: 8 },
+            theme: 'striped',
+            didParseCell: function (data: any) {
+                if (data.row.section === 'body' && data.cell.text) {
+                    if (data.cell.text.length > 25) { // Truncate long text
+                         data.cell.text = data.cell.text.substring(0, 22) + '...';
+                    }
+                }
+            }
+        });
+        
+        let finalY = (doc as any).lastAutoTable.finalY || 10;
+        finalY += 10;
+        
+        doc.setFontSize(14);
+        doc.text("Respuestas Abiertas", 14, finalY);
+        finalY += 6;
+
+        textResponses.forEach(question => {
+            if (question.answers.length > 0) {
+                doc.setFontSize(10);
+                doc.text(question.text, 14, finalY);
+                finalY += 5;
+                question.answers.forEach(answer => {
+                    doc.setFontSize(9);
+                    const splitText = doc.splitTextToSize(`- ${answer}`, 180);
+                    doc.text(splitText, 16, finalY);
+                    finalY += (splitText.length * 4);
+                    if (finalY > 280) { // Page break
+                        doc.addPage();
+                        finalY = 15;
+                    }
+                });
+                finalY += 4;
+            }
+        });
+
+
+        doc.save('resultados_encuesta.pdf');
+    };
+
+
 
   if (loading) {
       return (
@@ -442,7 +537,17 @@ export function SurveyManagement() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Dashboard de Resultados ({responses.length} respuestas)</CardTitle>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Dashboard de Resultados ({responses.length} respuestas)</CardTitle>
+                        <div className="flex gap-2">
+                             <Button variant="outline" size="sm" onClick={handleDownloadCSV} disabled={responses.length === 0}>
+                                <FileDown className="mr-2 h-4 w-4" /> CSV
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleDownloadPDF} disabled={responses.length === 0}>
+                                <FileDown className="mr-2 h-4 w-4" /> PDF
+                            </Button>
+                        </div>
+                    </div>
                     <CardDescription>
                     Visualice las respuestas recibidas en tiempo real.
                     </CardDescription>
