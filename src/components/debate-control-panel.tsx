@@ -530,7 +530,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                     <div className="flex items-center gap-2">
                                                         <Input 
                                                             id={`video-url-${q.id}`}
-                                                            placeholder="Pegar enlace o subir archivo"
+                                                            placeholder="Pegar enlace de YouTube, OneDrive, etc."
                                                             value={videoInputs[q.id] || ''}
                                                             onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
                                                             disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
@@ -544,10 +544,13 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                             title="Guardar Enlace">
                                                             {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
                                                         </Button>
-                                                        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile?.questionId === q.id}>
+                                                        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => {
+                                                            const fileInput = document.getElementById(`file-input-${q.id}`);
+                                                            fileInput?.click();
+                                                        }} disabled={uploadingFile?.questionId === q.id}>
                                                            <Upload className="h-4 w-4" />
                                                         </Button>
-                                                        <input type="file" ref={fileInputRef} data-question-id={q.id} onChange={handleFileChange} className="hidden" accept="video/*" />
+                                                        <input type="file" id={`file-input-${q.id}`} data-question-id={q.id} onChange={handleFileChange} className="hidden" accept="video/*" />
                                                     </div>
                                                     {uploadingFile?.questionId === q.id && (
                                                         <div className="space-y-1">
