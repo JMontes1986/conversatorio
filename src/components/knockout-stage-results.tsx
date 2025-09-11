@@ -82,14 +82,16 @@ export function KnockoutStageResults() {
     }, []);
 
     const finalStageResults = useMemo(() => {
+        if (loading) return [];
+        
         const groupRoundNames = allRounds
             .filter(r => r.phase === "Fase de Grupos")
             .map(r => r.name);
 
-        const finalScores = allScores.filter(score => 
-            !groupRoundNames.includes(score.matchId) &&
-            !score.matchId.startsWith("grupo") // Double check for safety
-        );
+        const finalScores = allScores.filter(score => {
+            // Check if the matchId exactly matches a group round name OR starts with a group round name (for byes)
+            return !groupRoundNames.some(groupName => score.matchId.startsWith(groupName));
+        });
 
         const matches: Record<string, ScoreData[]> = {};
         finalScores.forEach(score => {
@@ -161,7 +163,7 @@ export function KnockoutStageResults() {
 
         return processedMatches;
 
-    }, [allScores, debateState, allRounds]);
+    }, [allScores, debateState, allRounds, loading]);
 
 
     if (loading) {
