@@ -60,6 +60,7 @@ type SurveyResponse = {
     id: string;
     createdAt: any;
     answers: Record<string, string | number>;
+    isAdminSubmission?: boolean;
 }
 
 
@@ -251,7 +252,7 @@ export function SurveyManagement() {
                 const answers = responses
                     .map(r => r.answers[q.id])
                     .filter(a => typeof a === 'string' && a.trim() !== '') as string[];
-                return { text: q.text, answers };
+                return { id: q.id, text: q.text, answers };
             });
         });
   }
@@ -297,7 +298,7 @@ export function SurveyManagement() {
                 </div>
                  <Button asChild className="mt-4 w-full md:w-auto" variant="outline">
                     <Link href="/survey" target="_blank">
-                        <Send className="mr-2" />
+                        <Send className="mr-2 h-4 w-4" />
                         Hacer Encuesta como Admin
                     </Link>
                 </Button>
@@ -411,7 +412,7 @@ export function SurveyManagement() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Resultados de la Encuesta ({responses.length} respuestas)</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Dashboard de Resultados ({responses.length} respuestas)</CardTitle>
                     <CardDescription>
                     Visualice las respuestas recibidas en tiempo real.
                     </CardDescription>
@@ -451,18 +452,23 @@ export function SurveyManagement() {
                             </div>
                             <Separator />
                             <div className="space-y-4">
-                                {getTextResponses().map((item, i) => (
+                                <h3 className="font-semibold mb-2">Respuestas de Texto Abierto</h3>
+                                 <Accordion type="multiple" className="w-full">
+                                {getTextResponses().map((item) => (
                                     item.answers.length > 0 && (
-                                    <div key={i}>
-                                        <h3 className="font-semibold mb-2">{item.text}</h3>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                            {item.answers.map((answer, j) => (
-                                                <p key={j} className="text-sm bg-secondary p-2 rounded-md border">{answer}</p>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    <AccordionItem value={item.id} key={item.id}>
+                                         <AccordionTrigger>{item.text}</AccordionTrigger>
+                                         <AccordionContent>
+                                            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                                {item.answers.map((answer, j) => (
+                                                    <p key={j} className="text-sm bg-secondary p-2 rounded-md border">{answer}</p>
+                                                ))}
+                                            </div>
+                                         </AccordionContent>
+                                    </AccordionItem>
                                     )
                                 ))}
+                                </Accordion>
                             </div>
                         </>
                     ) : (
