@@ -28,6 +28,7 @@ import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+import Image from "next/image";
 
 
 const questionSchema = z.object({
@@ -119,7 +120,7 @@ export function SurveyManagement() {
     const unsubscribeConfig = onSnapshot(configRef, (doc) => {
         if (doc.exists()) {
             const data = doc.data();
-            const sanitizedData = {
+            const sanitizedData: FormData = {
                 ...defaultValues,
                 ...data,
                 title: data.title || '',
@@ -128,7 +129,7 @@ export function SurveyManagement() {
                 sections: data.sections && data.sections.length > 0 ? data.sections : defaultSections,
                 isActive: data.isActive || false,
             };
-            form.reset(sanitizedData as FormData);
+            form.reset(sanitizedData);
         } else {
              form.reset(defaultValues);
         }
@@ -344,26 +345,39 @@ export function SurveyManagement() {
                                     <FolderPlus className="mr-2 h-4 w-4" /> Añadir Sección
                                 </Button>
                             </div>
-                             {sectionFields.map((section, sectionIndex) => (
-                                <div key={section.id} className="space-y-4 rounded-md border p-4 relative bg-secondary/30">
-                                    <FormField
-                                        control={form.control}
-                                        name={`sections.${sectionIndex}.title`}
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Título de la Sección {sectionIndex + 1}</FormLabel>
-                                                <FormControl><Input {...field} placeholder="Escriba el título de la sección" /></FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => removeSection(sectionIndex)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-
-                                    <QuestionFields control={form.control} sectionIndex={sectionIndex} />
-                                </div>
-                            ))}
+                            <Accordion type="multiple" className="w-full">
+                                {sectionFields.map((section, sectionIndex) => (
+                                    <AccordionItem value={section.id} key={section.id} className="border-b-0">
+                                        <Card className="bg-secondary/30">
+                                            <AccordionTrigger className="p-4">
+                                                <div className="flex-1 text-left">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`sections.${sectionIndex}.title`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Título de la Sección {sectionIndex + 1}</FormLabel>
+                                                                <div className="flex items-center gap-2">
+                                                                     <FormControl><Input {...field} placeholder="Escriba el título de la sección" className="bg-background" /></FormControl>
+                                                                    <Button type="button" variant="ghost" size="icon" className="text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); removeSection(sectionIndex); }}>
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="p-4 pt-0">
+                                                <div className="space-y-4 pl-4 border-l-2 ml-2">
+                                                     <QuestionFields control={form.control} sectionIndex={sectionIndex} />
+                                                </div>
+                                            </AccordionContent>
+                                        </Card>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
                         </div>
 
                         <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || loading}>
@@ -392,6 +406,7 @@ export function SurveyManagement() {
                                 <h3 className="font-semibold mb-2">Resultados por Calificación</h3>
                                 <Accordion type="single" collapsible className="w-full">
                                     {calculateChartData().map((section, i) => (
+                                        section.questions.length > 0 &&
                                         <AccordionItem value={`section-${i}`} key={i}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
                                             <AccordionContent className="space-y-6">
@@ -446,7 +461,7 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
     });
 
     return (
-        <div className="space-y-4 pl-4 border-l-2 ml-2">
+        <>
             {fields.map((field, questionIndex) => (
                 <div key={field.id} className="space-y-3 rounded-md border p-3 relative bg-background">
                     <FormField
@@ -485,7 +500,7 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
             <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), text: '', type: 'rating' })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Pregunta a esta Sección
             </Button>
-        </div>
+        </>
     );
 }
 
