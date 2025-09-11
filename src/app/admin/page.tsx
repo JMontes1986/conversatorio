@@ -515,7 +515,7 @@ function AdminDashboard() {
                     <CardHeader>
                         <CardTitle>Vista del Bracket del Torneo</CardTitle>
                         <CardDescription>
-                            Visualización de las rondas eliminatorias tal como se muestran al público.
+                            Esta es una vista previa de cómo el público ve el bracket. La configuración de los enfrentamientos se realiza en la pestaña "Control del Debate".
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="w-full overflow-x-auto">

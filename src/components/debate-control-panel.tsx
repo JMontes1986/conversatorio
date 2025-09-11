@@ -198,9 +198,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         }, {} as Record<string, RoundData[]>);
         
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
-            if (a === 'General') return -1;
-            if (b === 'General') return 1;
-            return a.localeCompare(b);
+            const phaseOrder = ["Fase de Grupos", "Fase de Finales"];
+            return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
         });
         
         const result: Record<string, RoundData[]> = {};
@@ -218,18 +217,20 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         let qualifiedTeamNames: string[] = [];
 
         // Logic for advancing teams
-        if (selectedRoundData) {
-            if (selectedRoundData.phase === "Cuartos de Final") {
-                 const groupStageRounds = debateRounds.filter(r => r.phase === "Fase de Grupos");
-                 qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, groupStageRounds, 8);
-            } else {
-                 const roundDependencies: Record<string, string> = {
-                    "Semifinal": "Cuartos de Final",
-                    "Final": "Semifinal"
-                };
-                const previousRoundPhase = roundDependencies[selectedRoundData.phase];
-                if (previousRoundPhase) {
-                    const previousRounds = debateRounds.filter(r => r.phase === previousRoundPhase);
+        if (selectedRoundData && selectedRoundData.phase === "Fase de Finales") {
+            const phaseDependencies: Record<string, { from: string, limit?: number }> = {
+                "Cuartos de Final": { from: "Fase de Grupos", limit: 8 },
+                "Semifinal": { from: "Cuartos de Final" },
+                "Final": { from: "Semifinal" }
+            };
+
+            const dependency = Object.entries(phaseDependencies).find(([phase]) => roundName.includes(phase))?.[1];
+
+            if (dependency) {
+                const previousRounds = debateRounds.filter(r => r.phase === dependency.from);
+                if (dependency.limit) { // Top scoring teams from a phase
+                    qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, previousRounds, dependency.limit);
+                } else { // Winners from a phase
                     qualifiedTeamNames = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
                 }
             }
@@ -339,7 +340,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         <Card>
             <CardHeader>
                 <CardTitle>Configurar Ronda y Equipos</CardTitle>
-                <CardDescription>Establezca la ronda activa y los equipos que se enfrentan.</CardDescription>
+                <CardDescription>Establezca la ronda activa y los equipos que se enfrentan. Para las fases finales, el sistema pre-filtrará a los equipos clasificados.</CardDescription>
             </CardHeader>
             <CardContent>
                 <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
