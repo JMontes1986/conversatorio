@@ -13,6 +13,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -36,6 +37,7 @@ const questionSchema = z.object({
   id: z.string(),
   text: z.string().min(3, "El texto de la pregunta es requerido."),
   type: z.enum(["rating", "text"]),
+  required: z.boolean().optional(),
 });
 
 const sectionSchema = z.object({
@@ -66,29 +68,29 @@ const defaultSections: z.infer<typeof sectionSchema>[] = [
         id: nanoid(),
         title: "Sobre el Evento",
         questions: [
-            { id: nanoid(), text: "El tema del conversatorio fue relevante y de actualidad.", type: "rating" },
-            { id: nanoid(), text: "La organización general del evento fue excelente.", type: "rating" },
-            { id: nanoid(), text: "Los moderadores del conversatorio facilitaron un diálogo dinámico y ordenado.", type: "rating" },
-            { id: nanoid(), text: "La plataforma o el lugar donde se realizó el evento fue adecuado y cómodo.", type: "rating" },
-            { id: nanoid(), text: "El tiempo asignado para cada intervención fue suficiente.", type: "rating" },
+            { id: nanoid(), text: "El tema del conversatorio fue relevante y de actualidad.", type: "rating", required: true },
+            { id: nanoid(), text: "La organización general del evento fue excelente.", type: "rating", required: true },
+            { id: nanoid(), text: "Los moderadores del conversatorio facilitaron un diálogo dinámico y ordenado.", type: "rating", required: true },
+            { id: nanoid(), text: "La plataforma o el lugar donde se realizó el evento fue adecuado y cómodo.", type: "rating", required: true },
+            { id: nanoid(), text: "El tiempo asignado para cada intervención fue suficiente.", type: "rating", required: true },
         ]
     },
     {
         id: nanoid(),
         title: "Sobre el Contenido",
         questions: [
-             { id: nanoid(), text: "Los recursos audiovisuales utilizados (presentaciones, videos, etc.) fueron de alta calidad y enriquecieron el debate.", type: "rating" },
-            { id: nanoid(), text: "La calidad de los argumentos y la preparación de los equipos participantes fue alta.", type: "rating" },
+             { id: nanoid(), text: "Los recursos audiovisuales utilizados (presentaciones, videos, etc.) fueron de alta calidad y enriquecieron el debate.", type: "rating", required: true },
+            { id: nanoid(), text: "La calidad de los argumentos y la preparación de los equipos participantes fue alta.", type: "rating", required: true },
         ]
     },
     {
         id: nanoid(),
         title: "Opinión General",
         questions: [
-            { id: nanoid(), text: "El evento cumplió con mis expectativas.", type: "rating" },
-            { id: nanoid(), text: "Recomendaría este evento a otros colegios o estudiantes.", type: "rating" },
-            { id: nanoid(), text: "¿Qué sugerencias tiene para mejorar futuros conversatorios?", type: "text" },
-            { id: nanoid(), text: "¿En qué rol participó en el evento?", type: "text" },
+            { id: nanoid(), text: "El evento cumplió con mis expectativas.", type: "rating", required: true },
+            { id: nanoid(), text: "Recomendaría este evento a otros colegios o estudiantes.", type: "rating", required: true },
+            { id: nanoid(), text: "¿Qué sugerencias tiene para mejorar futuros conversatorios?", type: "text", required: false },
+            { id: nanoid(), text: "¿En qué rol participó en el evento?", type: "text", required: false },
         ]
     }
 ];
@@ -120,14 +122,12 @@ export function SurveyManagement() {
     const configRef = doc(db, 'siteContent', 'survey');
     const unsubscribeConfig = onSnapshot(configRef, (doc) => {
         if (doc.exists()) {
-            const data = doc.data();
+            const data = doc.data() as Partial<FormData>;
             const sanitizedData: FormData = {
-                ...defaultValues,
-                ...data,
-                title: data.title || '',
-                subtitle: data.subtitle || '',
-                imageUrl: data.imageUrl || '',
-                sections: data.sections && data.sections.length > 0 ? data.sections : defaultSections,
+                title: data.title || defaultValues.title,
+                subtitle: data.subtitle || defaultValues.subtitle,
+                imageUrl: data.imageUrl || defaultValues.imageUrl,
+                sections: data.sections && data.sections.length > 0 ? data.sections : defaultValues.sections,
                 isActive: data.isActive || false,
             };
             form.reset(sanitizedData);
@@ -201,6 +201,7 @@ export function SurveyManagement() {
         const newSection = {
             ...sectionToDuplicate,
             id: nanoid(),
+            title: `${sectionToDuplicate.title} (Copia)`,
             questions: sectionToDuplicate.questions.map(q => ({...q, id: nanoid()}))
         };
         insertSection(index + 1, newSection);
@@ -352,7 +353,7 @@ export function SurveyManagement() {
                         <div className="space-y-4">
                              <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-medium">Secciones y Preguntas</h3>
-                                <Button type="button" variant="outline" size="sm" onClick={() => appendSection({ id: nanoid(), title: '', questions: [{id: nanoid(), text: '', type: 'rating'}] })}>
+                                <Button type="button" variant="outline" size="sm" onClick={() => appendSection({ id: nanoid(), title: '', questions: [{id: nanoid(), text: '', type: 'rating', required: false}] })}>
                                     <FolderPlus className="mr-2 h-4 w-4" /> Añadir Sección
                                 </Button>
                             </div>
@@ -360,9 +361,9 @@ export function SurveyManagement() {
                                 {sectionFields.map((section, sectionIndex) => (
                                     <AccordionItem value={section.id} key={section.id} className="border-b-0 mb-2">
                                         <Card className="bg-secondary/30">
-                                             <div className="flex items-start p-4">
-                                                <AccordionTrigger className="flex-1 p-0 text-left">
-                                                     <FormField
+                                            <div className="flex items-start p-4">
+                                                <AccordionTrigger className="flex-1 p-0 text-left hover:no-underline">
+                                                    <FormField
                                                         control={form.control}
                                                         name={`sections.${sectionIndex}.title`}
                                                         render={({ field }) => (
@@ -468,7 +469,7 @@ export function SurveyManagement() {
   );
 }
 
-function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex: number }) {
+function QuestionFields({ control, sectionIndex }: { control: Control<FormData>, sectionIndex: number }) {
     const { fields, append, remove, insert } = useFieldArray({
         control,
         name: `sections.${sectionIndex}.questions`
@@ -482,7 +483,16 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
     return (
         <>
             {fields.map((field, questionIndex) => (
-                <div key={field.id} className="space-y-3 rounded-md border p-3 relative bg-background">
+                <div key={field.id} className="space-y-3 rounded-md border p-4 relative bg-background shadow-sm">
+                    <div className="absolute top-1 right-1 flex">
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleDuplicateQuestion(questionIndex)}>
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => remove(questionIndex)}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+
                     <FormField
                         control={control}
                         name={`sections.${sectionIndex}.questions.${questionIndex}.text`}
@@ -511,17 +521,26 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
                             </FormItem>
                         )}
                     />
-                    <div className="absolute top-1 right-1 flex">
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleDuplicateQuestion(questionIndex)}>
-                            <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => remove(questionIndex)}>
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
+                    <FormField
+                        control={control}
+                        name={`sections.${sectionIndex}.questions.${questionIndex}.required`}
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mt-2 bg-secondary/50">
+                                <div className="space-y-0.5">
+                                    <FormLabel>Pregunta Obligatoria</FormLabel>
+                                </div>
+                                <FormControl>
+                                    <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                    />
+                                </FormControl>
+                            </FormItem>
+                        )}
+                    />
                 </div>
             ))}
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), text: '', type: 'rating' })}>
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), text: '', type: 'rating', required: false })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Pregunta a esta Sección
             </Button>
         </>

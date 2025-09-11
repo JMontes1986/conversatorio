@@ -25,6 +25,7 @@ interface Question {
   id: string;
   text: string;
   type: "rating" | "text";
+  required?: boolean;
 }
 
 interface Section {
@@ -59,7 +60,6 @@ export default function SurveyPage() {
         setLoading(false);
     });
     
-    // Check if there are any responses to determine if the user can re-submit
     const responsesQuery = collection(db, "surveyResponses");
     const unsubscribeResponses = onSnapshot(responsesQuery, async () => {
         const snapshot = await getDocs(responsesQuery);
@@ -73,12 +73,10 @@ export default function SurveyPage() {
   }, []);
 
   useEffect(() => {
-    // Only block if a submission was made AND the responses haven't been cleared by admin
     const locallySubmitted = localStorage.getItem('surveySubmitted');
     if (locallySubmitted === 'true' && responseCount > 0) {
         setHasSubmitted(true);
     } else if (responseCount === 0) {
-        // If admin cleared responses, allow user to submit again
         localStorage.removeItem('surveySubmitted');
         setHasSubmitted(false);
     }
@@ -181,10 +179,13 @@ export default function SurveyPage() {
                             key={q.id}
                             control={form.control}
                             name={q.id}
-                            rules={{ required: q.type === 'rating' ? 'Esta pregunta es requerida' : false }}
+                            rules={{ required: q.required ? 'Esta pregunta es requerida' : false }}
                             render={({ field }) => (
                                 <FormItem className="space-y-3 rounded-md border bg-background p-4 shadow-sm">
-                                    <FormLabel className="text-base">{qIndex + 1}. {q.text}</FormLabel>
+                                    <FormLabel className="text-base">
+                                        {qIndex + 1}. {q.text}
+                                        {q.required && <span className="text-destructive ml-1">*</span>}
+                                    </FormLabel>
                                     <FormControl>
                                         {q.type === 'rating' ? (
                                             <RadioGroup
