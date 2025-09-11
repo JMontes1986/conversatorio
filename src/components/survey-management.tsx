@@ -13,11 +13,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import Image from "next/image";
+import Link from "next/link";
 
 
 const questionSchema = z.object({
@@ -273,7 +273,7 @@ export function SurveyManagement() {
         )}>
             <CardHeader>
                 <CardTitle>Estado de la Encuesta</CardTitle>
-                <CardDescription>Activa o desactiva la encuesta para el público.</CardDescription>
+                <CardDescription>Activa o desactiva la encuesta para el público y haz pruebas.</CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="flex items-center space-x-4 rounded-md border p-4">
@@ -295,6 +295,12 @@ export function SurveyManagement() {
                         aria-readonly
                     />
                 </div>
+                 <Button asChild className="mt-4 w-full md:w-auto" variant="outline">
+                    <Link href="/survey" target="_blank">
+                        <Send className="mr-2" />
+                        Hacer Encuesta como Admin
+                    </Link>
+                </Button>
             </CardContent>
              <CardFooter>
                 <p className="text-xs text-muted-foreground flex items-center gap-2">

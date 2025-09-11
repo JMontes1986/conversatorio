@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -20,6 +20,7 @@ import React, { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Image from "next/image";
+import { useAuth } from "@/context/auth-context";
 
 interface Question {
   id: string;
@@ -50,6 +51,7 @@ export default function SurveyPage() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [responseCount, setResponseCount] = useState(0);
   const form = useForm();
+  const { user: adminUser } = useAuth();
 
   useEffect(() => {
     const configRef = doc(db, 'siteContent', 'survey');
@@ -73,6 +75,12 @@ export default function SurveyPage() {
   }, []);
 
   useEffect(() => {
+    // Admin user should always be able to submit, so we bypass this check for them.
+    if (adminUser) {
+        setHasSubmitted(false);
+        return;
+    }
+
     const locallySubmitted = localStorage.getItem('surveySubmitted');
     if (locallySubmitted === 'true' && responseCount > 0) {
         setHasSubmitted(true);
@@ -80,7 +88,7 @@ export default function SurveyPage() {
         localStorage.removeItem('surveySubmitted');
         setHasSubmitted(false);
     }
-  }, [responseCount]);
+  }, [responseCount, adminUser]);
 
   async function onSubmit(values: any) {
     setIsSubmitting(true);
@@ -88,13 +96,21 @@ export default function SurveyPage() {
       await addDoc(collection(db, "surveyResponses"), {
         answers: values,
         createdAt: new Date(),
+        isAdminSubmission: !!adminUser
       });
       toast({
         title: "¡Gracias por su opinión!",
         description: "Su respuesta ha sido enviada exitosamente.",
       });
-      localStorage.setItem('surveySubmitted', 'true');
-      setHasSubmitted(true);
+      
+      // Only set localStorage and block for non-admin users
+      if (!adminUser) {
+          localStorage.setItem('surveySubmitted', 'true');
+          setHasSubmitted(true);
+      } else {
+          form.reset(); // Reset form for admin to submit again
+      }
+
     } catch (error) {
       console.error("Error adding document: ", error);
       toast({
@@ -156,7 +172,7 @@ export default function SurveyPage() {
                     <Image 
                         src={config.imageUrl}
                         alt="Encuesta Cabecera"
-                        layout="fill"
+                        fill
                         objectFit="cover"
                         className="rounded-t-lg"
                     />
