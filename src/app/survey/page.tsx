@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileQuestion, Send, EyeOff, CheckCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, doc, onSnapshot, getDocs } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,24 +47,42 @@ export default function SurveyPage() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [responseCount, setResponseCount] = useState(0);
   const form = useForm();
 
   useEffect(() => {
     const configRef = doc(db, 'siteContent', 'survey');
-    const unsubscribe = onSnapshot(configRef, (doc) => {
+    const unsubscribeConfig = onSnapshot(configRef, (doc) => {
         if (doc.exists()) {
             setConfig(doc.data() as SurveyConfig);
         }
         setLoading(false);
     });
     
-    const submitted = localStorage.getItem('surveySubmitted');
-    if (submitted === 'true') {
-        setHasSubmitted(true);
-    }
+    // Check if there are any responses to determine if the user can re-submit
+    const responsesQuery = collection(db, "surveyResponses");
+    const unsubscribeResponses = onSnapshot(responsesQuery, async () => {
+        const snapshot = await getDocs(responsesQuery);
+        setResponseCount(snapshot.size);
+    });
 
-    return () => unsubscribe();
+    return () => {
+        unsubscribeConfig();
+        unsubscribeResponses();
+    };
   }, []);
+
+  useEffect(() => {
+    // Only block if a submission was made AND the responses haven't been cleared by admin
+    const locallySubmitted = localStorage.getItem('surveySubmitted');
+    if (locallySubmitted === 'true' && responseCount > 0) {
+        setHasSubmitted(true);
+    } else if (responseCount === 0) {
+        // If admin cleared responses, allow user to submit again
+        localStorage.removeItem('surveySubmitted');
+        setHasSubmitted(false);
+    }
+  }, [responseCount]);
 
   async function onSubmit(values: any) {
     setIsSubmitting(true);
