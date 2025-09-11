@@ -89,6 +89,13 @@ const defaultSections: z.infer<typeof sectionSchema>[] = [
     }
 ];
 
+const defaultValues: FormData = {
+    title: "ENCUESTA DE SATISFACCIÓN",
+    subtitle: "CONVERSATORIO INTERCOLEGIAL COLEGIO BILINGÜE PADRE FRANCESCO COLL",
+    sections: defaultSections,
+    isActive: false,
+};
+
 
 export function SurveyManagement() {
   const { toast } = useToast();
@@ -99,12 +106,7 @@ export function SurveyManagement() {
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      title: "ENCUESTA DE SATISFACCIÓN",
-      subtitle: "CONVERSATORIO INTERCOLEGIAL COLEGIO BILINGÜE PADRE FRANCESCO COLL",
-      sections: defaultSections,
-      isActive: false,
-    },
+    defaultValues: defaultValues,
   });
 
   const isSurveyActive = form.watch('isActive');
@@ -113,7 +115,17 @@ export function SurveyManagement() {
     const configRef = doc(db, 'siteContent', 'survey');
     const unsubscribeConfig = onSnapshot(configRef, (doc) => {
         if (doc.exists()) {
-            form.reset(doc.data() as FormData);
+            const data = doc.data();
+            // Ensure data loaded from DB has all the necessary fields to avoid uncontrolled components.
+            const sanitizedData = {
+                ...defaultValues,
+                ...data,
+                title: data.title || '',
+                subtitle: data.subtitle || '',
+                sections: data.sections || [],
+                isActive: data.isActive || false,
+            };
+            form.reset(sanitizedData as FormData);
         }
         setLoading(false);
     });
@@ -450,3 +462,5 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
         </div>
     );
 }
+
+    
