@@ -12,7 +12,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, FileQuestion, Send, Star } from "lucide-react";
+import { Loader2, FileQuestion, Send, Star, EyeOff } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +31,7 @@ interface SurveyConfig {
   title: string;
   subtitle: string;
   questions: Question[];
+  isActive?: boolean;
 }
 
 export default function SurveyPage() {
@@ -83,10 +84,18 @@ export default function SurveyPage() {
     );
   }
 
-  if (!config) {
+  if (!config || !config.isActive) {
       return (
-           <div className="flex justify-center items-center h-screen">
-                <p className="text-muted-foreground">La encuesta no está disponible en este momento.</p>
+           <div className="container mx-auto flex items-center justify-center py-10 md:py-20 px-4">
+               <Card className="w-full max-w-md text-center">
+                   <CardHeader>
+                        <EyeOff className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                        <CardTitle>Encuesta no Disponible</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                    <p className="text-muted-foreground">La encuesta no está activa en este momento. Gracias por su interés.</p>
+                   </CardContent>
+               </Card>
             </div>
       )
   }

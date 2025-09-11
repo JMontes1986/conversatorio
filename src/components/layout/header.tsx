@@ -28,12 +28,21 @@ import { useAuth } from "@/context/auth-context";
 import { useJudgeAuth } from "@/context/judge-auth-context";
 import { useModeratorAuth } from "@/context/moderator-auth-context";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
-const navLinks = [
+const baseNavLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/draw", label: "Sorteo", icon: Shuffle },
   { href: "/debate", label: "Debate", icon: MessageSquare },
-  { href: "/survey", label: "Encuesta", icon: FileQuestion },
+];
+
+const conditionalNavLinks = [
+  { href: "/survey", label: "Encuesta", icon: FileQuestion, type: 'survey' },
+]
+
+const authNavLinks = [
   { href: "/scoring", label: "Puntuación", icon: ClipboardCheck, judge: true },
   { href: "/register", label: "Registro", icon: Users, admin: true },
   { href: "/moderator", label: "Moderar", icon: Gavel, moderator: true },
@@ -45,8 +54,19 @@ export function Header() {
   const { user: adminUser, logout: adminLogout } = useAuth();
   const { judge: judgeUser, logout: judgeLogout } = useJudgeAuth();
   const { moderator: moderatorUser, logout: moderatorLogout } = useModeratorAuth();
+  const [isSurveyActive, setIsSurveyActive] = useState(false);
   
   const isAuthenticated = adminUser || judgeUser || moderatorUser;
+
+  useEffect(() => {
+    const surveyConfigRef = doc(db, 'siteContent', 'survey');
+    const unsubscribe = onSnapshot(surveyConfigRef, (doc) => {
+      if (doc.exists()) {
+        setIsSurveyActive(doc.data().isActive || false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = () => {
     if (adminUser) adminLogout();
@@ -54,18 +74,21 @@ export function Header() {
     if (moderatorUser) moderatorLogout();
   };
 
+  const navLinks = [
+    ...baseNavLinks,
+    ...(isSurveyActive ? conditionalNavLinks.filter(l => l.type === 'survey') : []),
+    ...authNavLinks,
+  ]
+
   const filteredNavLinks = navLinks.filter(link => {
     if (link.admin && !adminUser) return false;
     if (link.judge && !judgeUser) return false;
     if (link.moderator && !moderatorUser) return false;
     
-    // Hide auth pages if not relevant user
     if(link.href === '/scoring' && !judgeUser) return false;
 
-    // Show link if it's not restricted or if the correct user is logged in
     return !link.admin && !link.judge && !link.moderator || adminUser || judgeUser || moderatorUser;
   }).filter(link => {
-    // Further filtering to avoid showing links to logged in users that they shouldn't see
     if (link.href === '/scoring' && !judgeUser) return false;
     return true;
   });
