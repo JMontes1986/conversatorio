@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -336,20 +335,15 @@ export function SurveyManagement() {
             return row;
         });
 
+        const head = [['Fecha', ...allQuestions.map(q => q.text.substring(0, 30))]];
+
         autoTable(doc, {
             startY: 30,
-            head: [['Fecha', ...allQuestions.map(q => q.text)]],
+            head: head,
             body: tableData,
             headStyles: { fontSize: 8 },
-            bodyStyles: { fontSize: 8 },
+            bodyStyles: { fontSize: 7 },
             theme: 'striped',
-            didParseCell: function (data: any) {
-                if (data.row.section === 'body' && data.cell.text) {
-                    if (data.cell.text.length > 25) { // Truncate long text
-                         data.cell.text = data.cell.text.substring(0, 22) + '...';
-                    }
-                }
-            }
         });
         
         let finalY = (doc as any).lastAutoTable.finalY || 10;
@@ -723,4 +717,3 @@ function QuestionFields({ control, sectionIndex }: { control: Control<FormData>,
 }
 
     
-
