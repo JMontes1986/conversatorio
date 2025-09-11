@@ -261,7 +261,7 @@ export function SurveyManagement() {
                         </p>
                     </div>
                     <Switch
-                        checked={isSurveyActive}
+                        checked={isSurveyActive || false}
                         onCheckedChange={handleToggleSurveyStatus}
                         disabled={isSubmitting}
                         aria-readonly
@@ -361,7 +361,7 @@ export function SurveyManagement() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Resultados de la Encuesta</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Resultados de la Encuesta ({responses.length} respuestas)</CardTitle>
                     <CardDescription>
                     Visualice las respuestas recibidas en tiempo real.
                     </CardDescription>
