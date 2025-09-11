@@ -65,7 +65,7 @@ export function FinalResultCard() {
         const winnerRonda6 = getWinnerOfRound(scores, "Ronda 6");
         const winnerRonda7 = getWinnerOfRound(scores, "Ronda 7");
 
-        const finalRoundScores = scores.filter(s => s.matchId === "Ronda 8 - Final");
+        const finalRoundScores = scores.filter(s => s.matchId.includes("Final") || s.matchId === "Ronda 8");
 
         if (finalRoundScores.length > 0) {
              const teamTotals: Record<string, number> = {};
