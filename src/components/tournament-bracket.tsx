@@ -5,23 +5,46 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { RefreshCw } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Loader2 } from 'lucide-react';
+
+const DEBATE_STATE_DOC_ID = "current";
 
 export function TournamentBracket() {
   const [refreshKey, setRefreshKey] = useState(Date.now());
-  
-  const canvaBaseUrl = "https://www.canva.com/design/DAGyhqwb22E/5zgo2W1ijIy-JKdmJspVsw/view?embed";
+  const [canvaUrl, setCanvaUrl] = useState("https://www.canva.com/design/DAGyhqwb22E/W2iKUebuBwmvLcRraqzKGg/view?embed");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data().bracketCanvaUrl) {
+        // Ensure we use the embeddable version of the URL
+        const rawUrl = docSnap.data().bracketCanvaUrl;
+        const url = new URL(rawUrl);
+        const embedUrl = `${url.origin}${url.pathname}/view?embed`;
+        setCanvaUrl(embedUrl);
+      }
+      setLoading(false);
+    });
+
+    // Auto-refresh interval
+    const interval = setInterval(() => {
+      setRefreshKey(Date.now());
+    }, 60000);
+
+    return () => {
+        unsubscribe();
+        clearInterval(interval);
+    };
+  }, []);
+
 
   const handleRefresh = () => {
     setRefreshKey(Date.now());
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      handleRefresh();
-    }, 60000); // 60000 ms = 1 minuto
-
-    return () => clearInterval(interval); // Limpiar el intervalo al desmontar el componente
-  }, []);
 
   return (
     <Card>
@@ -36,39 +59,45 @@ export function TournamentBracket() {
             </Button>
         </CardHeader>
         <CardContent>
-            <div className="bg-card p-0 md:p-4 rounded-lg w-full">
-                <div
-                    style={{
-                    position: 'relative',
-                    width: '100%',
-                    height: '0',
-                    paddingTop: '56.25%',
-                    paddingBottom: '0',
-                    boxShadow: '0 2px 8px 0 rgba(63,69,81,0.16)',
-                    overflow: 'hidden',
-                    borderRadius: '8px',
-                    willChange: 'transform',
-                    }}
-                >
-                    <iframe
-                    key={refreshKey}
-                    loading="lazy"
-                    style={{
-                        position: 'absolute',
-                        width: '100%',
-                        height: '100%',
-                        top: '0',
-                        left: '0',
-                        border: 'none',
-                        padding: '0',
-                        margin: '0',
-                    }}
-                    src={`${canvaBaseUrl}&r=${refreshKey}`}
-                    allowFullScreen
-                    allow="fullscreen"
-                    ></iframe>
+            {loading ? (
+                <div className="flex justify-center items-center h-96">
+                    <Loader2 className="h-8 w-8 animate-spin" />
                 </div>
-            </div>
+            ) : (
+                <div className="bg-card p-0 md:p-4 rounded-lg w-full">
+                    <div
+                        style={{
+                        position: 'relative',
+                        width: '100%',
+                        height: '0',
+                        paddingTop: '56.25%',
+                        paddingBottom: '0',
+                        boxShadow: '0 2px 8px 0 rgba(63,69,81,0.16)',
+                        overflow: 'hidden',
+                        borderRadius: '8px',
+                        willChange: 'transform',
+                        }}
+                    >
+                        <iframe
+                        key={refreshKey}
+                        loading="lazy"
+                        style={{
+                            position: 'absolute',
+                            width: '100%',
+                            height: '100%',
+                            top: '0',
+                            left: '0',
+                            border: 'none',
+                            padding: '0',
+                            margin: '0',
+                        }}
+                        src={`${canvaUrl}&r=${refreshKey}`}
+                        allowFullScreen
+                        allow="fullscreen"
+                        ></iframe>
+                    </div>
+                </div>
+            )}
         </CardContent>
     </Card>
   );

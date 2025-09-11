@@ -245,7 +245,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         } else {
             // Default to all schools if no specific logic applies (e.g., Fase de Grupos)
             setAvailableTeams(registeredSchools);
-            setIsAutoFilled(false);
+setIsAutoFilled(false);
             setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
         }
 
@@ -643,6 +643,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [bracketTitle, setBracketTitle] = useState("¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
     const [bracketSubtitle, setBracketSubtitle] = useState("Debate Intercolegial");
     const [bracketTitleSize, setBracketTitleSize] = useState([3]);
+    const [bracketCanvaUrl, setBracketCanvaUrl] = useState("");
     const [isSavingBracketSettings, setIsSavingBracketSettings] = useState(false);
 
     useEffect(() => {
@@ -664,6 +665,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 setBracketTitle(data.bracketTitle || "¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
                 setBracketSubtitle(data.bracketSubtitle || "Debate Intercolegial");
                 setBracketTitleSize([data.bracketTitleSize || 3]);
+                setBracketCanvaUrl(data.bracketCanvaUrl || "");
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
@@ -858,6 +860,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { 
                 bracketTitle,
                 bracketSubtitle,
+                bracketCanvaUrl,
                 bracketTitleSize: bracketTitleSize[0]
             }, { merge: true });
             toast({ title: "Ajustes del Bracket Guardados" });
@@ -1016,9 +1019,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><PenLine className="h-5 w-5"/>Ajustes del Bracket</CardTitle>
-                        <CardDescription>Personalice el título que aparece en el marcador del torneo.</CardDescription>
+                        <CardDescription>Personalice los títulos y el enlace de Canva que aparecen en el marcador del torneo.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="bracket-canva-url">URL del Bracket de Canva</Label>
+                            <Input id="bracket-canva-url" placeholder="Pegue el enlace para compartir de Canva" value={bracketCanvaUrl} onChange={(e) => setBracketCanvaUrl(e.target.value)} />
+                        </div>
                          <div className="space-y-2">
                             <Label htmlFor="bracket-title">Título Principal</Label>
                             <Input id="bracket-title" value={bracketTitle} onChange={(e) => setBracketTitle(e.target.value)} />

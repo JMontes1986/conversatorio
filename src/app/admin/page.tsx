@@ -511,17 +511,7 @@ function AdminDashboard() {
                 <RoundManagement />
             </TabsContent>
             <TabsContent value="bracket">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Vista del Bracket del Torneo</CardTitle>
-                        <CardDescription>
-                            Esta es una vista previa de cómo el público ve el bracket. La configuración de los enfrentamientos se realiza en la pestaña "Control del Debate".
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="w-full overflow-x-auto">
-                        <TournamentBracket />
-                    </CardContent>
-                </Card>
+                <TournamentBracket />
             </TabsContent>
             <TabsContent value="rubric">
                 <RubricManagement />
