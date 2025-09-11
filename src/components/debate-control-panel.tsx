@@ -38,7 +38,7 @@ import { Trash2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from './ui/progress';
 import { nanoid } from 'nanoid';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -581,7 +581,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                         </PopoverTrigger>
                                                         <PopoverContent>
                                                             <div className="flex flex-col items-center gap-2">
-                                                                <QRCode value={getQuestionUrl(q.id)} size={128} />
+                                                                <QRCodeSVG value={getQuestionUrl(q.id)} size={128} />
                                                                 <p className="text-xs text-muted-foreground text-center">Escanee para enviar una pregunta</p>
                                                             </div>
                                                         </PopoverContent>
