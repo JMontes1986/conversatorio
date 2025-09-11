@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -31,7 +32,7 @@ import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, T
 import Image from "next/image";
 import Link from "next/link";
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 
 const questionSchema = z.object({
@@ -335,7 +336,7 @@ export function SurveyManagement() {
             return row;
         });
 
-        (doc as any).autoTable({
+        autoTable(doc, {
             startY: 30,
             head: [['Fecha', ...allQuestions.map(q => q.text)]],
             body: tableData,
@@ -722,3 +723,4 @@ function QuestionFields({ control, sectionIndex }: { control: Control<FormData>,
 }
 
     
+
