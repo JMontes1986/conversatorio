@@ -12,7 +12,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, FileQuestion, Send, EyeOff } from "lucide-react";
+import { Loader2, FileQuestion, Send, EyeOff, CheckCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +46,7 @@ export default function SurveyPage() {
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const form = useForm();
 
   useEffect(() => {
@@ -56,6 +57,12 @@ export default function SurveyPage() {
         }
         setLoading(false);
     });
+    
+    const submitted = localStorage.getItem('surveySubmitted');
+    if (submitted === 'true') {
+        setHasSubmitted(true);
+    }
+
     return () => unsubscribe();
   }, []);
 
@@ -70,7 +77,8 @@ export default function SurveyPage() {
         title: "¡Gracias por su opinión!",
         description: "Su respuesta ha sido enviada exitosamente.",
       });
-      form.reset();
+      localStorage.setItem('surveySubmitted', 'true');
+      setHasSubmitted(true);
     } catch (error) {
       console.error("Error adding document: ", error);
       toast({
@@ -89,6 +97,22 @@ export default function SurveyPage() {
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
         </div>
     );
+  }
+
+  if (hasSubmitted) {
+      return (
+            <div className="container mx-auto flex items-center justify-center py-10 md:py-20 px-4">
+                <Card className="w-full max-w-md text-center">
+                    <CardHeader>
+                        <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
+                        <CardTitle className="font-headline text-3xl">¡Gracias!</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground">Tu respuesta ha sido registrada exitosamente.</p>
+                    </CardContent>
+                </Card>
+            </div>
+      )
   }
 
   if (!config || !config.isActive) {
@@ -131,7 +155,7 @@ export default function SurveyPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {config.sections.map((section, sectionIndex) => (
+              {(config.sections || []).map((section, sectionIndex) => (
                   <div key={section.id} className="space-y-6 rounded-lg border-2 border-primary/20 p-4 md:p-6">
                       <h2 className="text-xl font-bold text-primary">{section.title}</h2>
                       {section.questions.map((q, qIndex) => (
