@@ -155,12 +155,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     const [currentRound, setCurrentRound] = useState('');
     const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isAutoFilled, setIsAutoFilled] = useState(false);
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
-    const [drawState, setDrawState] = useState<DrawState | null>(null);
-    const [availableTeams, setAvailableTeams] = useState<SchoolData[]>(registeredSchools);
-
 
     useEffect(() => {
         setLoadingRounds(true);
@@ -174,49 +170,14 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
             setLoadingRounds(false);
         });
 
-        const drawStateRef = doc(db, "drawState", "liveDraw");
-        const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setDrawState(docSnap.data() as DrawState);
-            }
-        });
-
         return () => {
             unsubscribeRounds();
-            unsubscribeDrawState();
         };
     }, []);
     
-    const roundsByPhase = useMemo(() => {
-        const grouped = debateRounds.reduce((acc, round) => {
-            const phase = round.phase || 'General';
-            if (!acc[phase]) {
-                acc[phase] = [];
-            }
-            acc[phase].push(round);
-            return acc;
-        }, {} as Record<string, RoundData[]>);
+    const availableTeams = useMemo(() => {
+        const selectedRoundData = debateRounds.find(r => r.name === currentRound);
         
-        const sortedPhases = Object.keys(grouped).sort((a,b) => {
-            const phaseOrder = ["Fase de Grupos", "Fase de Finales"];
-            return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
-        });
-        
-        const result: Record<string, RoundData[]> = {};
-        sortedPhases.forEach(phase => {
-            result[phase] = grouped[phase];
-        });
-        return result;
-
-    }, [debateRounds]);
-
-    const handleRoundChange = useCallback((roundName: string) => {
-        setCurrentRound(roundName);
-        const selectedRoundData = debateRounds.find(r => r.name === roundName);
-        
-        let qualifiedTeamNames: string[] = [];
-
-        // Logic for advancing teams
         if (selectedRoundData && selectedRoundData.phase === "Fase de Finales") {
             const phaseDependencies: Record<string, { from: string, limit?: number }> = {
                 "Cuartos de Final": { from: "Fase de Grupos", limit: 8 },
@@ -224,32 +185,25 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                 "Final": { from: "Semifinal" }
             };
 
-            const dependency = Object.entries(phaseDependencies).find(([phase]) => roundName.includes(phase))?.[1];
+            const dependency = Object.entries(phaseDependencies).find(([phase]) => currentRound.includes(phase))?.[1];
 
             if (dependency) {
                 const previousRounds = debateRounds.filter(r => r.phase === dependency.from);
-                if (dependency.limit) { // Top scoring teams from a phase
-                    qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, previousRounds, dependency.limit);
-                } else { // Winners from a phase
-                    qualifiedTeamNames = previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
-                }
+                const qualifiedTeamNames = dependency.limit 
+                    ? getTopScoringTeamsFromPhase(allScores, previousRounds, dependency.limit)
+                    : previousRounds.flatMap(r => getWinnersOfRound(allScores, r.name));
+                
+                return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
             }
         }
         
-        if (qualifiedTeamNames.length > 0) {
-             const qualifiedSchools = registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-             setAvailableTeams(qualifiedSchools);
-             setIsAutoFilled(false); // Allow manual selection from qualified teams
-             setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]); // Reset selection
-             toast({ title: "Equipos Calificados Cargados", description: `Seleccione de la lista de ${qualifiedTeamNames.length} equipos que avanzaron.` });
-        } else {
-            // Default to all schools if no specific logic applies (e.g., Fase de Grupos)
-            setAvailableTeams(registeredSchools);
-setIsAutoFilled(false);
-            setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
-        }
+        return registeredSchools;
+    }, [currentRound, debateRounds, allScores, registeredSchools]);
 
-    }, [allScores, toast, debateRounds, registeredSchools]);
+    const handleRoundChange = useCallback((roundName: string) => {
+        setCurrentRound(roundName);
+        setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
+    }, []);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -335,6 +289,29 @@ setIsAutoFilled(false);
             });
         }
     };
+    
+    const roundsByPhase = useMemo(() => {
+        const grouped = debateRounds.reduce((acc, round) => {
+            const phase = round.phase || 'General';
+            if (!acc[phase]) {
+                acc[phase] = [];
+            }
+            acc[phase].push(round);
+            return acc;
+        }, {} as Record<string, RoundData[]>);
+        
+        const sortedPhases = Object.keys(grouped).sort((a,b) => {
+            const phaseOrder = ["Fase de Grupos", "Fase de Finales", "FINAL"];
+            return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
+        });
+        
+        const result: Record<string, RoundData[]> = {};
+        sortedPhases.forEach(phase => {
+            result[phase] = grouped[phase];
+        });
+        return result;
+
+    }, [debateRounds]);
 
     return (
         <Card>
@@ -366,7 +343,7 @@ setIsAutoFilled(false);
                         <Label>Equipos Participantes</Label>
                         {teams.map((team, index) => (
                             <div key={team.id} className="flex items-center gap-2">
-                                <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting || isAutoFilled}>
+                                <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting}>
                                     <SelectTrigger>
                                         <SelectValue placeholder={`Equipo ${index + 1}`} />
                                     </SelectTrigger>
@@ -384,16 +361,15 @@ setIsAutoFilled(false);
                                         Confirmar Avance
                                     </Button>
                                 ) : (
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting || isAutoFilled}>
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting}>
                                         <Trash2 className="h-4 w-4 text-destructive"/>
                                     </Button>
                                 )}
                             </div>
                         ))}
-                        <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting || isAutoFilled}>
+                        <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting}>
                             <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
                         </Button>
-                        {isAutoFilled && <p className="text-xs text-muted-foreground">La selección de equipos es automática para esta ronda.</p>}
                     </div>
                     <Button type="submit" disabled={isSubmitting || !currentRound}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -424,7 +400,8 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
             if (a === 'General') return -1;
             if (b === 'General') return 1;
-            return a.localeCompare(b);
+            const phaseOrder = ["Fase de Grupos", "Fase de Finales", "FINAL"];
+            return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
         });
         
         const result: Record<string, RoundData[]> = {};
