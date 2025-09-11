@@ -13,6 +13,7 @@ import {
   KeyRound,
   ClipboardCheck,
   Shuffle,
+  FileQuestion,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +33,7 @@ const navLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/draw", label: "Sorteo", icon: Shuffle },
   { href: "/debate", label: "Debate", icon: MessageSquare },
+  { href: "/survey", label: "Encuesta", icon: FileQuestion },
   { href: "/scoring", label: "Puntuación", icon: ClipboardCheck, judge: true },
   { href: "/register", label: "Registro", icon: Users, admin: true },
   { href: "/moderator", label: "Moderar", icon: Gavel, moderator: true },

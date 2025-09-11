@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home, UserPlus, Projector, HelpCircle } from "lucide-react";
+import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home, UserPlus, Projector, HelpCircle, FileQuestion } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -49,6 +49,7 @@ import { HomePageEditor } from '@/components/home-page-editor';
 import { CompetitionSettings } from '@/components/competition-settings';
 import { TournamentBracket } from '@/components/tournament-bracket';
 import { BracketEditor } from '@/components/bracket-editor';
+import { SurveyManagement } from '@/components/survey-management';
 
 
 interface SchoolData {
@@ -352,13 +353,14 @@ function AdminDashboard() {
 
       <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
         <Tabs defaultValue="home" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-11">
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-12">
             <TabsTrigger value="home"><Home className="mr-2 h-4 w-4" />Home</TabsTrigger>
             <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
             <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Rondas</TabsTrigger>
             <TabsTrigger value="bracket"><Projector className="mr-2 h-4 w-4" />Bracket</TabsTrigger>
             <TabsTrigger value="rubric"><ListChecks className="mr-2 h-4 w-4" />Rúbrica</TabsTrigger>
             <TabsTrigger value="draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
+            <TabsTrigger value="survey"><FileQuestion className="mr-2 h-4 w-4"/>Encuesta</TabsTrigger>
             <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Ajustes</TabsTrigger>
             <TabsTrigger value="judges"><User className="mr-2 h-4 w-4" />Jurados</TabsTrigger>
             <TabsTrigger value="moderators"><KeyRound className="mr-2 h-4 w-4" />Moderadores</TabsTrigger>
@@ -522,6 +524,9 @@ function AdminDashboard() {
             </TabsContent>
             <TabsContent value="draw">
                 <DrawAnimation />
+            </TabsContent>
+            <TabsContent value="survey">
+                <SurveyManagement />
             </TabsContent>
             <TabsContent value="settings">
                 <CompetitionSettings allScores={scores} />
