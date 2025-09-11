@@ -29,7 +29,7 @@ export function TournamentBracket() {
 
     const interval = setInterval(() => {
       handleRefresh();
-    }, 15000); // Auto-refresh every 15 seconds
+    }, 180000); // Auto-refresh every 3 minutes
 
     return () => {
         unsubscribe();
@@ -51,10 +51,13 @@ export function TournamentBracket() {
                 <CardTitle className="font-headline">Bracket del Torneo</CardTitle>
                 <CardDescription>Visualización de las rondas eliminatorias.</CardDescription>
             </div>
-            <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
-                {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                <span className="sr-only">Actualizar Bracket</span>
-            </Button>
+             <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground hidden md:block">Actualiza el bracket</p>
+                <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isRefreshing}>
+                    {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    <span className="sr-only">Actualizar Bracket</span>
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
             {loading ? (
