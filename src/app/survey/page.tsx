@@ -71,10 +71,16 @@ export default function SurveyPage() {
                             if(q.type === 'text') {
                                 fieldSchema = z.string().min(1, "Esta pregunta es requerida.");
                             } else if (q.type === 'rating') {
-                                fieldSchema = z.number({ required_error: "Debe seleccionar una opción."}).min(1).max(5);
+                                fieldSchema = z.string({ required_error: "Debe seleccionar una opción."}).min(1);
+                            }
+                        } else {
+                            if (q.type === 'rating') {
+                                fieldSchema = z.string().optional();
+                            } else {
+                                fieldSchema = z.string().optional();
                             }
                         }
-                        acc[q.id] = fieldSchema.optional();
+                        acc[q.id] = fieldSchema;
                     });
                     return acc;
                 }, {} as Record<string, z.ZodTypeAny>);
@@ -201,7 +207,7 @@ export default function SurveyPage() {
                     />
                 </div>
             )}
-          <FileQuestion className="mx-auto h-12 w-12 text-primary mb-4" />
+          {!config.imageUrl && <FileQuestion className="mx-auto h-12 w-12 text-primary mb-4" />}
           <CardTitle className="font-headline text-3xl">{config.title}</CardTitle>
           <CardDescription>
             {config.subtitle}
@@ -227,8 +233,8 @@ export default function SurveyPage() {
                                     <FormControl>
                                         {q.type === 'rating' ? (
                                             <RadioGroup
-                                                onValueChange={(value) => field.onChange(parseInt(value))}
-                                                defaultValue={String(field.value)}
+                                                onValueChange={(value) => field.onChange(value)}
+                                                defaultValue={field.value}
                                                 className="flex flex-wrap justify-center gap-2 md:gap-4 pt-2"
                                             >
                                                 {[1,2,3,4,5].map(val => (
