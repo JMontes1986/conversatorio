@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -16,11 +15,11 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send, TrendingUp, TrendingDown } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "./ui/textarea";
 import { nanoid } from "nanoid";
@@ -208,6 +207,36 @@ export function SurveyManagement() {
         insertSection(index + 1, newSection);
     }
 
+    const ratingQuestionStats = useMemo(() => {
+        const sections = form.getValues('sections');
+        if (responses.length === 0 || !sections) return null;
+
+        const allRatingQuestions = sections.flatMap(section => 
+            section.questions.filter(q => q.type === 'rating')
+        );
+
+        if (allRatingQuestions.length === 0) return null;
+
+        const questionAverages = allRatingQuestions.map(q => {
+            const ratings = responses
+                .map(r => parseInt(r.answers[q.id] as string, 10))
+                .filter(rating => !isNaN(rating) && rating >= 1 && rating <= 5);
+            
+            if (ratings.length === 0) return { id: q.id, text: q.text, average: 0 };
+            
+            const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+            return { id: q.id, text: q.text, average: sum / ratings.length };
+        });
+
+        const highest = questionAverages.reduce((max, q) => q.average > max.average ? q : max, questionAverages[0]);
+        const lowest = questionAverages.filter(q => q.average > 0).reduce((min, q) => q.average < min.average ? q : min, questionAverages.find(q => q.average > 0) || { average: 5 });
+
+
+        return { highest, lowest };
+
+    }, [responses, form]);
+
+
     const calculateChartData = () => {
         const sections = form.getValues('sections');
         if (responses.length === 0 || !sections) return [];
@@ -219,8 +248,9 @@ export function SurveyManagement() {
                     const counts: { [key: string]: number } = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
                     responses.forEach(r => {
                         const answer = r.answers[q.id];
-                        if (typeof answer === 'number' && answer >= 1 && answer <= 5) {
-                            counts[String(answer)]++;
+                        const rating = parseInt(answer as string, 10);
+                        if (!isNaN(rating) && rating >= 1 && rating <= 5) {
+                            counts[String(rating)]++;
                         }
                     });
 
@@ -424,6 +454,33 @@ export function SurveyManagement() {
                         </div>
                     ) : responses.length > 0 ? (
                         <>
+                            {ratingQuestionStats && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <Card className="border-green-500 bg-green-50/50">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-green-700">
+                                                <TrendingUp className="h-5 w-5" /> Pregunta Mejor Calificada
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-xs text-muted-foreground">{ratingQuestionStats.highest.text}</p>
+                                            <p className="text-2xl font-bold text-green-700">{ratingQuestionStats.highest.average.toFixed(2)}</p>
+                                        </CardContent>
+                                    </Card>
+                                     <Card className="border-red-500 bg-red-50/50">
+                                        <CardHeader>
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700">
+                                                <TrendingDown className="h-5 w-5" /> Pregunta con Menor Calificación
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-xs text-muted-foreground">{ratingQuestionStats.lowest.text}</p>
+                                            <p className="text-2xl font-bold text-red-700">{ratingQuestionStats.lowest.average.toFixed(2)}</p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            )}
+
                             <div>
                                 <h3 className="font-semibold mb-2">Resultados por Calificación</h3>
                                 <Accordion type="single" collapsible className="w-full">
@@ -558,3 +615,5 @@ function QuestionFields({ control, sectionIndex }: { control: Control<FormData>,
         </>
     );
 }
+
+    
