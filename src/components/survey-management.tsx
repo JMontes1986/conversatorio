@@ -1,7 +1,8 @@
 
+
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -149,7 +150,7 @@ export function SurveyManagement() {
     };
   }, [form]);
 
-  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({
+  const { fields: sectionFields, append: appendSection, remove: removeSection, insert: insertSection } = useFieldArray({
     control: form.control,
     name: "sections"
   });
@@ -194,6 +195,16 @@ export function SurveyManagement() {
         setIsSubmitting(false);
     }
   };
+
+   const handleDuplicateSection = (index: number) => {
+        const sectionToDuplicate = form.getValues(`sections.${index}`);
+        const newSection = {
+            ...sectionToDuplicate,
+            id: nanoid(),
+            questions: sectionToDuplicate.questions.map(q => ({...q, id: nanoid()}))
+        };
+        insertSection(index + 1, newSection);
+    }
 
     const calculateChartData = () => {
         const sections = form.getValues('sections');
@@ -349,8 +360,8 @@ export function SurveyManagement() {
                                 {sectionFields.map((section, sectionIndex) => (
                                     <AccordionItem value={section.id} key={section.id} className="border-b-0 mb-2">
                                         <Card className="bg-secondary/30">
-                                            <div className="flex items-center p-4">
-                                                <AccordionTrigger className="flex-1 p-0">
+                                             <div className="flex items-start p-4">
+                                                <AccordionTrigger className="flex-1 p-0 text-left">
                                                      <FormField
                                                         control={form.control}
                                                         name={`sections.${sectionIndex}.title`}
@@ -363,9 +374,14 @@ export function SurveyManagement() {
                                                         )}
                                                     />
                                                 </AccordionTrigger>
-                                                <Button type="button" variant="ghost" size="icon" className="text-destructive shrink-0 ml-2 self-end mb-1" onClick={(e) => { e.stopPropagation(); removeSection(sectionIndex); }}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex flex-col ml-2 pt-6">
+                                                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={(e) => { e.stopPropagation(); handleDuplicateSection(sectionIndex); }}>
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); removeSection(sectionIndex); }}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                             <AccordionContent className="p-4 pt-0">
                                                 <div className="space-y-4 pl-4 border-l-2 ml-2">
@@ -453,10 +469,15 @@ export function SurveyManagement() {
 }
 
 function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex: number }) {
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, insert } = useFieldArray({
         control,
         name: `sections.${sectionIndex}.questions`
     });
+
+    const handleDuplicateQuestion = (index: number) => {
+        const questionToDuplicate = control.getValues(`sections.${sectionIndex}.questions.${index}`);
+        insert(index + 1, { ...questionToDuplicate, id: nanoid() });
+    }
 
     return (
         <>
@@ -490,9 +511,14 @@ function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex:
                             </FormItem>
                         )}
                     />
-                    <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 text-destructive" onClick={() => remove(questionIndex)}>
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="absolute top-1 right-1 flex">
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => handleDuplicateQuestion(questionIndex)}>
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => remove(questionIndex)}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), text: '', type: 'rating' })}>
