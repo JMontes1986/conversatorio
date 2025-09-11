@@ -37,15 +37,9 @@ export default function ScoreboardPage() {
                         <KnockoutStageResults />
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline">Bracket del Torneo</CardTitle>
-                        <CardDescription>Visualización de las rondas eliminatorias.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="w-full overflow-x-auto">
-                        <TournamentBracket />
-                    </CardContent>
-                </Card>
+                
+                <TournamentBracket />
+
             </div>
         </div>
     );
