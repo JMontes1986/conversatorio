@@ -140,7 +140,7 @@ export default function DebatePage() {
                                 )}
                                 {debateState.temporaryMessage && (
                                     <p className={cn(
-                                        "font-medium leading-tight text-muted-foreground",
+                                        "font-medium leading-tight text-muted-foreground whitespace-pre-wrap",
                                         isFullscreen ? "text-4xl md:text-6xl" : "text-3xl md:text-4xl"
                                     )}>
                                         {debateState.temporaryMessage}
