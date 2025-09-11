@@ -12,9 +12,9 @@ import {
   CardFooter
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Lock, Eye, Trash2, ShieldQuestion } from "lucide-react";
+import { Loader2, AlertTriangle, Lock, Eye, Trash2, ShieldQuestion, FileQuestion } from "lucide-react";
 import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from './ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
@@ -35,6 +35,9 @@ interface SchoolData {
 interface ScoreData {
     id: string;
 }
+interface SurveyResponse {
+    id: string;
+}
 
 
 export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[] }) {
@@ -44,6 +47,8 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loading, setLoading] = useState(true);
     const [verifiedSchools, setVerifiedSchools] = useState<SchoolData[]>([]);
+    const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>([]);
+
 
     useEffect(() => {
         const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
@@ -64,11 +69,18 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             } as SchoolData));
             setVerifiedSchools(schools);
         });
+        
+        const surveyResponsesQuery = query(collection(db, "surveyResponses"));
+        const unsubscribeSurveyResponses = onSnapshot(surveyResponsesQuery, (snapshot) => {
+            const responses = snapshot.docs.map(doc => ({ id: doc.id }));
+            setSurveyResponses(responses);
+        });
 
 
         return () => {
             unsubscribeSettings();
             unsubscribeSchools();
+            unsubscribeSurveyResponses();
         }
     }, []);
 
@@ -139,6 +151,29 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             setIsSubmitting(false);
         }
     };
+    
+    const handleResetAllSurveys = async () => {
+        setIsSubmitting(true);
+        try {
+            const surveyResponsesRef = collection(db, "surveyResponses");
+            const querySnapshot = await getDocs(surveyResponsesRef);
+            const batch = writeBatch(db);
+            querySnapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+
+            toast({
+                title: "Encuestas Reiniciadas",
+                description: "Todas las respuestas de la encuesta han sido eliminadas."
+            });
+        } catch (error) {
+            console.error("Error resetting surveys:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudieron eliminar las respuestas." });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
 
     const handleResetDraw = async () => {
         setIsSubmitting(true);
@@ -309,12 +344,12 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                         <div>
                             <h3 className="font-semibold">Reiniciar Todos los Resultados</h3>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Elimina permanentemente todas las puntuaciones de todas las rondas.
+                                Elimina permanentemente todas las puntuaciones de todas las rondas. ({allScores.length} registros)
                             </p>
                         </div>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="destructive" disabled={isSubmitting}>
+                                <Button variant="destructive" disabled={isSubmitting || allScores.length === 0}>
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Reiniciar Resultados
                                 </Button>
@@ -365,8 +400,40 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                             </AlertDialogContent>
                         </AlertDialog>
                     </div>
+                    <div className="flex items-center justify-between rounded-lg border border-destructive/50 p-4">
+                        <div>
+                            <h3 className="font-semibold">Reiniciar Todas las Encuestas</h3>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Elimina permanentemente todas las respuestas de la encuesta. ({surveyResponses.length} respuestas)
+                            </p>
+                        </div>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={isSubmitting || surveyResponses.length === 0}>
+                                    <FileQuestion className="mr-2 h-4 w-4" />
+                                    Reiniciar Encuestas
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción eliminará todas las respuestas de la encuesta enviadas por los usuarios. No podrá recuperar estos datos.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleResetAllSurveys} className="bg-destructive hover:bg-destructive/90">
+                                        Sí, eliminar todo
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
                 </CardContent>
             </Card>
         </div>
     );
 }
+
+    
