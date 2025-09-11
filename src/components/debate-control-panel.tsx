@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, Users } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -667,7 +667,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onSendQuestion }: { allPrep
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Preguntas del Público</CardTitle>
+                <CardTitle className="flex items-center gap-2"><HelpCircle className="h-6 w-6"/>Preguntas del Público</CardTitle>
                 <CardDescription>Revise, apruebe y proyecte las preguntas enviadas por los estudiantes.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -1128,4 +1128,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
-
