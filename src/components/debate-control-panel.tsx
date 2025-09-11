@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, Users } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -38,6 +38,7 @@ import { Trash2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from './ui/progress';
 import { nanoid } from 'nanoid';
+import QRCode from 'qrcode.react';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -80,6 +81,13 @@ type DrawState = {
     rounds: RoundData[];
     activeTab?: string;
 };
+interface StudentQuestion {
+    id: string;
+    text: string;
+    relatedDebateQuestionId: string;
+    status: 'pending' | 'approved' | 'rejected';
+    createdAt: any;
+}
 
 
 function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
@@ -465,6 +473,12 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         return acc;
     }, {} as Record<string, Question[]>);
 
+    const getQuestionUrl = (questionId: string) => {
+        if (typeof window === 'undefined') return '';
+        const url = new URL(`/ask?q_id=${questionId}`, window.location.origin);
+        return url.toString();
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -561,6 +575,17 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                 </div>
 
                                                 <div className="flex items-center justify-end gap-2 pt-2">
+                                                     <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button size="sm" variant="outline"><QrCode className="mr-2 h-4 w-4" /> QR</Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent>
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                <QRCode value={getQuestionUrl(q.id)} size={128} />
+                                                                <p className="text-xs text-muted-foreground text-center">Escanee para enviar una pregunta</p>
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
                                                             <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
@@ -602,6 +627,90 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             </CardContent>
         </Card>
     );
+}
+
+function StudentQuestionsTab({ allPreparedQuestions, onSendQuestion }: { allPreparedQuestions: Question[], onSendQuestion: (text: string) => void }) {
+    const { toast } = useToast();
+    const [questions, setQuestions] = useState<StudentQuestion[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const q = query(collection(db, "studentQuestions"), orderBy("createdAt", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentQuestion));
+            setQuestions(data);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleUpdateStatus = async (id: string, status: StudentQuestion['status']) => {
+        try {
+            await updateDoc(doc(db, "studentQuestions", id), { status });
+            toast({ title: "Estado de la Pregunta Actualizado" });
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.'});
+        }
+    };
+    
+    const getRelatedDebateQuestionText = (relatedId: string) => {
+        return allPreparedQuestions.find(q => q.id === relatedId)?.text || "Pregunta General";
+    }
+    
+    const handleProjectQuestion = (text: string) => {
+        onSendQuestion(text);
+    }
+    
+    const pendingQuestions = questions.filter(q => q.status === 'pending');
+    const approvedQuestions = questions.filter(q => q.status === 'approved');
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Preguntas del Público</CardTitle>
+                <CardDescription>Revise, apruebe y proyecte las preguntas enviadas por los estudiantes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? <Loader2 className="mx-auto animate-spin" /> : (
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="text-lg font-semibold mb-2">Pendientes de Aprobación ({pendingQuestions.length})</h3>
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                {pendingQuestions.length > 0 ? pendingQuestions.map(q => (
+                                    <div key={q.id} className="p-3 border rounded-lg bg-secondary/50">
+                                        <p className="text-sm font-medium">{q.text}</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Relacionada con: "{getRelatedDebateQuestionText(q.relatedDebateQuestionId)}"
+                                        </p>
+                                        <div className="flex justify-end gap-2 mt-2">
+                                            <Button size="sm" variant="destructive" onClick={() => handleUpdateStatus(q.id, 'rejected')}><X className="h-4 w-4 mr-1"/> Rechazar</Button>
+                                            <Button size="sm" onClick={() => handleUpdateStatus(q.id, 'approved')}><Check className="h-4 w-4 mr-1"/> Aprobar</Button>
+                                        </div>
+                                    </div>
+                                )) : <p className="text-sm text-muted-foreground text-center py-4">No hay preguntas pendientes.</p>}
+                            </div>
+                        </div>
+                         <div>
+                            <h3 className="text-lg font-semibold mb-2">Aprobadas ({approvedQuestions.length})</h3>
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                {approvedQuestions.length > 0 ? approvedQuestions.map(q => (
+                                    <div key={q.id} className="p-3 border rounded-lg">
+                                        <p className="text-sm font-medium">{q.text}</p>
+                                         <p className="text-xs text-muted-foreground mt-1">
+                                            Relacionada con: "{getRelatedDebateQuestionText(q.relatedDebateQuestionId)}"
+                                        </p>
+                                        <div className="flex justify-end gap-2 mt-2">
+                                            <Button size="sm" onClick={() => handleProjectQuestion(q.text)}><Send className="h-4 w-4 mr-1"/> Proyectar</Button>
+                                        </div>
+                                    </div>
+                                )) : <p className="text-sm text-muted-foreground text-center py-4">No hay preguntas aprobadas.</p>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
 }
 
 export function DebateControlPanel({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
@@ -697,11 +806,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     };
 
-    const handleSendQuestion = async (question: Question) => {
+    const handleSendQuestion = async (questionText: string) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                question: question.text,
+                question: questionText,
                 videoUrl: "", // Clear video when question is sent
                 temporaryMessage: "", // Clear temp message
                 temporaryImageUrl: ""
@@ -923,7 +1032,43 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 </Card>
                 
                 <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} />
+                
+                <QuestionManagement 
+                    preparedQuestions={preparedQuestions}
+                    loadingQuestions={loadingQuestions}
+                    currentDebateRound={currentRound}
+                    debateRounds={debateRounds}
+                    videoInputs={videoInputs}
+                    setVideoInputs={setVideoInputs}
+                    savingVideoId={savingVideoId}
+                    onAddQuestion={handleAddQuestion}
+                    onDeleteQuestion={handleDeleteQuestion}
+                    onSaveVideoLink={handleSaveVideoLink}
+                    onSendQuestion={(q: Question) => handleSendQuestion(q.text)}
+                    onSendVideo={handleSendVideo}
+                    onUploadComplete={handleUploadComplete}
+                />
+                 <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onSendQuestion={handleSendQuestion} />
 
+            </div>
+
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Control del Debate</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                       <div>
+                            <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
+                            <div className="mt-2">
+                                 <TimerSettings />
+                            </div>
+                       </div>
+                        <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
+                            <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Pública
+                       </Button>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader>
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
@@ -977,41 +1122,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                             <Eraser className="mr-2 h-4 w-4"/>
                             Limpiar Mensaje de Pantalla
                         </Button>
-                    </CardContent>
-                </Card>
-
-                <QuestionManagement 
-                    preparedQuestions={preparedQuestions}
-                    loadingQuestions={loadingQuestions}
-                    currentDebateRound={currentRound}
-                    debateRounds={debateRounds}
-                    videoInputs={videoInputs}
-                    setVideoInputs={setVideoInputs}
-                    savingVideoId={savingVideoId}
-                    onAddQuestion={handleAddQuestion}
-                    onDeleteQuestion={handleDeleteQuestion}
-                    onSaveVideoLink={handleSaveVideoLink}
-                    onSendQuestion={handleSendQuestion}
-                    onSendVideo={handleSendVideo}
-                    onUploadComplete={handleUploadComplete}
-                />
-            </div>
-
-            <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Control del Debate</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                       <div>
-                            <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
-                            <div className="mt-2">
-                                 <TimerSettings />
-                            </div>
-                       </div>
-                        <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
-                            <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Pública
-                       </Button>
                     </CardContent>
                 </Card>
             </div>
