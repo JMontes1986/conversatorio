@@ -24,10 +24,11 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "./ui/textarea";
 import { nanoid } from "nanoid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
+import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+
 
 const questionSchema = z.object({
   id: z.string(),
@@ -118,17 +119,18 @@ export function SurveyManagement() {
     const unsubscribeConfig = onSnapshot(configRef, (doc) => {
         if (doc.exists()) {
             const data = doc.data();
-            // Ensure data loaded from DB has all the necessary fields to avoid uncontrolled components.
             const sanitizedData = {
                 ...defaultValues,
                 ...data,
                 title: data.title || '',
                 subtitle: data.subtitle || '',
                 imageUrl: data.imageUrl || '',
-                sections: data.sections || [],
+                sections: data.sections && data.sections.length > 0 ? data.sections : defaultSections,
                 isActive: data.isActive || false,
             };
             form.reset(sanitizedData as FormData);
+        } else {
+             form.reset(defaultValues);
         }
         setLoading(false);
     });
@@ -192,30 +194,43 @@ export function SurveyManagement() {
     }
   };
 
-  const calculateAverages = () => {
+    const calculateChartData = () => {
         const sections = form.getValues('sections');
-        if (responses.length === 0 || sections.length === 0) return [];
-        
-        return sections.map(section => {
-            const ratingQuestions = section.questions.filter(q => q.type === 'rating');
-            const questionAverages = ratingQuestions.map(q => {
-                const ratings = responses
-                    .map(r => r.answers[q.id])
-                    .filter(a => typeof a === 'number' && a > 0 && a <= 5) as number[];
-                
-                if (ratings.length === 0) return { text: q.text, average: 'N/A' };
+        if (responses.length === 0 || !sections) return [];
 
-                const sum = ratings.reduce((acc, val) => acc + val, 0);
-                const average = (sum / ratings.length).toFixed(2);
-                return { text: q.text, average };
-            });
-            return { title: section.title, questions: questionAverages };
+        return sections.map(section => {
+            const ratingQuestionsData = section.questions
+                .filter(q => q.type === 'rating')
+                .map(q => {
+                    const counts: { [key: string]: number } = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+                    responses.forEach(r => {
+                        const answer = r.answers[q.id];
+                        if (typeof answer === 'number' && answer >= 1 && answer <= 5) {
+                            counts[String(answer)]++;
+                        }
+                    });
+
+                    const chartData = Object.entries(counts).map(([name, value]) => ({
+                        name,
+                        Total: value,
+                    }));
+                    
+                    const totalVotes = chartData.reduce((sum, item) => sum + item.Total, 0);
+
+                    return {
+                        id: q.id,
+                        text: q.text,
+                        chartData,
+                        totalVotes
+                    };
+                });
+            return { title: section.title, questions: ratingQuestionsData };
         });
-  };
-  
+    };
+
   const getTextResponses = () => {
         const sections = form.getValues('sections');
-        if (responses.length === 0 || sections.length === 0) return [];
+        if (responses.length === 0 || !sections) return [];
         
         return sections.flatMap(section => {
             const textQuestions = section.questions.filter(q => q.type === 'text');
@@ -292,7 +307,7 @@ export function SurveyManagement() {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>URL de la Imagen de Cabecera (Opcional)</FormLabel>
-                                <FormControl><Input {...field} placeholder="https://ejemplo.com/imagen.png" /></FormControl>
+                                <FormControl><Input {...field} value={field.value ?? ''} placeholder="https://ejemplo.com/imagen.png" /></FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
@@ -303,7 +318,7 @@ export function SurveyManagement() {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Título Principal</FormLabel>
-                                <FormControl><Input {...field} /></FormControl>
+                                <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
@@ -314,7 +329,7 @@ export function SurveyManagement() {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Subtítulo</FormLabel>
-                                <FormControl><Textarea {...field} rows={2} /></FormControl>
+                                <FormControl><Textarea {...field} value={field.value ?? ''} rows={2} /></FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
@@ -374,28 +389,25 @@ export function SurveyManagement() {
                     ) : responses.length > 0 ? (
                         <>
                             <div>
-                                <h3 className="font-semibold mb-2">Promedio de Calificaciones</h3>
+                                <h3 className="font-semibold mb-2">Resultados por Calificación</h3>
                                 <Accordion type="single" collapsible className="w-full">
-                                    {calculateAverages().map((section, i) => (
+                                    {calculateChartData().map((section, i) => (
                                         <AccordionItem value={`section-${i}`} key={i}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
-                                            <AccordionContent>
-                                                <Table>
-                                                    <TableHeader>
-                                                        <TableRow>
-                                                            <TableHead>Pregunta</TableHead>
-                                                            <TableHead className="text-right">Promedio (1-5)</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {section.questions.map((item, j) => (
-                                                            <TableRow key={j}>
-                                                                <TableCell className="text-sm">{item.text}</TableCell>
-                                                                <TableCell className="text-right font-bold text-lg">{item.average}</TableCell>
-                                                            </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
+                                            <AccordionContent className="space-y-6">
+                                                {section.questions.map(q => (
+                                                    <div key={q.id}>
+                                                        <p className="text-sm font-medium mb-2">{q.text} <span className="text-muted-foreground">({q.totalVotes} votos)</span></p>
+                                                        <ResponsiveContainer width="100%" height={150}>
+                                                            <RechartsBarChart layout="vertical" data={q.chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                                                                <XAxis type="number" hide />
+                                                                <YAxis type="category" dataKey="name" width={10} tickLine={false} axisLine={false} />
+                                                                <Tooltip cursor={{ fill: 'hsl(var(--secondary))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}/>
+                                                                <Bar dataKey="Total" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                                                            </RechartsBarChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                ))}
                                             </AccordionContent>
                                         </AccordionItem>
                                     ))}
