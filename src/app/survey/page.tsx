@@ -21,6 +21,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 
 interface Question {
   id: string;
@@ -50,14 +52,36 @@ export default function SurveyPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [responseCount, setResponseCount] = useState(0);
-  const form = useForm();
   const { user: adminUser } = useAuth();
-
+  
+  const form = useForm();
+  
   useEffect(() => {
     const configRef = doc(db, 'siteContent', 'survey');
     const unsubscribeConfig = onSnapshot(configRef, (doc) => {
         if (doc.exists()) {
-            setConfig(doc.data() as SurveyConfig);
+            const data = doc.data() as SurveyConfig;
+            setConfig(data);
+             // Create dynamic validation schema
+            if (data.sections) {
+                const schemaObject = data.sections.reduce((acc, section) => {
+                    section.questions.forEach(q => {
+                        let fieldSchema: z.ZodTypeAny = z.any();
+                        if (q.required) {
+                            if(q.type === 'text') {
+                                fieldSchema = z.string().min(1, "Esta pregunta es requerida.");
+                            } else if (q.type === 'rating') {
+                                fieldSchema = z.number({ required_error: "Debe seleccionar una opción."}).min(1).max(5);
+                            }
+                        }
+                        acc[q.id] = fieldSchema.optional();
+                    });
+                    return acc;
+                }, {} as Record<string, z.ZodTypeAny>);
+                
+                const dynamicSchema = z.object(schemaObject);
+                form.reset(undefined, { resolver: zodResolver(dynamicSchema) } as any);
+            }
         }
         setLoading(false);
     });
@@ -72,7 +96,7 @@ export default function SurveyPage() {
         unsubscribeConfig();
         unsubscribeResponses();
     };
-  }, []);
+  }, [form]);
 
   useEffect(() => {
     // Admin user should always be able to submit, so we bypass this check for them.
@@ -96,19 +120,18 @@ export default function SurveyPage() {
       await addDoc(collection(db, "surveyResponses"), {
         answers: values,
         createdAt: new Date(),
-        isAdminSubmission: !!adminUser
+        isAdminSubmission: !!adminUser,
       });
       toast({
         title: "¡Gracias por su opinión!",
         description: "Su respuesta ha sido enviada exitosamente.",
       });
       
-      // Only set localStorage and block for non-admin users
       if (!adminUser) {
           localStorage.setItem('surveySubmitted', 'true');
           setHasSubmitted(true);
       } else {
-          form.reset(); // Reset form for admin to submit again
+          form.reset(); 
       }
 
     } catch (error) {
@@ -187,7 +210,7 @@ export default function SurveyPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {(config.sections || []).map((section, sectionIndex) => (
+              {(config.sections || []).map((section) => (
                   <div key={section.id} className="space-y-6 rounded-lg border-2 border-primary/20 p-4 md:p-6">
                       <h2 className="text-xl font-bold text-primary">{section.title}</h2>
                       {section.questions.map((q, qIndex) => (
@@ -195,7 +218,6 @@ export default function SurveyPage() {
                             key={q.id}
                             control={form.control}
                             name={q.id}
-                            rules={{ required: q.required ? 'Esta pregunta es requerida' : false }}
                             render={({ field }) => (
                                 <FormItem className="space-y-3 rounded-md border bg-background p-4 shadow-sm">
                                     <FormLabel className="text-base">
