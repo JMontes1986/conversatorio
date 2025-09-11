@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -389,7 +388,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     );
 }
 
-function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo, onUploadComplete }: any) {
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo, onSendQrCode, onUploadComplete }: any) {
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
@@ -473,11 +472,6 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         return acc;
     }, {} as Record<string, Question[]>);
 
-    const getQuestionUrl = (questionId: string) => {
-        if (typeof window === 'undefined') return '';
-        const url = new URL(`/ask?q_id=${questionId}`, window.location.origin);
-        return url.toString();
-    };
 
     return (
         <Card>
@@ -575,20 +569,9 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                 </div>
 
                                                 <div className="flex items-center justify-end gap-2 pt-2">
-                                                     <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button size="sm" variant="outline"><QrCode className="mr-2 h-4 w-4" /> QR</Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent>
-                                                            <div className="flex flex-col items-center gap-2">
-                                                                <QRCodeSVG value={getQuestionUrl(q.id)} size={128} />
-                                                                <p className="text-xs text-muted-foreground text-center">Escanee para enviar una pregunta</p>
-                                                            </div>
-                                                        </PopoverContent>
-                                                    </Popover>
                                                     <AlertDialog>
                                                         <AlertDialogTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive text-xs h-8 w-8 p-0">
+                                                            <Button size="sm" variant="ghost" className="text-destructive text-xs h-8 w-8 p-0">
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         </AlertDialogTrigger>
@@ -607,6 +590,9 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                     </AlertDialog>
                                                     <Button size="sm" variant="outline" onClick={() => onSendVideo(q)} disabled={!videoInputs[q.id]}>
                                                         <Video className="mr-2 h-4 w-4" /> Enviar Video
+                                                    </Button>
+                                                     <Button size="sm" variant="outline" onClick={() => onSendQrCode(q)}>
+                                                        <QrCode className="mr-2 h-4 w-4" /> Enviar QR
                                                     </Button>
                                                      <Button size="sm" onClick={() => onSendQuestion(q)}>
                                                         <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
@@ -721,7 +707,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [previewTempMessage, setPreviewTempMessage] = useState("");
     const [previewTempImageUrl, setPreviewTempImageUrl] = useState("");
     const [tempMessageInput, setTempMessageInput] = useState("");
-    const [tempQrUrlInput, setTempQrUrlInput] = useState("");
     const [tempImageUrlInput, setTempImageUrlInput] = useState("");
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
@@ -838,6 +823,26 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     };
 
+    const handleSendQrCode = async (question: Question) => {
+        try {
+            const askUrl = new URL(`/ask?q_id=${question.id}`, window.location.origin);
+            const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(askUrl.toString())}`;
+            
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                temporaryMessage: "¡Escanea para enviar tu pregunta!",
+                temporaryImageUrl: qrApiUrl,
+                question: "",
+                videoUrl: ""
+            }, { merge: true });
+            toast({ title: "Código QR Enviado", description: "El QR es ahora visible para el público." });
+        } catch (error) {
+            console.error("Error sending QR Code:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el código QR." });
+        }
+    };
+
+
     const handleClearScreen = async () => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -881,22 +886,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         sendTempMessage(tempMessageInput, tempImageUrlInput);
     }
     
-    const handleSendQrCode = () => {
-        if (!tempQrUrlInput.trim()) {
-            toast({ variant: "destructive", title: "Error", description: "La URL para el QR no puede estar vacía." });
-            return;
-        }
-        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tempQrUrlInput)}`;
-        const message = tempMessageInput.trim() || "¡Escanea para ver en tiempo real!";
-        sendTempMessage(message, qrApiUrl);
-    };
-
     const handleClearTemporaryMessage = async () => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { temporaryMessage: "", temporaryImageUrl: "" }, { merge: true });
             setTempMessageInput("");
-            setTempQrUrlInput("");
             setTempImageUrlInput("");
             toast({ title: "Mensaje Temporal Limpiado" });
         } catch (error) {
@@ -1046,6 +1040,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onSaveVideoLink={handleSaveVideoLink}
                     onSendQuestion={(q: Question) => handleSendQuestion(q.text)}
                     onSendVideo={handleSendVideo}
+                    onSendQrCode={handleSendQrCode}
                     onUploadComplete={handleUploadComplete}
                 />
                  <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onSendQuestion={handleSendQuestion} />
@@ -1072,7 +1067,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 <Card>
                     <CardHeader>
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
-                        <CardDescription>Muestre un mensaje (con texto, una imagen, o un QR) en la pantalla pública.</CardDescription>
+                        <CardDescription>Muestre un mensaje de texto o una imagen en la pantalla pública.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                          <div className="space-y-2">
@@ -1086,41 +1081,26 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                             />
                         </div>
 
-                        <div className="border-t pt-4 space-y-2">
+                        <div className="space-y-2">
                             <Label htmlFor="temp-image-url-input">URL de la Imagen (opcional)</Label>
                              <Input 
                                 id="temp-image-url-input"
-                                placeholder="Pegue el enlace público a una imagen (ej: https://...)"
+                                placeholder="Pegue el enlace público a una imagen"
                                 value={tempImageUrlInput}
                                 onChange={(e) => setTempImageUrlInput(e.target.value)}
                              />
                         </div>
-
-                         <div className="border-t pt-4 space-y-2">
-                            <Label htmlFor="temp-qr-url-input">URL para Código QR (opcional)</Label>
-                             <Input 
-                                id="temp-qr-url-input"
-                                placeholder="Pegue la URL para generar el QR (ej: https://...)"
-                                value={tempQrUrlInput}
-                                onChange={(e) => setTempQrUrlInput(e.target.value)}
-                             />
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 justify-end pt-4">
+                        
+                        <div className="flex flex-wrap gap-2 justify-end pt-2">
                             <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage}>
                                 {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                Enviar Texto/Imagen
-                            </Button>
-                             <Button onClick={handleSendQrCode} disabled={isSendingTempMessage || !tempQrUrlInput.trim()}>
-                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4"/>}
-                                Enviar Texto y QR
+                                Enviar Mensaje
                             </Button>
                         </div>
 
-
-                         <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full mt-4">
+                         <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full mt-2">
                             <Eraser className="mr-2 h-4 w-4"/>
-                            Limpiar Mensaje de Pantalla
+                            Limpiar Mensaje
                         </Button>
                     </CardContent>
                 </Card>
