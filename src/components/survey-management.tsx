@@ -45,6 +45,7 @@ const sectionSchema = z.object({
 const formSchema = z.object({
   title: z.string().min(3, "El título es requerido."),
   subtitle: z.string().min(10, "El subtítulo es requerido."),
+  imageUrl: z.string().url("Debe ser una URL válida.").optional().or(z.literal('')),
   sections: z.array(sectionSchema).min(1, "Debe haber al menos una sección."),
   isActive: z.boolean().optional(),
 });
@@ -92,6 +93,7 @@ const defaultSections: z.infer<typeof sectionSchema>[] = [
 const defaultValues: FormData = {
     title: "ENCUESTA DE SATISFACCIÓN",
     subtitle: "CONVERSATORIO INTERCOLEGIAL COLEGIO BILINGÜE PADRE FRANCESCO COLL",
+    imageUrl: "",
     sections: defaultSections,
     isActive: false,
 };
@@ -122,6 +124,7 @@ export function SurveyManagement() {
                 ...data,
                 title: data.title || '',
                 subtitle: data.subtitle || '',
+                imageUrl: data.imageUrl || '',
                 sections: data.sections || [],
                 isActive: data.isActive || false,
             };
@@ -283,6 +286,17 @@ export function SurveyManagement() {
                 <CardContent>
                     <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                        <FormField
+                            control={form.control}
+                            name="imageUrl"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>URL de la Imagen de Cabecera (Opcional)</FormLabel>
+                                <FormControl><Input {...field} placeholder="https://ejemplo.com/imagen.png" /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
                         <FormField
                             control={form.control}
                             name="title"

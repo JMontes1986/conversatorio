@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import Image from "next/image";
 
 interface Question {
   id: string;
@@ -35,6 +36,7 @@ interface Section {
 interface SurveyConfig {
   title: string;
   subtitle: string;
+  imageUrl?: string;
   sections: Section[];
   isActive?: boolean;
 }
@@ -109,6 +111,17 @@ export default function SurveyPage() {
     <div className="container mx-auto flex items-center justify-center py-10 md:py-20 px-4">
       <Card className="w-full max-w-3xl">
         <CardHeader className="text-center">
+            {config.imageUrl && (
+                <div className="relative w-full h-48 mb-6">
+                    <Image 
+                        src={config.imageUrl}
+                        alt="Encuesta Cabecera"
+                        layout="fill"
+                        objectFit="cover"
+                        className="rounded-t-lg"
+                    />
+                </div>
+            )}
           <FileQuestion className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="font-headline text-3xl">{config.title}</CardTitle>
           <CardDescription>
@@ -174,4 +187,3 @@ export default function SurveyPage() {
     </div>
   );
 }
-
