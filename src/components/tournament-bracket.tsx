@@ -29,7 +29,7 @@ export function TournamentBracket() {
 
     const interval = setInterval(() => {
       handleRefresh();
-    }, 60000); // Auto-refresh every minute
+    }, 15000); // Auto-refresh every 15 seconds
 
     return () => {
         unsubscribe();
