@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -125,7 +126,7 @@ export default function DebatePage() {
                         {showVideo && <VideoEmbed url={debateState.videoUrl} />}
                         {showQuestion && (
                             <p className={cn(
-                                "font-medium leading-tight",
+                                "font-medium leading-tight whitespace-pre-wrap",
                                 isFullscreen
                                   ? "text-5xl md:text-7xl"
                                   : "text-4xl md:text-5xl"

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -613,6 +613,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [previewTempImageUrl, setPreviewTempImageUrl] = useState("");
     const [tempMessageInput, setTempMessageInput] = useState("");
     const [tempQrUrlInput, setTempQrUrlInput] = useState("");
+    const [tempImageFile, setTempImageFile] = useState<File | null>(null);
+    const [tempImageUploadProgress, setTempImageUploadProgress] = useState(0);
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
@@ -760,6 +762,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el mensaje." });
         } finally {
             setIsSendingTempMessage(false);
+            setTempImageFile(null);
+            setTempImageUploadProgress(0);
         }
     };
 
@@ -781,6 +785,40 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         sendTempMessage(message, qrApiUrl);
     };
 
+     const handleTempImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setTempImageFile(file);
+        }
+    };
+
+    const handleSendImage = () => {
+        if (!tempImageFile) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una imagen para subir." });
+            return;
+        }
+        
+        setIsSendingTempMessage(true);
+        const storageRef = ref(storage, `tempImages/${Date.now()}_${tempImageFile.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, tempImageFile);
+
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setTempImageUploadProgress(progress);
+            },
+            (error) => {
+                console.error("Upload failed:", error);
+                toast({ variant: "destructive", title: "Error", description: "La subida de la imagen falló." });
+                setIsSendingTempMessage(false);
+            },
+            async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                const message = tempMessageInput.trim();
+                sendTempMessage(message, downloadURL);
+            }
+        );
+    };
 
     const handleClearTemporaryMessage = async () => {
         try {
@@ -788,6 +826,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { temporaryMessage: "", temporaryImageUrl: "" }, { merge: true });
             setTempMessageInput("");
             setTempQrUrlInput("");
+            setTempImageFile(null);
             toast({ title: "Mensaje Temporal Limpiado" });
         } catch (error) {
             console.error("Error clearing temporary message:", error);
@@ -912,7 +951,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                             <h3 className="font-medium text-lg">Pantalla Pública:</h3>
                             <div className="text-xl p-4 bg-secondary rounded-md min-h-[150px] flex flex-col items-center justify-center text-center gap-4">
                                 {previewTempImageUrl && <img src={previewTempImageUrl} alt="Mensaje temporal" className="max-w-xs max-h-48 object-contain"/>}
-                                <span className="text-muted-foreground">{previewTempMessage}</span>
+                                <span className="text-muted-foreground whitespace-pre-wrap">{previewTempMessage}</span>
                                 {previewVideoUrl && !previewTempImageUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
                                 {previewQuestion && !previewTempImageUrl && !previewTempMessage && previewQuestion}
                                 {!previewVideoUrl && !previewQuestion && !previewTempMessage && !previewTempImageUrl && "Pantalla Limpia"}
@@ -926,39 +965,64 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 <Card>
                     <CardHeader>
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
-                        <CardDescription>Muestre un mensaje de texto o un código QR en la pantalla pública.</CardDescription>
+                        <CardDescription>Muestre un mensaje (con texto, una imagen subida o un QR) en la pantalla pública.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Texto (para mensaje o QR)</Label>
+                         <div className="space-y-2">
+                            <Label htmlFor="temp-message-input">Texto (opcional si sube imagen)</Label>
                             <Textarea 
-                                placeholder="Ej: ¡Escanea para ver en tiempo real!"
+                                id="temp-message-input"
+                                placeholder="Ej: ¡Sigan nuestras redes sociales!"
                                 value={tempMessageInput}
                                 onChange={(e) => setTempMessageInput(e.target.value)}
                                 rows={2}
                             />
                         </div>
-                        <div className="space-y-2">
-                             <Label>URL para Código QR</Label>
-                             <Input 
-                                placeholder="Pegue la URL para generar el QR (ej: https://...)"
-                                value={tempQrUrlInput}
-                                onChange={(e) => setTempQrUrlInput(e.target.value)}
-                             />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+                        <div className="flex justify-end">
                             <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage || !tempMessageInput.trim()}>
                                 {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
                                 Enviar solo Texto
                             </Button>
-                             <Button onClick={handleSendQrCode} disabled={isSendingTempMessage || !tempQrUrlInput.trim()}>
-                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4"/>}
-                                Enviar Texto y QR
-                            </Button>
                         </div>
-                         <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full">
+                        
+                        <div className="border-t pt-4 space-y-2">
+                            <Label htmlFor="temp-qr-url-input">URL para Código QR</Label>
+                             <Input 
+                                id="temp-qr-url-input"
+                                placeholder="Pegue la URL para generar el QR (ej: https://...)"
+                                value={tempQrUrlInput}
+                                onChange={(e) => setTempQrUrlInput(e.target.value)}
+                             />
+                             <div className="flex justify-end">
+                                <Button onClick={handleSendQrCode} disabled={isSendingTempMessage || !tempQrUrlInput.trim()}>
+                                    {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4"/>}
+                                    Enviar Texto y QR
+                                </Button>
+                             </div>
+                        </div>
+                        
+                         <div className="border-t pt-4 space-y-2">
+                            <Label htmlFor="temp-image-file">Subir una Imagen</Label>
+                             <Input 
+                                id="temp-image-file"
+                                type="file"
+                                accept="image/*"
+                                onChange={handleTempImageFileChange}
+                             />
+                              {tempImageUploadProgress > 0 && <Progress value={tempImageUploadProgress} />}
+                             <div className="flex justify-end">
+                                <Button onClick={handleSendImage} disabled={isSendingTempMessage || !tempImageFile}>
+                                    {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ImageIcon className="mr-2 h-4 w-4"/>}
+                                    Enviar Texto e Imagen
+                                </Button>
+                             </div>
+                        </div>
+
+
+                         <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full mt-4">
                             <Eraser className="mr-2 h-4 w-4"/>
-                            Limpiar Mensaje
+                            Limpiar Mensaje de Pantalla
                         </Button>
                     </CardContent>
                 </Card>
