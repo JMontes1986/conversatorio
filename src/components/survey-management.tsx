@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 
 const questionSchema = z.object({
   id: z.string(),
@@ -34,10 +35,17 @@ const questionSchema = z.object({
   type: z.enum(["rating", "text"]),
 });
 
+const sectionSchema = z.object({
+  id: z.string(),
+  title: z.string().min(3, "El título de la sección es requerido."),
+  questions: z.array(questionSchema).min(1, "La sección debe tener al menos una pregunta."),
+});
+
+
 const formSchema = z.object({
   title: z.string().min(3, "El título es requerido."),
   subtitle: z.string().min(10, "El subtítulo es requerido."),
-  questions: z.array(questionSchema).min(1, "Debe haber al menos una pregunta."),
+  sections: z.array(sectionSchema).min(1, "Debe haber al menos una sección."),
   isActive: z.boolean().optional(),
 });
 
@@ -49,18 +57,36 @@ type SurveyResponse = {
 }
 
 
-const defaultQuestions: z.infer<typeof questionSchema>[] = [
-    { id: nanoid(), text: "El tema del conversatorio fue relevante y de actualidad.", type: "rating" },
-    { id: nanoid(), text: "La organización general del evento fue excelente.", type: "rating" },
-    { id: nanoid(), text: "Los moderadores del conversatorio facilitaron un diálogo dinámico y ordenado.", type: "rating" },
-    { id: nanoid(), text: "La plataforma o el lugar donde se realizó el evento fue adecuado y cómodo.", type: "rating" },
-    { id: nanoid(), text: "El tiempo asignado para cada intervención fue suficiente.", type: "rating" },
-    { id: nanoid(), text: "Los recursos audiovisuales utilizados (presentaciones, videos, etc.) fueron de alta calidad y enriquecieron el debate.", type: "rating" },
-    { id: nanoid(), text: "La calidad de los argumentos y la preparación de los equipos participantes fue alta.", type: "rating" },
-    { id: nanoid(), text: "El evento cumplió con mis expectativas.", type: "rating" },
-    { id: nanoid(), text: "Recomendaría este evento a otros colegios o estudiantes.", type: "rating" },
-    { id: nanoid(), text: "¿Qué sugerencias tiene para mejorar futuros conversatorios?", type: "text" },
-    { id: nanoid(), text: "¿En qué rol participó en el evento?", type: "text" },
+const defaultSections: z.infer<typeof sectionSchema>[] = [
+    {
+        id: nanoid(),
+        title: "Sobre el Evento",
+        questions: [
+            { id: nanoid(), text: "El tema del conversatorio fue relevante y de actualidad.", type: "rating" },
+            { id: nanoid(), text: "La organización general del evento fue excelente.", type: "rating" },
+            { id: nanoid(), text: "Los moderadores del conversatorio facilitaron un diálogo dinámico y ordenado.", type: "rating" },
+            { id: nanoid(), text: "La plataforma o el lugar donde se realizó el evento fue adecuado y cómodo.", type: "rating" },
+            { id: nanoid(), text: "El tiempo asignado para cada intervención fue suficiente.", type: "rating" },
+        ]
+    },
+    {
+        id: nanoid(),
+        title: "Sobre el Contenido",
+        questions: [
+             { id: nanoid(), text: "Los recursos audiovisuales utilizados (presentaciones, videos, etc.) fueron de alta calidad y enriquecieron el debate.", type: "rating" },
+            { id: nanoid(), text: "La calidad de los argumentos y la preparación de los equipos participantes fue alta.", type: "rating" },
+        ]
+    },
+    {
+        id: nanoid(),
+        title: "Opinión General",
+        questions: [
+            { id: nanoid(), text: "El evento cumplió con mis expectativas.", type: "rating" },
+            { id: nanoid(), text: "Recomendaría este evento a otros colegios o estudiantes.", type: "rating" },
+            { id: nanoid(), text: "¿Qué sugerencias tiene para mejorar futuros conversatorios?", type: "text" },
+            { id: nanoid(), text: "¿En qué rol participó en el evento?", type: "text" },
+        ]
+    }
 ];
 
 
@@ -76,7 +102,7 @@ export function SurveyManagement() {
     defaultValues: {
       title: "ENCUESTA DE SATISFACCIÓN",
       subtitle: "CONVERSATORIO INTERCOLEGIAL COLEGIO BILINGÜE PADRE FRANCESCO COLL",
-      questions: defaultQuestions,
+      sections: defaultSections,
       isActive: false,
     },
   });
@@ -105,9 +131,9 @@ export function SurveyManagement() {
     };
   }, [form]);
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({
     control: form.control,
-    name: "questions"
+    name: "sections"
   });
 
   async function onSubmit(values: FormData) {
@@ -152,32 +178,38 @@ export function SurveyManagement() {
   };
 
   const calculateAverages = () => {
-        const ratingQuestions = form.getValues('questions').filter(q => q.type === 'rating');
-        if (responses.length === 0 || ratingQuestions.length === 0) return [];
+        const sections = form.getValues('sections');
+        if (responses.length === 0 || sections.length === 0) return [];
         
-        return ratingQuestions.map(q => {
-            const ratings = responses
-                .map(r => r.answers[q.id])
-                .filter(a => typeof a === 'number' && a > 0 && a <= 5) as number[];
-            
-            if (ratings.length === 0) return { text: q.text, average: 'N/A' };
+        return sections.map(section => {
+            const ratingQuestions = section.questions.filter(q => q.type === 'rating');
+            const questionAverages = ratingQuestions.map(q => {
+                const ratings = responses
+                    .map(r => r.answers[q.id])
+                    .filter(a => typeof a === 'number' && a > 0 && a <= 5) as number[];
+                
+                if (ratings.length === 0) return { text: q.text, average: 'N/A' };
 
-            const sum = ratings.reduce((acc, val) => acc + val, 0);
-            const average = (sum / ratings.length).toFixed(2);
-            return { text: q.text, average };
+                const sum = ratings.reduce((acc, val) => acc + val, 0);
+                const average = (sum / ratings.length).toFixed(2);
+                return { text: q.text, average };
+            });
+            return { title: section.title, questions: questionAverages };
         });
   };
   
   const getTextResponses = () => {
-        const textQuestions = form.getValues('questions').filter(q => q.type === 'text');
-        if (responses.length === 0 || textQuestions.length === 0) return [];
+        const sections = form.getValues('sections');
+        if (responses.length === 0 || sections.length === 0) return [];
         
-        return textQuestions.map(q => {
-            const answers = responses
-                .map(r => r.answers[q.id])
-                .filter(a => typeof a === 'string' && a.trim() !== '') as string[];
-            
-            return { text: q.text, answers };
+        return sections.flatMap(section => {
+            const textQuestions = section.questions.filter(q => q.type === 'text');
+            return textQuestions.map(q => {
+                const answers = responses
+                    .map(r => r.answers[q.id])
+                    .filter(a => typeof a === 'string' && a.trim() !== '') as string[];
+                return { text: q.text, answers };
+            });
         });
   }
 
@@ -233,7 +265,7 @@ export function SurveyManagement() {
                 <CardHeader>
                     <CardTitle>Editor del Formulario de Encuesta</CardTitle>
                     <CardDescription>
-                    Modifique el título, las preguntas y el tipo de respuesta.
+                    Modifique el título, secciones y preguntas.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -263,43 +295,33 @@ export function SurveyManagement() {
                         />
                         
                         <Separator />
-                        
+
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-medium">Preguntas</h3>
-                                <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), text: '', type: 'rating' })}>
-                                    <PlusCircle className="mr-2 h-4 w-4" /> Añadir Pregunta
+                             <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-medium">Secciones y Preguntas</h3>
+                                <Button type="button" variant="outline" size="sm" onClick={() => appendSection({ id: nanoid(), title: '', questions: [{id: nanoid(), text: '', type: 'rating'}] })}>
+                                    <FolderPlus className="mr-2 h-4 w-4" /> Añadir Sección
                                 </Button>
                             </div>
-                            {fields.map((field, index) => (
-                            <div key={field.id} className="space-y-3 rounded-md border p-4 relative">
-                                <FormField
-                                    control={form.control}
-                                    name={`questions.${index}.text`}
-                                    render={({ field }) => (
-                                        <FormItem><FormLabel>Texto de la Pregunta {index + 1}</FormLabel><FormControl><Textarea rows={2} {...field} /></FormControl><FormMessage /></FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name={`questions.${index}.type`}
-                                    render={({ field }) => (
-                                        <FormItem><FormLabel>Tipo de Respuesta</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="rating">Calificación (1-5)</SelectItem>
-                                                <SelectItem value="text">Texto Abierto</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => remove(index)}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </div>
+                             {sectionFields.map((section, sectionIndex) => (
+                                <div key={section.id} className="space-y-4 rounded-md border p-4 relative bg-secondary/30">
+                                    <FormField
+                                        control={form.control}
+                                        name={`sections.${sectionIndex}.title`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Título de la Sección {sectionIndex + 1}</FormLabel>
+                                                <FormControl><Input {...field} placeholder="Escriba el título de la sección" /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive" onClick={() => removeSection(sectionIndex)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+
+                                    <QuestionFields control={form.control} sectionIndex={sectionIndex} />
+                                </div>
                             ))}
                         </div>
 
@@ -327,22 +349,31 @@ export function SurveyManagement() {
                         <>
                             <div>
                                 <h3 className="font-semibold mb-2">Promedio de Calificaciones</h3>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Pregunta</TableHead>
-                                            <TableHead className="text-right">Promedio (1-5)</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {calculateAverages().map((item, i) => (
-                                            <TableRow key={i}>
-                                                <TableCell className="text-sm">{item.text}</TableCell>
-                                                <TableCell className="text-right font-bold text-lg">{item.average}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                <Accordion type="single" collapsible className="w-full">
+                                    {calculateAverages().map((section, i) => (
+                                        <AccordionItem value={`section-${i}`} key={i}>
+                                            <AccordionTrigger>{section.title}</AccordionTrigger>
+                                            <AccordionContent>
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Pregunta</TableHead>
+                                                            <TableHead className="text-right">Promedio (1-5)</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {section.questions.map((item, j) => (
+                                                            <TableRow key={j}>
+                                                                <TableCell className="text-sm">{item.text}</TableCell>
+                                                                <TableCell className="text-right font-bold text-lg">{item.average}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    ))}
+                                </Accordion>
                             </div>
                             <Separator />
                             <div className="space-y-4">
@@ -369,3 +400,54 @@ export function SurveyManagement() {
     </div>
   );
 }
+
+function QuestionFields({ control, sectionIndex }: { control: any, sectionIndex: number }) {
+    const { fields, append, remove } = useFieldArray({
+        control,
+        name: `sections.${sectionIndex}.questions`
+    });
+
+    return (
+        <div className="space-y-4 pl-4 border-l-2 ml-2">
+            {fields.map((field, questionIndex) => (
+                <div key={field.id} className="space-y-3 rounded-md border p-3 relative bg-background">
+                    <FormField
+                        control={control}
+                        name={`sections.${sectionIndex}.questions.${questionIndex}.text`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Texto de la Pregunta {questionIndex + 1}</FormLabel>
+                                <FormControl><Textarea rows={2} {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={control}
+                        name={`sections.${sectionIndex}.questions.${questionIndex}.type`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Tipo de Respuesta</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="rating">Calificación (1-5)</SelectItem>
+                                        <SelectItem value="text">Texto Abierto</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 text-destructive" onClick={() => remove(questionIndex)}>
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ id: nanoid(), text: '', type: 'rating' })}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Pregunta a esta Sección
+            </Button>
+        </div>
+    );
+}
+

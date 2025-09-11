@@ -12,13 +12,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, FileQuestion, Send, Star, EyeOff } from "lucide-react";
+import { Loader2, FileQuestion, Send, EyeOff } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface Question {
@@ -27,10 +26,16 @@ interface Question {
   type: "rating" | "text";
 }
 
+interface Section {
+  id: string;
+  title: string;
+  questions: Question[];
+}
+
 interface SurveyConfig {
   title: string;
   subtitle: string;
-  questions: Question[];
+  sections: Section[];
   isActive?: boolean;
 }
 
@@ -113,44 +118,49 @@ export default function SurveyPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {config.questions.map((q, index) => (
-                <FormField
-                    key={q.id}
-                    control={form.control}
-                    name={q.id}
-                    rules={{ required: q.type === 'rating' ? 'Esta pregunta es requerida' : false }}
-                    render={({ field }) => (
-                        <FormItem className="space-y-3 rounded-md border p-4">
-                            <FormLabel className="text-base">{index + 1}. {q.text}</FormLabel>
-                            <FormControl>
-                                {q.type === 'rating' ? (
-                                    <RadioGroup
-                                        onValueChange={(value) => field.onChange(parseInt(value))}
-                                        defaultValue={String(field.value)}
-                                        className="flex flex-wrap justify-center gap-2 md:gap-4 pt-2"
-                                    >
-                                        {[1,2,3,4,5].map(val => (
-                                            <FormItem key={val} className="flex flex-col items-center space-y-1">
-                                                 <FormControl>
-                                                     <RadioGroupItem value={String(val)} className="h-8 w-8" />
-                                                 </FormControl>
-                                                <FormLabel className="font-normal text-xs text-center">
-                                                    {val}
-                                                </FormLabel>
-                                            </FormItem>
-                                        ))}
-                                    </RadioGroup>
-                                ) : (
-                                    <Textarea
-                                        placeholder="Escriba su respuesta aquí..."
-                                        {...field}
-                                    />
-                                )}
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
+              {config.sections.map((section, sectionIndex) => (
+                  <div key={section.id} className="space-y-6 rounded-lg border-2 border-primary/20 p-4 md:p-6">
+                      <h2 className="text-xl font-bold text-primary">{section.title}</h2>
+                      {section.questions.map((q, qIndex) => (
+                         <FormField
+                            key={q.id}
+                            control={form.control}
+                            name={q.id}
+                            rules={{ required: q.type === 'rating' ? 'Esta pregunta es requerida' : false }}
+                            render={({ field }) => (
+                                <FormItem className="space-y-3 rounded-md border bg-background p-4 shadow-sm">
+                                    <FormLabel className="text-base">{qIndex + 1}. {q.text}</FormLabel>
+                                    <FormControl>
+                                        {q.type === 'rating' ? (
+                                            <RadioGroup
+                                                onValueChange={(value) => field.onChange(parseInt(value))}
+                                                defaultValue={String(field.value)}
+                                                className="flex flex-wrap justify-center gap-2 md:gap-4 pt-2"
+                                            >
+                                                {[1,2,3,4,5].map(val => (
+                                                    <FormItem key={val} className="flex flex-col items-center space-y-1">
+                                                        <FormControl>
+                                                            <RadioGroupItem value={String(val)} className="h-8 w-8" />
+                                                        </FormControl>
+                                                        <FormLabel className="font-normal text-xs text-center">
+                                                            {val}
+                                                        </FormLabel>
+                                                    </FormItem>
+                                                ))}
+                                            </RadioGroup>
+                                        ) : (
+                                            <Textarea
+                                                placeholder="Escriba su respuesta aquí..."
+                                                {...field}
+                                            />
+                                        )}
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                      ))}
+                  </div>
               ))}
 
               <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
@@ -164,3 +174,4 @@ export default function SurveyPage() {
     </div>
   );
 }
+
