@@ -90,15 +90,16 @@ export function KnockoutStageResults() {
         
         knockoutPhases.forEach(phase => {
             const roundsInPhase = knockoutRounds.filter(r => r.phase === phase);
-            const roundNamesInPhase = roundsInPhase.map(r => r.name);
-            const phaseScores = scores.filter(s => roundNamesInPhase.includes(s.matchId.split('-bye-')[0]));
+            const roundNamesInPhase = new Set(roundsInPhase.map(r => r.name));
             
-            const matches: Record<string, { scores: ScoreData[], roundName: string }> = {};
+            const phaseScores = scores.filter(s => roundNamesInPhase.has(s.matchId.split('-bye-')[0]));
+            
+            const matches: Record<string, { scores: ScoreData[] }> = {};
 
             phaseScores.forEach(score => {
                 const matchIdentifier = score.matchId;
                 if (!matches[matchIdentifier]) {
-                    matches[matchIdentifier] = { scores: [], roundName: score.matchId };
+                    matches[matchIdentifier] = { scores: [] };
                 }
                 matches[matchIdentifier].scores.push(score);
             });
@@ -134,9 +135,9 @@ export function KnockoutStageResults() {
                 return { id: matchId, teams, winner, isTie, judges: judges.size };
             });
 
-            // Add pending match from debateState
-            if (debateState && debateState.currentRound && roundNamesInPhase.includes(debateState.currentRound)) {
-                const isAlreadyScored = scores.some(s => s.matchId === debateState.currentRound);
+            // Add pending match from debateState if it belongs to the current phase and is not already scored
+            if (debateState && debateState.currentRound && roundNamesInPhase.has(debateState.currentRound)) {
+                const isAlreadyScored = matchResults.some(m => m.id === debateState.currentRound);
                 if (!isAlreadyScored && debateState.teams.length > 0) {
                      matchResults.push({
                         id: debateState.currentRound,
