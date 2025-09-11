@@ -337,7 +337,7 @@ export function SurveyManagement() {
             return row;
         });
 
-        const head = [['Fecha', ...allQuestions.map(q => q.text)]];
+        const head = [['Fecha', ...allQuestions.map(q => q.text.substring(0, 40) + (q.text.length > 40 ? '...' : ''))]];
 
         autoTable(doc, {
             startY: 30,
@@ -349,7 +349,13 @@ export function SurveyManagement() {
         });
         
         let finalY = (doc as any).lastAutoTable.finalY || 10;
-        finalY += 10;
+        
+        if (finalY < 280) { // Add space only if there is room on the page
+             finalY += 10;
+        } else {
+             doc.addPage();
+             finalY = 15;
+        }
         
         doc.setFontSize(14);
         doc.text("Respuestas Abiertas", 14, finalY);
@@ -357,18 +363,16 @@ export function SurveyManagement() {
 
         textResponses.forEach(question => {
             if (question.answers.length > 0) {
+                if (finalY > 260) { doc.addPage(); finalY = 15; }
                 doc.setFontSize(10);
                 doc.text(question.text, 14, finalY);
                 finalY += 5;
                 question.answers.forEach(answer => {
+                    if (finalY > 280) { doc.addPage(); finalY = 15; }
                     doc.setFontSize(9);
                     const splitText = doc.splitTextToSize(`- ${answer}`, 180);
                     doc.text(splitText, 16, finalY);
                     finalY += (splitText.length * 4);
-                    if (finalY > 280) { // Page break
-                        doc.addPage();
-                        finalY = 15;
-                    }
                 });
                 finalY += 4;
             }
