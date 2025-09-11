@@ -4,10 +4,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, where, doc, orderBy } from "firebase/firestore";
 import { Loader2, Trophy, EyeOff, CheckCircle, Swords, Folder } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 
 type RoundData = {
   id: string;
@@ -32,12 +31,11 @@ type MatchResult = {
     teams: { name: string; total: number }[];
     winner: string | null;
     isTie: boolean;
-    judges: number;
     isBye?: boolean;
     isPending?: boolean;
 }
 
-const knockoutPhases = ["Cuartos de Final", "Semifinal", "Final"];
+const knockoutPhases = ["Fase de Finales"];
 
 export function KnockoutStageResults() {
     const [knockoutRounds, setKnockoutRounds] = useState<RoundData[]>([]);
@@ -53,6 +51,7 @@ export function KnockoutStageResults() {
         );
         const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
             const rounds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            rounds.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
             setKnockoutRounds(rounds);
         });
 
@@ -85,43 +84,37 @@ export function KnockoutStageResults() {
         };
     }, []);
 
-    const resultsByPhase = useMemo(() => {
-        const phases: Record<string, MatchResult[]> = {};
-        
-        knockoutPhases.forEach(phase => {
-            const roundsInPhase = knockoutRounds.filter(r => r.phase === phase);
-            const roundNamesInPhase = new Set(roundsInPhase.map(r => r.name));
-            
-            const phaseScores = scores.filter(s => roundNamesInPhase.has(s.matchId.split('-bye-')[0]));
-            
-            const matches: Record<string, { scores: ScoreData[] }> = {};
+    const resultsByRound = useMemo(() => {
+        return knockoutRounds.map(round => {
+            // Check for scores matching the round name
+            const roundScores = scores.filter(s => s.matchId === round.name);
 
-            phaseScores.forEach(score => {
-                const matchIdentifier = score.matchId;
-                if (!matches[matchIdentifier]) {
-                    matches[matchIdentifier] = { scores: [] };
-                }
-                matches[matchIdentifier].scores.push(score);
-            });
-            
-            let matchResults: MatchResult[] = Object.entries(matches).map(([matchId, data]) => {
-                const isBye = matchId.includes('-bye-');
-                if (isBye) {
-                     const winnerTeam = data.scores[0].teams[0];
-                     return { id: matchId, teams: [winnerTeam], winner: winnerTeam.name, isTie: false, judges: 0, isBye: true };
-                }
+            // Handle bye scores that start with the round name
+            const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
+            if (byeScore) {
+                const winnerTeam = byeScore.teams[0];
+                return {
+                    round: round,
+                    match: {
+                        id: round.name,
+                        teams: [winnerTeam],
+                        winner: winnerTeam.name,
+                        isTie: false,
+                        isBye: true
+                    } as MatchResult
+                };
+            }
 
+            // Handle normally scored match
+            if (roundScores.length > 0) {
                 const teamTotals: Record<string, number> = {};
-                const judges = new Set<string>();
-
-                data.scores.forEach(score => {
-                    judges.add(score.judgeName);
+                roundScores.forEach(score => {
                     score.teams.forEach(team => {
                         if (!teamTotals[team.name]) teamTotals[team.name] = 0;
                         teamTotals[team.name] += team.total;
                     });
                 });
-
+                
                 const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
                 let winner: string | null = null;
                 let isTie = false;
@@ -132,32 +125,32 @@ export function KnockoutStageResults() {
                     if (winners.length === 1) winner = winners[0].name;
                     else isTie = true;
                 }
-                return { id: matchId, teams, winner, isTie, judges: judges.size };
-            });
+                
+                return {
+                    round: round,
+                    match: { id: round.name, teams, winner, isTie } as MatchResult
+                };
+            }
 
-            // Add pending match from debateState if it belongs to the current phase and is not already scored
-            if (debateState && debateState.currentRound && roundNamesInPhase.has(debateState.currentRound)) {
-                const isAlreadyScored = matchResults.some(m => m.id === debateState.currentRound);
-                if (!isAlreadyScored && debateState.teams.length > 0) {
-                     matchResults.push({
-                        id: debateState.currentRound,
+            // Handle pending match from debateState
+            if (debateState?.currentRound === round.name && debateState.teams.length > 0) {
+                 return {
+                    round: round,
+                    match: {
+                        id: round.name,
                         teams: debateState.teams.map(t => ({ name: t.name, total: 0 })),
                         winner: null,
                         isTie: false,
-                        judges: 0,
-                        isPending: true,
-                    });
-                }
+                        isPending: true
+                    } as MatchResult
+                 };
             }
 
-
-            if(matchResults.length > 0) {
-                phases[phase] = matchResults.sort((a,b) => a.id.localeCompare(b.id));
-            }
+            // No scores or pending state for this round
+            return { round: round, match: null };
         });
-
-        return phases;
     }, [knockoutRounds, scores, debateState]);
+
 
     if (loading) {
         return (
@@ -183,7 +176,7 @@ export function KnockoutStageResults() {
         );
     }
 
-    if (Object.keys(resultsByPhase).length === 0) {
+    if (resultsByRound.length === 0 || resultsByRound.every(r => r.match === null)) {
         return (
             <div className="text-center text-muted-foreground p-8">
                 Aún no hay resultados para las fases finales.
@@ -192,61 +185,63 @@ export function KnockoutStageResults() {
     }
 
     return (
-        <Accordion type="multiple" className="w-full space-y-4" defaultValue={knockoutPhases}>
-            {knockoutPhases.map(phase => resultsByPhase[phase] && (
-                <AccordionItem value={phase} key={phase}>
-                    <Card>
-                        <AccordionTrigger className="p-6">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Folder className="h-5 w-5"/>
-                                {phase}
-                            </CardTitle>
-                        </AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0">
-                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {resultsByPhase[phase].map((match) => (
-                                <Card key={match.id} className="bg-secondary/50">
-                                    <CardHeader>
-                                        <CardTitle className="text-base text-center capitalize">{match.id.replace(/-/g, ' ')}</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {match.isBye ? (
-                                            <div className="text-center text-sm h-16 flex flex-col items-center justify-center">
-                                                <p className="font-bold flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" />{match.winner}</p>
-                                                <Badge variant="secondary" className="mt-2"><CheckCircle className="h-3 w-3 mr-1"/>Avance Automático</Badge>
-                                            </div>
-                                        ) : match.isPending ? (
-                                            <div className="text-sm h-16 flex flex-col items-center justify-center text-center">
-                                                <div className="flex items-center gap-2 font-semibold">
-                                                    <span>{match.teams[0]?.name || 'Equipo 1'}</span>
-                                                    <Swords className="h-4 w-4 text-muted-foreground"/>
-                                                    <span>{match.teams[1]?.name || 'Equipo 2'}</span>
-                                                </div>
-                                                <Badge variant="outline" className="mt-3">Pendiente</Badge>
-                                            </div>
-                                        ) : (
-                                            <Table>
-                                                <TableBody>
-                                                {match.teams.sort((a, b) => b.total - a.total).map(team => (
-                                                    <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
-                                                        <TableCell className="flex items-center gap-2">
-                                                            {team.name}
-                                                            {team.name === match.winner && <Trophy className="h-4 w-4 text-amber-500" />}
-                                                        </TableCell>
-                                                        <TableCell className="text-right text-lg">{team.total}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                                </TableBody>
-                                            </Table>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            ))}
+       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+           {resultsByRound.map(({ round, match }) => (
+                <Card key={round.id}>
+                    <CardHeader>
+                        <CardTitle className="text-lg">{round.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                       {match ? (
+                           match.isBye ? (
+                             <div className="text-center text-sm h-24 flex flex-col items-center justify-center">
+                                <p className="font-bold flex items-center gap-2">
+                                     <Trophy className="h-4 w-4 text-amber-500" />
+                                    {match.winner}
+                                </p>
+                                <Badge variant="secondary" className="mt-2">
+                                     <CheckCircle className="h-3 w-3 mr-1"/>
+                                     Avance Automático
+                                </Badge>
+                             </div>
+                           ) : match.isPending ? (
+                                <div className="text-sm h-24 flex flex-col items-center justify-center text-center">
+                                    <div className="flex items-center gap-2 font-semibold">
+                                        <span>{match.teams[0]?.name || 'Equipo 1'}</span>
+                                        <Swords className="h-4 w-4 text-muted-foreground"/>
+                                        <span>{match.teams[1]?.name || 'Equipo 2'}</span>
+                                    </div>
+                                    <Badge variant="outline" className="mt-3">Pendiente</Badge>
+                                </div>
+                           ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Equipo</TableHead>
+                                        <TableHead className="text-right">Puntaje Total</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {match.teams.sort((a, b) => b.total - a.total).map(team => (
+                                        <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
+                                            <TableCell className="flex items-center gap-2">
+                                                {team.name}
+                                                {team.name === match.winner && <Trophy className="h-4 w-4 text-amber-500" />}
+                                            </TableCell>
+                                            <TableCell className="text-right text-lg">{team.total}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                           )
+                       ) : (
+                           <div className="text-center text-sm text-muted-foreground h-24 flex items-center justify-center">
+                                Esperando enfrentamiento...
                            </div>
-                        </AccordionContent>
-                    </Card>
-                </AccordionItem>
-            ))}
-        </Accordion>
+                       )}
+                    </CardContent>
+                </Card>
+           ))}
+        </div>
     );
 }
