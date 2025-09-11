@@ -76,11 +76,12 @@ export function FinalResultCard() {
                 });
             });
             const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
-            const winner = teams.length > 0 ? teams.reduce((a, b) => a[1] > b[1] ? a : b)[0] : null;
+            const winner = teams.length > 0 ? teams.reduce((a, b) => a.total > b.total ? a : b) : null;
 
             return {
                 teams,
-                winner: winner?.name || null
+                winner: winner ? winner.name : null,
+                isTie: teams.length > 1 && teams[0].total === teams[1].total,
             }
         }
         
@@ -90,7 +91,8 @@ export function FinalResultCard() {
                     { name: winnerRonda6, total: 0 },
                     { name: winnerRonda7, total: 0 }
                 ],
-                winner: null
+                winner: null,
+                isTie: false,
             }
         }
 
@@ -174,4 +176,3 @@ export function FinalResultCard() {
         </Card>
     );
 }
-
