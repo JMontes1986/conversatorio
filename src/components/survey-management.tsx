@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -290,31 +291,32 @@ export function SurveyManagement() {
   }
 
   const handleDownloadCSV = () => {
-    const allQuestions = form.getValues('sections').flatMap(s => s.questions);
-    
-    let csvContent = "data:text/csv;charset=utf-8,";
-    const headers = ["Fecha de Envío", "Es Admin", ...allQuestions.map(q => q.text.replace(/,/g, ''))];
-    csvContent += headers.join(",") + "\r\n";
+        const allQuestions = form.getValues('sections').flatMap(s => s.questions);
+        
+        let csvContent = "";
+        const headers = ["Fecha de Envío", "Es Admin", ...allQuestions.map(q => q.text.replace(/,/g, ''))];
+        csvContent += headers.join(",") + "\r\n";
 
-    responses.forEach(response => {
-        const row = [
-            response.createdAt.toDate().toLocaleString(),
-            response.isAdminSubmission ? "Sí" : "No",
-            ...allQuestions.map(q => {
-                const answer = response.answers[q.id] || "";
-                return `"${String(answer).replace(/"/g, '""')}"`;
-            })
-        ];
-        csvContent += row.join(",") + "\r\n";
-    });
+        responses.forEach(response => {
+            const row = [
+                response.createdAt.toDate().toLocaleString(),
+                response.isAdminSubmission ? "Sí" : "No",
+                ...allQuestions.map(q => {
+                    const answer = response.answers[q.id] || "";
+                    return `"${String(answer).replace(/"/g, '""')}"`;
+                })
+            ];
+            csvContent += row.join(",") + "\r\n";
+        });
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "resultados_encuesta.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "resultados_encuesta.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
   };
   
     const handleDownloadPDF = () => {
@@ -335,14 +337,14 @@ export function SurveyManagement() {
             return row;
         });
 
-        const head = [['Fecha', ...allQuestions.map(q => q.text.substring(0, 30))]];
+        const head = [['Fecha', ...allQuestions.map(q => q.text)]];
 
         autoTable(doc, {
             startY: 30,
             head: head,
             body: tableData,
-            headStyles: { fontSize: 8 },
-            bodyStyles: { fontSize: 7 },
+            headStyles: { fontSize: 8, cellWidth: 'wrap' },
+            bodyStyles: { fontSize: 7, cellWidth: 'wrap' },
             theme: 'striped',
         });
         
@@ -372,8 +374,13 @@ export function SurveyManagement() {
             }
         });
 
-
-        doc.save('resultados_encuesta.pdf');
+        const pdfBlob = doc.output('blob');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = 'resultados_encuesta.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
 
@@ -715,5 +722,7 @@ function QuestionFields({ control, sectionIndex }: { control: Control<FormData>,
         </>
     );
 }
+
+    
 
     
