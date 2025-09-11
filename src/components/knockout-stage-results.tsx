@@ -17,6 +17,12 @@ type ScoreData = {
   createdAt: { seconds: number };
 }
 
+type RoundData = {
+    id: string;
+    name: string;
+    phase: string;
+}
+
 type DebateState = {
     currentRound: string;
     teams: { name: string }[];
@@ -31,11 +37,10 @@ type MatchResult = {
     isPending?: boolean;
 }
 
-const groupPhaseKeywords = ["grupo"];
-const finalPhaseKeywords = ["cuartos", "semifinal", "final", "ronda 6", "ronda 7", "ronda 8"];
 
 export function KnockoutStageResults() {
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
+    const [allRounds, setAllRounds] = useState<RoundData[]>([]);
     const [debateState, setDebateState] = useState<DebateState | null>(null);
     const [resultsPublished, setResultsPublished] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -45,6 +50,12 @@ export function KnockoutStageResults() {
         const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
             const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScoreData));
             setAllScores(scoresData);
+        });
+
+        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
+            setAllRounds(roundsData);
         });
         
         const debateStateRef = doc(db, "debateState", "current");
@@ -66,16 +77,20 @@ export function KnockoutStageResults() {
             unsubscribeScores();
             unsubscribeSettings();
             unsubscribeDebateState();
+            unsubscribeRounds();
         };
     }, []);
 
     const finalStageResults = useMemo(() => {
-        // 1. Filter out scores that are definitely from the group stage
+        const groupRoundNames = allRounds
+            .filter(r => r.phase === "Fase de Grupos")
+            .map(r => r.name);
+
         const finalScores = allScores.filter(score => 
-            !groupPhaseKeywords.some(keyword => score.matchId.toLowerCase().includes(keyword))
+            !groupRoundNames.includes(score.matchId) &&
+            !score.matchId.startsWith("grupo") // Double check for safety
         );
 
-        // 2. Group scores by matchId
         const matches: Record<string, ScoreData[]> = {};
         finalScores.forEach(score => {
             if (!matches[score.matchId]) {
@@ -84,11 +99,9 @@ export function KnockoutStageResults() {
             matches[score.matchId].push(score);
         });
 
-        // 3. Process each match
         const processedMatches: MatchResult[] = Object.entries(matches).map(([matchId, scores]) => {
             const teamTotals: Record<string, number> = {};
             
-            // Handle bye scores explicitly
             if (matchId.includes('-bye-')) {
                 const team = scores[0].teams[0];
                 return {
@@ -124,12 +137,11 @@ export function KnockoutStageResults() {
             return { id: matchId, teams, winner, isTie };
         });
 
-        // 4. Add the currently pending match if it's a final and not yet scored
         if (debateState?.currentRound && debateState.teams.length > 0) {
-            const isPendingFinal = finalPhaseKeywords.some(keyword => debateState.currentRound.toLowerCase().includes(keyword));
+            const isCurrentRoundFromGroups = groupRoundNames.includes(debateState.currentRound);
             const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
 
-            if (isPendingFinal && !isAlreadyScored) {
+            if (!isCurrentRoundFromGroups && !isAlreadyScored) {
                 processedMatches.push({
                     id: debateState.currentRound,
                     teams: debateState.teams.map(t => ({ name: t.name, total: 0 })),
@@ -140,7 +152,6 @@ export function KnockoutStageResults() {
             }
         }
         
-        // 5. Sort results
         processedMatches.sort((a, b) => {
              const aDate = matches[a.id]?.[0]?.createdAt.seconds || Infinity;
              const bDate = matches[b.id]?.[0]?.createdAt.seconds || Infinity;
@@ -150,7 +161,7 @@ export function KnockoutStageResults() {
 
         return processedMatches;
 
-    }, [allScores, debateState]);
+    }, [allScores, debateState, allRounds]);
 
 
     if (loading) {
