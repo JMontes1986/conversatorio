@@ -123,8 +123,13 @@ export default function SurveyPage() {
   async function onSubmit(values: any) {
     setIsSubmitting(true);
     try {
+      const cleanedValues = Object.entries(values).reduce((acc, [key, value]) => {
+          acc[key] = value === undefined ? "" : value;
+          return acc;
+      }, {} as Record<string, any>);
+      
       await addDoc(collection(db, "surveyResponses"), {
-        answers: values,
+        answers: cleanedValues,
         createdAt: new Date(),
         isAdminSubmission: !!adminUser,
       });
