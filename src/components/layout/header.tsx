@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   Shuffle,
   FileQuestion,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ import { db } from "@/lib/firebase";
 
 const baseNavLinks = [
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
+  { href: "/programacion", label: "Programación", icon: Calendar },
   { href: "/draw", label: "Sorteo", icon: Shuffle },
   { href: "/debate", label: "Debate", icon: MessageSquare },
 ];
