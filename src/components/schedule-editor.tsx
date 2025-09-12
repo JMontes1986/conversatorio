@@ -57,7 +57,13 @@ export function ScheduleEditor() {
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data() as FormData;
-        form.reset(data);
+        // Ensure 'completed' field exists to prevent Firebase error with 'undefined'
+        const sanitizedData = {
+            ...data,
+            day1: data.day1?.map(item => ({ ...item, completed: item.completed ?? false })) || [],
+            day2: data.day2?.map(item => ({ ...item, completed: item.completed ?? false })) || [],
+        };
+        form.reset(sanitizedData);
       } else {
         form.reset(defaultSchedule);
       }
@@ -83,7 +89,7 @@ export function ScheduleEditor() {
         description: "Hubo un problema al guardar los datos.",
       });
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   }
 
