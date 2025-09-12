@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -497,7 +495,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             <CardHeader>
                 <CardTitle>Gestión de Preguntas y Videos</CardTitle>
                  <CardDescription>
-                    Prepare las preguntas y videos del debate. Puede usar enlaces de YouTube, enlaces directos a videos, o subir un archivo.
+                    Prepare las preguntas y videos del debate. Puede usar enlaces de YouTube, pegar código de inserción de SharePoint, o subir un archivo.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -553,32 +551,36 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                 <p className="flex-grow text-sm font-medium">{q.text}</p>
                                                 
                                                 <div className="space-y-2">
-                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Enlace o Archivo de Video</Label>
+                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Video Asociado</Label>
+                                                    
+                                                    <Textarea
+                                                        id={`video-url-${q.id}`}
+                                                        placeholder="Pegue aquí el enlace de YouTube o el código &lt;iframe&gt; de SharePoint/OneDrive."
+                                                        value={videoInputs[q.id] || ''}
+                                                        onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
+                                                        disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
+                                                        rows={3}
+                                                    />
+
                                                     <div className="flex items-center gap-2">
-                                                        <Input 
-                                                            id={`video-url-${q.id}`}
-                                                            placeholder="Pegar enlace de YouTube, OneDrive, etc."
-                                                            value={videoInputs[q.id] || ''}
-                                                            onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
-                                                            disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
-                                                        />
                                                         <Button 
-                                                            size="icon" 
-                                                            variant="outline" 
-                                                            className="h-9 w-9 shrink-0" 
+                                                            size="sm" 
+                                                            variant="outline"
                                                             onClick={() => onSaveVideoLink(q.id)}
                                                             disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
-                                                            title="Guardar Enlace">
+                                                            title="Guardar Enlace o Código">
                                                             {savingVideoId === q.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4" />}
+                                                            Guardar Video
                                                         </Button>
-                                                        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => {
+                                                        <Button size="sm" variant="outline" onClick={() => {
                                                             const fileInput = document.getElementById(`file-input-${q.id}`);
                                                             fileInput?.click();
                                                         }} disabled={uploadingFile?.questionId === q.id}>
-                                                           <Upload className="h-4 w-4" />
+                                                           <Upload className="h-4 w-4" /> Subir Archivo
                                                         </Button>
                                                         <input type="file" id={`file-input-${q.id}`} data-question-id={q.id} onChange={handleFileChange} className="hidden" accept="video/*" />
                                                     </div>
+
                                                     {uploadingFile?.questionId === q.id && (
                                                         <div className="space-y-1">
                                                             <Progress value={uploadProgress} />
@@ -907,9 +909,23 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     
     const handleSendVideo = async (question: Question) => {
         try {
+            const videoValue = videoInputs[question.id] || "";
+            const isIframe = videoValue.trim().startsWith('&lt;iframe');
+            
+            let finalUrl = videoValue;
+            if (isIframe) {
+                const srcMatch = videoValue.match(/src="([^"]+)"/);
+                if (srcMatch && srcMatch[1]) {
+                    finalUrl = srcMatch[1];
+                } else {
+                     toast({ variant: "destructive", title: "Error de Formato", description: "El código del iframe no es válido. No se encontró el atributo 'src'." });
+                    return;
+                }
+            }
+
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: videoInputs[question.id] || "",
+                videoUrl: finalUrl,
                 question: "",
                 questionId: "",
             }, { merge: true });
@@ -1034,14 +1050,29 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
 
     const handleSaveVideoLink = async (questionId: string) => {
         setSavingVideoId(questionId);
-        const url = videoInputs[questionId] || "";
+        let urlToSave = videoInputs[questionId] || "";
+        
+        const isIframe = urlToSave.trim().startsWith('&lt;iframe');
+        if (isIframe) {
+            const srcMatch = urlToSave.match(/src="([^"]+)"/);
+            if (srcMatch && srcMatch[1]) {
+                urlToSave = srcMatch[1];
+            } else {
+                toast({ variant: "destructive", title: "Error de Formato", description: "El código del iframe no es válido. No se encontró el atributo 'src'." });
+                setSavingVideoId(null);
+                return;
+            }
+        }
+
         try {
             const questionRef = doc(db, "questions", questionId);
-            await updateDoc(questionRef, { videoUrl: url });
-            toast({ title: "Enlace de Video Guardado", description: "El enlace se ha asociado a la pregunta." });
+            await updateDoc(questionRef, { videoUrl: urlToSave });
+            // Update local state to show the extracted URL if it was an iframe
+            setVideoInputs(prev => ({ ...prev, [questionId]: urlToSave }));
+            toast({ title: "Video Guardado", description: "El video se ha asociado a la pregunta." });
         } catch (error) {
             console.error("Error saving video link:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el enlace." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el video." });
         } finally {
             setSavingVideoId(null);
         }
@@ -1143,7 +1174,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     </CardContent>
                 </Card>
                 <Tabs defaultValue="round-config">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-5">
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>

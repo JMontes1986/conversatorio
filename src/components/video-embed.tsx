@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -23,25 +22,13 @@ const getYouTubeId = (url: string): string | null => {
   return null;
 };
 
-const getOneDriveEmbedUrl = (url: string): string | null => {
+const isSharePointEmbedUrl = (url: string): boolean => {
     try {
         const urlObj = new URL(url);
-        if (urlObj.hostname.endsWith('.sharepoint.com') || urlObj.hostname.endsWith('1drv.ms')) {
-            let embedUrl = url.replace("/view.aspx?", "/embed.aspx?");
-            embedUrl = embedUrl.replace("/v.aspx?", "/embed.aspx?"); // Handle other sharepoint variations
-            
-            // Add autoplay and make it chromeless
-            const embedUrlObj = new URL(embedUrl);
-            embedUrlObj.searchParams.set('wdAr', '1.77'); // 16:9 aspect ratio
-            embedUrlObj.searchParams.set('autoplay', 'true');
-            embedUrlObj.searchParams.set('wdEaa', '1'); // Enable autoplay
-            
-            return embedUrlObj.toString();
-        }
-    } catch(error) {
-        // Not a valid URL
+        return urlObj.hostname.endsWith('.sharepoint.com') && urlObj.pathname.includes('/embed.aspx');
+    } catch (e) {
+        return false;
     }
-    return null;
 }
 
 
@@ -63,19 +50,17 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({ url }) => {
     );
   }
   
-  const oneDriveEmbedUrl = getOneDriveEmbedUrl(url);
-
-  if (oneDriveEmbedUrl) {
+  if (isSharePointEmbedUrl(url)) {
     return (
          <div className="aspect-video w-full">
             <iframe
-            src={oneDriveEmbedUrl}
+            src={url}
             width="962"
             height="541"
             frameBorder="0"
             scrolling="no"
             allowFullScreen
-            title="OneDrive Video"
+            title="OneDrive/SharePoint Video"
             className="w-full h-full rounded-lg"
             ></iframe>
         </div>
