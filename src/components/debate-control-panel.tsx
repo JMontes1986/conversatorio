@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -43,6 +43,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { EditQuestionForm } from './edit-question-form';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -741,12 +742,62 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
     )
 }
 
+function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
+    const { toast } = useToast();
+    const [imageUrl, setImageUrl] = useState(initialUrl);
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        setImageUrl(initialUrl);
+    }, [initialUrl]);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { sidebarImageUrl: imageUrl }, { merge: true });
+            toast({ title: "Imagen Guardada" });
+        } catch (error) {
+            console.error("Error saving image URL:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la URL de la imagen." });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><ImageIcon className="h-5 w-5"/>Imagen de Barra Lateral</CardTitle>
+                <CardDescription>Establezca una imagen para mostrar cuando el QR esté inactivo.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="sidebar-image-url">URL de la Imagen</Label>
+                    <Input 
+                        id="sidebar-image-url"
+                        placeholder="https://ejemplo.com/imagen.png"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        disabled={isSaving}
+                    />
+                </div>
+                <Button className="w-full" onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
+                    Guardar Imagen
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
 export function DebateControlPanel({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
     const { toast } = useToast();
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [isQrEnabled, setIsQrEnabled] = useState(false);
+    const [sidebarImageUrl, setSidebarImageUrl] = useState("");
     const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<string | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
@@ -766,6 +817,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
                 setIsQrEnabled(data.isQrEnabled || false);
+                setSidebarImageUrl(data.sidebarImageUrl || "");
                 setProjectedStudentQuestion(data.studentQuestionOverlay || null);
                 if(data.timer) {
                     setMainTimer(prev => ({
@@ -1075,62 +1127,79 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                         </div>
                     </CardContent>
                 </Card>
-                
-                <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} />
-                
-                <QuestionManagement 
-                    preparedQuestions={preparedQuestions}
-                    loadingQuestions={loadingQuestions}
-                    currentDebateRound={currentRound}
-                    debateRounds={debateRounds}
-                    videoInputs={videoInputs}
-                    setVideoInputs={setVideoInputs}
-                    savingVideoId={savingVideoId}
-                    onAddQuestion={handleAddQuestion}
-                    onDeleteQuestion={handleDeleteQuestion}
-                    onSaveVideoLink={handleSaveVideoLink}
-                    onSendQuestion={handleSendQuestion}
-                    onSendVideo={handleSendVideo}
-                    onUploadComplete={handleUploadComplete}
-                />
-                 <StudentQuestionsTab 
-                    allPreparedQuestions={preparedQuestions} 
-                    onProjectQuestion={handleProjectStudentQuestion} 
-                    projectedQuestion={projectedStudentQuestion}
-                 />
-
+                <Tabs defaultValue="round-config">
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
+                        <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
+                        <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
+                        <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="round-config">
+                        <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} />
+                    </TabsContent>
+                    <TabsContent value="questions">
+                         <QuestionManagement 
+                            preparedQuestions={preparedQuestions}
+                            loadingQuestions={loadingQuestions}
+                            currentDebateRound={currentRound}
+                            debateRounds={debateRounds}
+                            videoInputs={videoInputs}
+                            setVideoInputs={setVideoInputs}
+                            savingVideoId={savingVideoId}
+                            onAddQuestion={handleAddQuestion}
+                            onDeleteQuestion={handleDeleteQuestion}
+                            onSaveVideoLink={handleSaveVideoLink}
+                            onSendQuestion={handleSendQuestion}
+                            onSendVideo={handleSendVideo}
+                            onUploadComplete={handleUploadComplete}
+                        />
+                    </TabsContent>
+                    <TabsContent value="audience">
+                        <StudentQuestionsTab 
+                            allPreparedQuestions={preparedQuestions} 
+                            onProjectQuestion={handleProjectStudentQuestion} 
+                            projectedQuestion={projectedStudentQuestion}
+                        />
+                    </TabsContent>
+                    <TabsContent value="display-settings">
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Control de Pantalla</CardTitle>
+                                    <CardDescription>Ajustes generales para la pantalla pública.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                <div>
+                                        <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
+                                        <div className="mt-2">
+                                            <TimerSettings />
+                                        </div>
+                                </div>
+                                    <div className="space-y-2 rounded-lg border p-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="qr-switch" className="font-medium">Habilitar QR para Preguntas</Label>
+                                            <Switch
+                                                id="qr-switch"
+                                                checked={isQrEnabled}
+                                                onCheckedChange={handleToggleQr}
+                                            />
+                                        </div>
+                                        <Button variant="outline" size="sm" className="w-full mt-2" onClick={handleClearStudentQuestion}>
+                                            <EyeOff className="mr-2 h-4 w-4"/> Ocultar Pregunta del Público
+                                        </Button>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
+                                        <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Principal
+                                </Button>
+                                </CardContent>
+                            </Card>
+                            <SidebarImageSetter initialUrl={sidebarImageUrl} />
+                        </div>
+                    </TabsContent>
+                </Tabs>
             </div>
 
             <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Control del Debate</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                       <div>
-                            <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
-                            <div className="mt-2">
-                                 <TimerSettings />
-                            </div>
-                       </div>
-                        <div className="space-y-2 rounded-lg border p-3">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="qr-switch" className="font-medium">Habilitar QR para Preguntas</Label>
-                                 <Switch
-                                    id="qr-switch"
-                                    checked={isQrEnabled}
-                                    onCheckedChange={handleToggleQr}
-                                />
-                            </div>
-                             <Button variant="outline" size="sm" className="w-full mt-2" onClick={handleClearStudentQuestion}>
-                                <EyeOff className="mr-2 h-4 w-4"/> Ocultar Pregunta del Público
-                            </Button>
-                        </div>
-                        <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
-                            <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Principal
-                       </Button>
-                    </CardContent>
-                </Card>
                 <Card>
                     <CardHeader>
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
@@ -1160,3 +1229,4 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
+

@@ -5,11 +5,12 @@
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { Loader2, MessageSquare, QrCode, Zap, XCircle } from 'lucide-react';
+import { Loader2, MessageSquare, QrCode, Zap, XCircle, Image as ImageIcon } from 'lucide-react';
 import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -22,6 +23,7 @@ interface DebateState {
     lastUpdated: number;
   };
   isQrEnabled: boolean;
+  sidebarImageUrl?: string;
   studentQuestionOverlay?: string;
 }
 
@@ -43,6 +45,7 @@ export default function DebatePage() {
           videoUrl: "",
           timer: { duration: 5 * 60, lastUpdated: Date.now() },
           isQrEnabled: false,
+          sidebarImageUrl: "",
           studentQuestionOverlay: ""
         });
       }
@@ -81,7 +84,7 @@ export default function DebatePage() {
     );
   }
 
-  const { question, questionId, videoUrl, timer, isQrEnabled, studentQuestionOverlay } = debateState;
+  const { question, questionId, videoUrl, timer, isQrEnabled, sidebarImageUrl, studentQuestionOverlay } = debateState;
   const showVideo = !!videoUrl;
   const showQr = isQrEnabled && !!questionId;
 
@@ -133,13 +136,29 @@ export default function DebatePage() {
                         size="small"
                     />
                 </div>
-                 {showQr && (
+                 {showQr ? (
                     <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
                         <QrCode className="h-8 w-8 text-primary mb-2"/>
                         <h2 className="font-headline text-xl font-bold mb-3">¡Escanea y Pregunta!</h2>
                          <div className="bg-white p-2 rounded-md">
                             <QRCodeSVG value={getLiveUrl()} size={200} />
                         </div>
+                    </div>
+                ) : sidebarImageUrl ? (
+                     <div className="bg-background rounded-lg shadow-2xl p-4 flex flex-col items-center justify-center flex-grow text-center overflow-hidden">
+                        <div className="relative w-full h-full">
+                            <Image
+                                src={sidebarImageUrl}
+                                alt="Imagen de barra lateral"
+                                fill
+                                className="object-contain"
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
+                         <ImageIcon className="h-8 w-8 text-muted-foreground mb-2"/>
+                         <p className="text-sm text-muted-foreground">Espacio de imagen</p>
                     </div>
                 )}
             </div>
