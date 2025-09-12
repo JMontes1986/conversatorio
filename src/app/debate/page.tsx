@@ -117,7 +117,6 @@ export default function DebatePage() {
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full">
-                        <MessageSquare className="h-12 w-12 md:h-20 md:w-20 text-primary mb-6" />
                         <h1 className="font-headline text-3xl md:text-5xl lg:text-7xl font-bold whitespace-pre-wrap">
                             {question}
                         </h1>
