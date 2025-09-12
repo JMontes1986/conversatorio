@@ -106,7 +106,7 @@ export default function DebatePage() {
                         <QrCode className="h-8 w-8 text-primary mb-2"/>
                         <h2 className="font-headline text-xl font-bold mb-3">¡Escanea y Pregunta!</h2>
                          <div className="bg-white p-2 rounded-md">
-                            <QRCodeSVG value={getAskUrl()} size={150} />
+                            <QRCodeSVG value={getAskUrl()} size={200} />
                         </div>
                     </div>
                 )}
