@@ -41,20 +41,27 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             }
             // Sync time when lastUpdated changes (on reset or pause/play)
             if (data.timer.lastUpdated) {
-                setTimeRemaining(data.timer.duration);
+                const serverTime = data.timer.duration;
+                // If the timer is active, calculate the elapsed time since last update
+                if(data.timer.isActive) {
+                    const elapsed = Math.floor((Date.now() - data.timer.lastUpdated) / 1000);
+                    setTimeRemaining(Math.max(0, serverTime - elapsed));
+                } else {
+                    setTimeRemaining(serverTime);
+                }
             }
         }
       }
     });
     return () => unsubscribe();
-  }, []); // This useEffect should only run once to set up the listener
+  }, []);
 
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isActive && timeRemaining > 0) {
       interval = setInterval(() => {
-        setTimeRemaining((time) => time - 1);
+        setTimeRemaining((time) => Math.max(0, time - 1));
       }, 1000);
     } else if (timeRemaining <= 0 && isActive) {
       if (showControls) {
