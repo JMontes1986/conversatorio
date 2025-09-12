@@ -43,7 +43,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             if (typeof data.timer.isActive === 'boolean' && data.timer.isActive !== isActive) {
               setIsActive(data.timer.isActive);
             }
-            if (data.timer.lastUpdated && timeRemaining !== data.timer.duration) {
+            if (data.timer.lastUpdated) {
                 setTimeRemaining(data.timer.duration);
             }
         }
