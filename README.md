@@ -1,3 +1,4 @@
+
 # Plataforma de Debate Intercolegial - Conversatorio Colgemelli
 
 Esta es una aplicación web full-stack construida con Next.js y Firebase, diseñada para gestionar de manera integral una competencia de debate intercolegial. La plataforma ofrece una experiencia completa tanto para los organizadores y participantes como para el público general.
@@ -23,7 +24,8 @@ Estas secciones son accesibles para cualquier visitante sin necesidad de iniciar
 - **Página de Inicio (`/`)**: Una página de bienvenida dinámica cuyo contenido (títulos, textos, características e imágenes del carrusel) es completamente editable desde el panel de administrador.
 - **Marcador (`/scoreboard`)**: Muestra los resultados de la competencia en tiempo real. Incluye los resultados de la fase de grupos y un bracket del torneo que se actualiza automáticamente a medida que avanzan las rondas.
 - **Sorteo en Vivo (`/draw`)**: Una pantalla pública que refleja en tiempo real el sorteo de equipos en las diferentes fases del torneo, creando una experiencia transparente y emocionante.
-- **Página de Debate (`/debate`)**: Es la pantalla principal que los participantes y el público ven durante un debate. Muestra la pregunta activa, videos relacionados, mensajes del moderador y un temporizador sincronizado.
+- **Página de Debate (`/debate`)**: Es la pantalla principal que los participantes y el público ven durante un debate. Muestra la pregunta activa, videos relacionados, mensajes del moderador y un temporizador persistente y sincronizado.
+- **Página de Preguntas del Público (`/live`)**: Permite a los espectadores enviar preguntas a los equipos durante el debate. Se accede a ella a través de un código QR interactivo en la página de debate.
 
 ### 2. Roles de Usuario y Autenticación
 
@@ -38,14 +40,17 @@ El sistema cuenta con tres roles de usuario bien definidos para gestionar la com
 Es el centro de control de la competencia. Es un panel protegido que requiere autenticación de administrador y está organizado en pestañas:
 
 - **Home**: Permite editar todo el contenido de la página de inicio.
-- **Colegios**: Permite registrar, ver, editar, eliminar y verificar los colegios participantes, sus equipos y sus listas de asistentes.
+- **Programación**: Editor del cronograma del evento con **guardado automático**.
+- **Colegios**: Permite registrar, ver, editar, eliminar y verificar los colegios participantes. La edición de la información de un colegio cuenta con **guardado automático** para una gestión más eficiente.
 - **Rondas**: Para crear y eliminar las rondas del torneo, asignándolas a fases específicas (Ej: Fase de Grupos, Cuartos de Final).
 - **Rúbrica**: Permite definir los criterios de evaluación (nombre y descripción) que los jueces utilizarán para calificar.
-- **Sorteo**: Interfaz para realizar el sorteo automático de equipos, ya sea para la fase de grupos o para las fases eliminatorias.
-- **Jurados**: Para registrar nuevos jurados con su nombre y cédula.
-- **Moderadores**: Permite crear cuentas de moderador con un token de acceso único y gestionar su estado (activo/inactivo). También permite crear nuevos administradores.
-- **Control del Debate**: Una vista de moderador completa integrada para el administrador.
-- **Resultados**: Muestra un desglose detallado de las puntuaciones de cada ronda, con el total por equipo y el puntaje de cada juez.
+- **Sorteo**: Interfaz para realizar el sorteo automático de equipos para la fase de grupos.
+- **Bracket**: Permite configurar el bracket del torneo que se muestra públicamente.
+- **Encuesta**: Herramienta para crear y gestionar encuestas de satisfacción, y visualizar los resultados en tiempo real.
+- **Jurados**: Para registrar nuevos jurados con su nombre y cédula, y gestionar su estado (activo/inactivo).
+- **Moderadores**: Permite crear cuentas de moderador con un token de acceso único y gestionar su estado. También permite crear nuevos administradores.
+- **Control del Debate**: Una vista de moderador completa integrada para el administrador, desde donde puede enviar preguntas, videos, mensajes y controlar el temporizador.
+- **Ajustes Generales**: Panel para controlar el estado de la competencia (inscripciones abiertas/cerradas, resultados públicos/ocultos) y realizar acciones de reinicio.
 
 ### 4. Panel de Moderador (`/moderator`)
 
@@ -56,10 +61,10 @@ Interfaz simplificada y protegida para quienes dirigen los debates en vivo.
     - **Gestión de Rondas y Sorteo**: Puede visualizar la configuración de las rondas y el resultado de los sorteos.
     - **Control del Debate**: Es la herramienta principal. Permite:
         - Seleccionar la ronda activa y los equipos que se enfrentan.
-        - Controlar un temporizador global visible para todos los participantes.
-        - Enviar preguntas preparadas o videos a la pantalla principal (`/debate`).
-        - Enviar mensajes temporales.
-        - Limpiar la pantalla de los participantes.
+        - Controlar un temporizador global persistente y visible para todos.
+        - Enviar preguntas preparadas o videos a la pantalla principal.
+        - Proyectar preguntas del público, indicando claramente a qué equipo van dirigidas.
+        - Enviar mensajes temporales y limpiar la pantalla de los participantes.
         - Subir videos y asociarlos a preguntas.
 
 ### 5. Panel de Puntuación del Jurado (`/scoring`)
@@ -72,7 +77,7 @@ Un portal seguro y sencillo para que los jueces califiquen las rondas.
     - Presenta la rúbrica de evaluación definida por el administrador.
     - Permite al juez asignar una puntuación (de 1 a 5) a cada equipo por cada criterio.
     - Calcula el total automáticamente y lo envía a la base de datos.
-    - Muestra un historial de las puntuaciones que el juez ha enviado en rondas anteriores.
+    - Muestra un historial de las puntuaciones que el juez ha enviado.
 
 ---
 
