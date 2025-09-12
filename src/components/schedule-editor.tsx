@@ -37,10 +37,24 @@ const defaultSchedule: FormData = {
   day1: [
     { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
     { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
+    { id: 'd1-3', time: "09:00", endTime: "10:00", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)", completed: false },
+    { id: 'd1-4', time: "10:00", endTime: "10:15", activity: "Receso", completed: false },
+    { id: 'd1-5', time: "10:15", endTime: "11:15", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)", completed: false },
+    { id: 'd1-6', time: "11:15", endTime: "12:15", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)", completed: false },
+    { id: 'd1-7', time: "12:15", endTime: "13:30", activity: "Almuerzo", completed: false },
+    { id: 'd1-8', time: "13:30", endTime: "14:30", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)", completed: false },
+    { id: 'd1-9', time: "14:30", endTime: "15:00", activity: "Anuncio de Clasificados a Cuartos de Final", completed: false },
   ],
   day2: [
     { id: 'd2-1', time: "09:00", endTime: "10:00", activity: "Cuartos de Final - Enfrentamiento 1", completed: false },
     { id: 'd2-2', time: "10:00", endTime: "11:00", activity: "Cuartos de Final - Enfrentamiento 2", completed: false },
+    { id: 'd2-3', time: "11:00", endTime: "11:15", activity: "Receso", completed: false },
+    { id: 'd2-4', time: "11:15", endTime: "12:15", activity: "Semifinal 1", completed: false },
+    { id: 'd2-5', time: "12:15", endTime: "13:15", activity: "Semifinal 2", completed: false },
+    { id: 'd2-6', time: "13:15", endTime: "14:30", activity: "Almuerzo", completed: false },
+    { id: 'd2-7', time: "14:30", endTime: "16:00", activity: "GRAN FINAL", completed: false },
+    { id: 'd2-8', time: "16:00", endTime: "16:30", activity: "Deliberación del Jurado", completed: false },
+    { id: 'd2-9', time: "16:30", endTime: "17:00", activity: "Ceremonia de Premiación y Clausura", completed: false },
   ]
 };
 
@@ -83,9 +97,6 @@ export function ScheduleEditor() {
       if (doc.exists()) {
         const data = doc.data() as Partial<FormData>;
         const sanitizedData: FormData = {
-            title: data.title || defaultSchedule.title,
-            subtitle: data.subtitle || defaultSchedule.subtitle,
-            imageUrl: data.imageUrl || defaultSchedule.imageUrl,
             day1: data.day1 && data.day1.length > 0 ? data.day1.map(item => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
             day2: data.day2 && data.day2.length > 0 ? data.day2.map(item => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
         };
