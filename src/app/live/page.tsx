@@ -47,7 +47,7 @@ function PublicPageLayout({ children }: { children: React.ReactNode }) {
                     </Link>
                 </div>
             </header>
-            {children}
+            <main className="flex-grow">{children}</main>
             <Footer />
         </>
     );
@@ -222,6 +222,6 @@ function QuestionLiveComponent() {
     );
 }
 
-export default function SurveyPage() {
+export default function LivePage() {
     return <PublicPageLayout><QuestionLiveComponent /></PublicPageLayout>;
 }

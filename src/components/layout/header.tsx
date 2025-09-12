@@ -54,7 +54,6 @@ export function Header() {
   
   const isAuthenticated = adminUser || judgeUser || moderatorUser;
 
-  // This check has been moved to the survey page itself to avoid permission issues for anonymous users.
   useEffect(() => {
     const surveyConfigRef = doc(db, 'siteContent', 'survey');
     const unsubscribe = onSnapshot(surveyConfigRef, (doc) => {
