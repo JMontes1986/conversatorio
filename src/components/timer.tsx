@@ -28,10 +28,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     // Initialize Tone.js Synth on client
     synth.current = new Tone.Synth().toDestination();
   }, []);
-
-  useEffect(() => {
-    setTimeRemaining(initialTime);
-  }, [initialTime]);
   
   useEffect(() => {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -39,18 +35,19 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       if (doc.exists()) {
         const data = doc.data();
         if (data.timer) {
+            // Always listen for isActive state from Firestore
             if (typeof data.timer.isActive === 'boolean') {
               setIsActive(data.timer.isActive);
             }
+            // Sync time when lastUpdated changes (on reset or pause/play)
             if (data.timer.lastUpdated) {
-                // When lastUpdated changes, we sync the time from Firestore
                 setTimeRemaining(data.timer.duration);
             }
         }
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, []); // This useEffect should only run once to set up the listener
 
 
   useEffect(() => {
@@ -61,6 +58,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       }, 1000);
     } else if (timeRemaining <= 0 && isActive) {
       if (showControls) {
+          // When time runs out, automatically stop the timer
           toggleTimer(); 
           playSound();
       }
@@ -91,10 +89,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            // When pausing, send the current remaining time.
+            // When starting, it will use the time that was set on pause/reset.
+            const newDuration = newIsActive ? timeRemaining : (timeRemaining > 0 ? timeRemaining : 0);
+
             await setDoc(docRef, { 
                 timer: { 
                     isActive: newIsActive,
-                    duration: timeRemaining > 0 ? timeRemaining : 0, // Use the current time when pausing/stopping
+                    duration: newDuration,
                     lastUpdated: Date.now()
                 } 
             }, { merge: true });
@@ -111,7 +113,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
-                    duration: initialTime, // Reset to the original time
+                    duration: initialTime, // Reset to the original time passed in props
                     lastUpdated: Date.now() // Force a refresh on all clients
                 } 
             }, { merge: true });
