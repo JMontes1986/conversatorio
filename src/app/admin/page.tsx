@@ -707,7 +707,7 @@ function AdminDashboard() {
             <main>
                 <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
                      {renderContent()}
-                     <DialogContent>
+                     <DialogContent className="max-w-3xl">
                         <DialogHeader>
                             <DialogTitle>Editar Colegio</DialogTitle>
                         </DialogHeader>
