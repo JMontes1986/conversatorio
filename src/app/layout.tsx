@@ -16,6 +16,31 @@ export const metadata: Metadata = {
   },
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SportsEvent",
+  "name": "Conversatorio Colgemelli",
+  "description": "Plataforma de debate y competencia para colegios.",
+  "startDate": "2024-08-17T08:00-05:00",
+  "endDate": "2024-08-18T17:00-05:00",
+  "eventStatus": "https://schema.org/EventScheduled",
+  "location": {
+    "@type": "Place",
+    "name": "Colegio Bilingüe Padre Francesco Coll",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Panama City",
+      "addressCountry": "PA"
+    }
+  },
+  "organizer": {
+    "@type": "Organization",
+    "name": "Colgemelli",
+    "url": "https://conversatorio-colgemelli.web.app"
+  }
+};
+
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,6 +52,10 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
