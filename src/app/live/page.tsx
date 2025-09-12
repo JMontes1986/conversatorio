@@ -66,6 +66,11 @@ function QuestionLiveComponent() {
     useEffect(() => {
         const q_id = searchParams.get('q_id');
         if (q_id) {
+            // Check if a question has already been submitted for this debate question ID
+            if (localStorage.getItem(`submitted_question_${q_id}`)) {
+                setIsSubmitted(true);
+            }
+
             setQuestionId(q_id);
             const questionRef = doc(db, 'questions', q_id);
             getDoc(questionRef).then(docSnap => {
@@ -109,6 +114,10 @@ function QuestionLiveComponent() {
                 status: 'pending',
                 createdAt: serverTimestamp(),
             });
+            
+            // Set a flag in localStorage to prevent another submission for this question
+            localStorage.setItem(`submitted_question_${questionId}`, 'true');
+
             setIsSubmitted(true);
             toast({ title: '¡Pregunta Enviada!', description: 'Su pregunta ha sido enviada al moderador para revisión.' });
         } catch (error) {
@@ -151,7 +160,7 @@ function QuestionLiveComponent() {
                         <CardTitle className="font-headline text-3xl">¡Gracias por Participar!</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-muted-foreground">Tu pregunta ha sido enviada al moderador. ¡Presta atención a la pantalla!</p>
+                        <p className="text-muted-foreground">Tu pregunta ha sido enviada. Solo puedes enviar una pregunta por tema de debate.</p>
                     </CardContent>
                 </Card>
             </div>
