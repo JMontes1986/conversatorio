@@ -14,12 +14,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Loader2, UserPlus, Trash2, Users } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Users, CheckCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Separator } from "@/components/ui/separator";
+import { useDebounce } from "use-debounce";
+import { Badge } from "./ui/badge";
 
 const participantSchema = z.object({
   name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
@@ -46,6 +48,8 @@ interface SchoolData {
     contactName: string;
     contactEmail: string;
 }
+
+type SaveStatus = "idle" | "saving" | "saved";
 
 
 function DynamicFieldArray({ control, name, label, buttonText, Icon }: {
@@ -105,7 +109,7 @@ function DynamicFieldArray({ control, name, label, buttonText, Icon }: {
 
 export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onFinished: () => void }) {
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -118,32 +122,43 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
       attendees: school.attendees || [],
     },
   });
+  
+  const watchedValues = form.watch();
+  const [debouncedValues] = useDebounce(watchedValues, 1000);
 
-  async function onSubmit(values: FormData) {
-    setIsSubmitting(true);
+  const handleAutoSave = useCallback(async (values: FormData) => {
+    setSaveStatus("saving");
     try {
       const schoolRef = doc(db, "schools", school.id);
       await updateDoc(schoolRef, values);
-      toast({
-        title: "¡Colegio Actualizado!",
-        description: "La información del colegio ha sido actualizada.",
-      });
-      onFinished();
+      form.reset(values); // This is key to prevent continuous saving
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (error) {
-      console.error("Error updating document: ", error);
+      console.error("Error auto-saving school data: ", error);
       toast({
         variant: "destructive",
-        title: "Error al actualizar",
-        description: "Hubo un problema al guardar los datos. Por favor, inténtelo de nuevo.",
+        title: "Error de Guardado Automático",
+        description: "Hubo un problema al guardar los cambios.",
       });
-    } finally {
-        setIsSubmitting(false);
+      setSaveStatus("idle");
     }
-  }
+  }, [school.id, toast, form]);
+
+  useEffect(() => {
+    if (form.formState.isDirty) {
+      handleAutoSave(debouncedValues);
+    }
+  }, [debouncedValues, form.formState.isDirty, handleAutoSave]);
+
 
   return (
     <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto p-1">
+        <form className="space-y-6 max-h-[70vh] overflow-y-auto p-1">
+            <div className="flex justify-end">
+                 {saveStatus === 'saving' && <Badge variant="outline"><Loader2 className="mr-2 h-3 w-3 animate-spin"/>Guardando...</Badge>}
+                {saveStatus === 'saved' && <Badge variant="secondary" className="bg-green-100 text-green-800"><CheckCircle className="mr-2 h-3 w-3"/>Guardado</Badge>}
+            </div>
             <FormField
             control={form.control}
             name="schoolName"
@@ -216,13 +231,7 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
                 buttonText="Añadir Asistente"
                 Icon={Users}
             />
-
-            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting ? "Guardando..." : "Guardar Cambios"}
-            </Button>
         </form>
     </Form>
   );
 }
-
