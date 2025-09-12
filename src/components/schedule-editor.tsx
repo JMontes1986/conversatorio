@@ -17,7 +17,8 @@ import { nanoid } from "nanoid";
 
 const scheduleItemSchema = z.object({
   id: z.string(),
-  time: z.string().min(1, "La hora es requerida."),
+  time: z.string().min(1, "La hora de inicio es requerida."),
+  endTime: z.string().min(1, "La hora de finalización es requerida."),
   activity: z.string().min(3, "La actividad es requerida."),
 });
 
@@ -30,12 +31,12 @@ type FormData = z.infer<typeof formSchema>;
 
 const defaultSchedule: FormData = {
   day1: [
-    { id: 'd1-1', time: "08:00", activity: "Registro y Bienvenida" },
-    { id: 'd1-2', time: "08:30", activity: "Ceremonia de Apertura" },
+    { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida" },
+    { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura" },
   ],
   day2: [
-    { id: 'd2-1', time: "09:00", activity: "Cuartos de Final - Enfrentamiento 1" },
-    { id: 'd2-2', time: "10:00", activity: "Cuartos de Final - Enfrentamiento 2" },
+    { id: 'd2-1', time: "09:00", endTime: "10:00", activity: "Cuartos de Final - Enfrentamiento 1" },
+    { id: 'd2-2', time: "10:00", endTime: "11:00", activity: "Cuartos de Final - Enfrentamiento 2" },
   ]
 };
 
@@ -130,25 +131,38 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append({ id: nanoid(), time: "", activity: "" })}
+          onClick={() => append({ id: nanoid(), time: "", endTime: "", activity: "" })}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Añadir Actividad
         </Button>
       </div>
       <div className="space-y-4">
         {fields.map((field, index) => (
-          <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-start bg-secondary/30 p-3 rounded-md">
-            <FormField
-              control={control}
-              name={`${day}.${index}.time`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hora</FormLabel>
-                  <FormControl><Input type="time" {...field} placeholder="Ej: 09:00" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-4 items-start bg-secondary/30 p-3 rounded-md">
+            <div className="grid grid-cols-2 gap-2">
+                <FormField
+                control={control}
+                name={`${day}.${index}.time`}
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Inicio</FormLabel>
+                    <FormControl><Input type="time" {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                 <FormField
+                control={control}
+                name={`${day}.${index}.endTime`}
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Fin</FormLabel>
+                    <FormControl><Input type="time" {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            </div>
             <FormField
               control={control}
               name={`${day}.${index}.activity`}
@@ -164,7 +178,7 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
               type="button"
               variant="ghost"
               size="icon"
-              className="self-end text-destructive"
+              className="self-center text-destructive"
               onClick={() => remove(index)}
             >
               <Trash2 className="h-4 w-4" />
