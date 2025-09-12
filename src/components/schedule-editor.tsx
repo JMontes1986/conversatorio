@@ -74,10 +74,10 @@ export function ScheduleEditor() {
   const [debouncedValues] = useDebounce(watchedValues, 1000);
 
   const saveSchedule = useCallback(async (values: FormData) => {
+    if (!form.formState.isDirty) return;
     setSaveStatus("saving");
     try {
       await setDoc(doc(db, 'siteContent', 'schedule'), values);
-      form.reset(values); // Reset the form with the new saved values
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (error) {
@@ -89,16 +89,16 @@ export function ScheduleEditor() {
       });
       setSaveStatus("idle");
     }
-  }, [toast, form]);
+  }, [toast, form.formState.isDirty]);
 
   useEffect(() => {
     const docRef = doc(db, 'siteContent', 'schedule');
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
-        const data = doc.data() as Partial<FormData>;
+        const data = doc.data();
         const sanitizedData: FormData = {
-            day1: data.day1 && data.day1.length > 0 ? data.day1.map(item => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
-            day2: data.day2 && data.day2.length > 0 ? data.day2.map(item => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
+            day1: data.day1 && data.day1.length > 0 ? data.day1.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
+            day2: data.day2 && data.day2.length > 0 ? data.day2.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
         };
         form.reset(sanitizedData);
       } else {
