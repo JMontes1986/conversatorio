@@ -56,6 +56,20 @@ export default function DebatePage() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullScreen]);
+
   const getLiveUrl = () => {
       if (typeof window !== "undefined" && debateState?.questionId) {
           const url = new URL("/live", window.location.origin);
@@ -116,7 +130,7 @@ export default function DebatePage() {
                 !isFullScreen && "lg:col-span-3",
                 isFullScreen && "fixed inset-0 z-10 p-12 md:p-20"
             )}>
-                 <Button variant="ghost" size="icon" className="absolute top-4 right-4 h-10 w-10 text-muted-foreground z-20" onClick={() => setIsFullScreen(!isFullScreen)}>
+                 <Button variant="ghost" size="icon" className="absolute top-4 left-4 h-10 w-10 text-muted-foreground z-20" onClick={() => setIsFullScreen(!isFullScreen)}>
                     {isFullScreen ? <Minimize className="h-6 w-6" /> : <Expand className="h-6 w-6" />}
                     <span className="sr-only">{isFullScreen ? "Minimizar" : "Expandir"}</span>
                 </Button>
@@ -146,19 +160,14 @@ export default function DebatePage() {
                                 <QRCodeSVG value={getLiveUrl()} size={200} />
                             </div>
                         </>
-                    ) : sidebarImageUrl ? (
-                        <div className="relative w-full h-full">
+                    ) : (
+                         <div className="relative w-full h-full">
                             <Image
-                                src={sidebarImageUrl}
+                                src={sidebarImageUrl || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}
                                 alt="Imagen de barra lateral"
                                 fill
                                 className="object-contain"
                             />
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center text-muted-foreground">
-                            <ImageIcon className="h-8 w-8 mb-2"/>
-                            <p className="text-sm">Espacio de imagen</p>
                         </div>
                     )}
                  </div>
@@ -179,7 +188,7 @@ export default function DebatePage() {
         {isFullScreen && (
             <>
                 {showQr && (
-                     <div className="fixed bottom-4 left-4 z-20 bg-background/80 backdrop-blur-sm rounded-lg shadow-2xl p-4 flex flex-col items-center text-center animate-in fade-in-50">
+                     <div className="fixed top-4 right-4 z-20 bg-background/80 backdrop-blur-sm rounded-lg shadow-2xl p-4 flex flex-col items-center text-center animate-in fade-in-50">
                         <QrCode className="h-6 w-6 text-primary mb-1"/>
                         <h2 className="font-headline text-md font-bold mb-2">¡Escanea y Pregunta!</h2>
                          <div className="bg-white p-1 rounded-md">
