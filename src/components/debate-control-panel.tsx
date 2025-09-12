@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -38,7 +37,6 @@ import { Trash2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from './ui/progress';
 import { nanoid } from 'nanoid';
-import { QRCodeSVG } from 'qrcode.react';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -389,7 +387,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     );
 }
 
-function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo, onSendQrCode, onUploadComplete }: any) {
+function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebateRound, debateRounds, videoInputs, setVideoInputs, savingVideoId, onAddQuestion, onDeleteQuestion, onSaveVideoLink, onSendQuestion, onSendVideo, onUploadComplete }: any) {
     const [newQuestionInput, setNewQuestionInput] = useState("");
     const [newQuestionRound, setNewQuestionRound] = useState("");
     const [isAddingQuestion, setIsAddingQuestion] = useState(false);
@@ -592,9 +590,6 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                     <Button size="sm" variant="outline" onClick={() => onSendVideo(q)} disabled={!videoInputs[q.id]}>
                                                         <Video className="mr-2 h-4 w-4" /> Enviar Video
                                                     </Button>
-                                                     <Button size="sm" variant="outline" onClick={() => onSendQrCode(q)}>
-                                                        <QrCode className="mr-2 h-4 w-4" /> Enviar QR
-                                                    </Button>
                                                      <Button size="sm" onClick={() => onSendQuestion(q)}>
                                                         <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
                                                     </Button>
@@ -616,7 +611,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     );
 }
 
-function StudentQuestionsTab({ allPreparedQuestions, onSendQuestion }: { allPreparedQuestions: Question[], onSendQuestion: (text: string) => void }) {
+function StudentQuestionsTab({ allPreparedQuestions, onSendTempMessage }: { allPreparedQuestions: Question[], onSendTempMessage: (text: string) => void }) {
     const { toast } = useToast();
     const [questions, setQuestions] = useState<StudentQuestion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -645,7 +640,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onSendQuestion }: { allPrep
     }
     
     const handleProjectQuestion = (text: string) => {
-        onSendQuestion(text);
+        onSendTempMessage(text);
     }
     
     const pendingQuestions = questions.filter(q => q.status === 'pending');
@@ -706,9 +701,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [previewTempMessage, setPreviewTempMessage] = useState("");
-    const [previewTempImageUrl, setPreviewTempImageUrl] = useState("");
     const [tempMessageInput, setTempMessageInput] = useState("");
-    const [tempImageUrlInput, setTempImageUrlInput] = useState("");
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
@@ -726,7 +719,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
                 setPreviewTempMessage(data.temporaryMessage || "");
-                setPreviewTempImageUrl(data.temporaryImageUrl || "");
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
@@ -792,16 +784,16 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     };
 
-    const handleSendQuestion = async (questionText: string) => {
+    const handleSendQuestion = async (question: Question) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                question: questionText,
-                videoUrl: "", // Clear video when question is sent
-                temporaryMessage: "", // Clear temp message
-                temporaryImageUrl: ""
+                question: question.text,
+                questionId: question.id,
+                videoUrl: "", 
+                temporaryMessage: ""
             }, { merge: true });
-            toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
+            toast({ title: "Pregunta Enviada", description: "La pregunta y el QR son ahora visibles." });
         } catch (error) {
              console.error("Error setting question: ", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar la pregunta." });
@@ -813,9 +805,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 videoUrl: videoInputs[question.id] || "",
-                question: "", // Clear question when video is sent
-                temporaryMessage: "", // Clear temp message
-                temporaryImageUrl: ""
+                question: "",
+                questionId: "",
+                temporaryMessage: "", 
             }, { merge: true });
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
         } catch (error) {
@@ -824,34 +816,14 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     };
 
-    const handleSendQrCode = async (question: Question) => {
-        try {
-            const askUrl = new URL(`/ask?q_id=${question.id}`, window.location.origin);
-            const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(askUrl.toString())}`;
-            
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { 
-                temporaryMessage: "¡Escanea para enviar tu pregunta!",
-                temporaryImageUrl: qrApiUrl,
-                question: "",
-                videoUrl: ""
-            }, { merge: true });
-            toast({ title: "Código QR Enviado", description: "El QR es ahora visible para el público." });
-        } catch (error) {
-            console.error("Error sending QR Code:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el código QR." });
-        }
-    };
-
-
     const handleClearScreen = async () => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 question: "Esperando pregunta del moderador...",
+                questionId: "",
                 videoUrl: "",
-                temporaryMessage: "",
-                temporaryImageUrl: ""
+                temporaryMessage: ""
             }, { merge: true });
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
         } catch (error) {
@@ -860,14 +832,14 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     }
     
-    const sendTempMessage = async (message: string, imageUrl?: string) => {
+    const sendTempMessage = async (message: string) => {
         setIsSendingTempMessage(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 temporaryMessage: message,
-                temporaryImageUrl: imageUrl || "",
                 question: "",
+                questionId: "",
                 videoUrl: ""
             }, { merge: true });
             toast({ title: "Mensaje Temporal Enviado" });
@@ -880,19 +852,18 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     };
 
     const handleSendTemporaryMessage = () => {
-        if (!tempMessageInput.trim() && !tempImageUrlInput.trim()) {
-            toast({ variant: "destructive", title: "Error", description: "El mensaje o la URL de la imagen no pueden estar vacíos." });
+        if (!tempMessageInput.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "El mensaje no puede estar vacío." });
             return;
         }
-        sendTempMessage(tempMessageInput, tempImageUrlInput);
+        sendTempMessage(tempMessageInput);
     }
     
     const handleClearTemporaryMessage = async () => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { temporaryMessage: "", temporaryImageUrl: "" }, { merge: true });
+            await setDoc(docRef, { temporaryMessage: "" }, { merge: true });
             setTempMessageInput("");
-            setTempImageUrlInput("");
             toast({ title: "Mensaje Temporal Limpiado" });
         } catch (error) {
             console.error("Error clearing temporary message:", error);
@@ -1016,11 +987,10 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                          <div className="space-y-4">
                             <h3 className="font-medium text-lg">Pantalla Pública:</h3>
                             <div className="text-xl p-4 bg-secondary rounded-md min-h-[150px] flex flex-col items-center justify-center text-center gap-4">
-                                {previewTempImageUrl && <img src={previewTempImageUrl} alt="Mensaje temporal" className="max-w-xs max-h-48 object-contain"/>}
                                 <span className="text-muted-foreground whitespace-pre-wrap">{previewTempMessage}</span>
-                                {previewVideoUrl && !previewTempImageUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
-                                {previewQuestion && !previewTempImageUrl && !previewTempMessage && previewQuestion}
-                                {!previewVideoUrl && !previewQuestion && !previewTempMessage && !previewTempImageUrl && "Pantalla Limpia"}
+                                {previewVideoUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
+                                {previewQuestion && !previewTempMessage && previewQuestion}
+                                {!previewVideoUrl && !previewQuestion && !previewTempMessage && "Pantalla Limpia"}
                             </div>
                         </div>
                     </CardContent>
@@ -1039,12 +1009,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onAddQuestion={handleAddQuestion}
                     onDeleteQuestion={handleDeleteQuestion}
                     onSaveVideoLink={handleSaveVideoLink}
-                    onSendQuestion={(q: Question) => handleSendQuestion(q.text)}
+                    onSendQuestion={handleSendQuestion}
                     onSendVideo={handleSendVideo}
-                    onSendQrCode={handleSendQrCode}
                     onUploadComplete={handleUploadComplete}
                 />
-                 <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onSendQuestion={handleSendQuestion} />
+                 <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onSendTempMessage={sendTempMessage} />
 
             </div>
 
@@ -1068,7 +1037,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 <Card>
                     <CardHeader>
                         <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
-                        <CardDescription>Muestre un mensaje de texto o una imagen en la pantalla pública.</CardDescription>
+                        <CardDescription>Muestre un mensaje de texto en la pantalla pública. Esto reemplazará la pregunta o el video.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                          <div className="space-y-2">
@@ -1082,16 +1051,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="temp-image-url-input">URL de la Imagen (opcional)</Label>
-                             <Input 
-                                id="temp-image-url-input"
-                                placeholder="Pegue el enlace público a una imagen"
-                                value={tempImageUrlInput}
-                                onChange={(e) => setTempImageUrlInput(e.target.value)}
-                             />
-                        </div>
-                        
                         <div className="flex flex-wrap gap-2 justify-end pt-2">
                             <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage}>
                                 {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
@@ -1109,5 +1068,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
-
-    
