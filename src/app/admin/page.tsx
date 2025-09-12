@@ -12,12 +12,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   Table,
   TableBody,
   TableCell,
@@ -28,20 +22,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { School, User, Settings, PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, Trophy, KeyRound, Copy, Check, ToggleLeft, ToggleRight, Video, Send, Plus, Save, MessageSquare, RefreshCw, Gavel, Swords, ChevronDown, Users, CheckCircle2, Shuffle, ListChecks, Home, UserPlus, Projector, HelpCircle, FileQuestion, Calendar } from "lucide-react";
+import { PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, KeyRound, Copy, Check, ToggleLeft, ToggleRight, UserPlus, ChevronDown, Users, CheckCircle2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
 import { nanoid } from 'nanoid';
 import { DebateControlPanel } from '@/components/debate-control-panel';
 import { RoundManagement } from '@/components/round-management';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EditSchoolForm } from '@/components/edit-school-form';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DrawAnimation } from '@/components/draw-animation';
 import { RubricManagement } from '@/components/rubric-management';
@@ -51,6 +44,7 @@ import { TournamentBracket } from '@/components/tournament-bracket';
 import { BracketEditor } from '@/components/bracket-editor';
 import { SurveyManagement } from '@/components/survey-management';
 import { ScheduleEditor } from '@/components/schedule-editor';
+import { AdminNav } from '@/components/admin-nav';
 
 
 interface SchoolData {
@@ -93,6 +87,7 @@ interface MatchResults {
 
 function AdminDashboard() {
   const { toast } = useToast();
+  const [activeView, setActiveView] = useState("home");
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [judges, setJudges] = useState<JudgeData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
@@ -319,96 +314,17 @@ function AdminDashboard() {
     setTimeout(() => setCopiedTokenId(null), 2000);
   };
  
- const scoresByMatch = scores.reduce((acc, score) => {
-    if (!acc[score.matchId]) {
-        acc[score.matchId] = [];
-    }
-    acc[score.matchId].push(score);
-    return acc;
- }, {} as Record<string, ScoreData[]>);
-
- const processedResults: MatchResults[] = Object.entries(scoresByMatch).map(([matchId, matchScores]) => {
-    const teamTotals: Record<string, number> = {};
-    
-    matchScores.forEach(score => {
-        score.teams.forEach(team => {
-            if (!teamTotals[team.name]) {
-                teamTotals[team.name] = 0;
-            }
-            teamTotals[team.name] += team.total;
-        });
-    });
-
-    let winner: string | null = null;
-    let isTie = false;
-    let tiedTeams: string[] = [];
-    const totals = Object.values(teamTotals);
-
-    if (totals.length > 0) {
-        const maxScore = Math.max(...totals);
-        const winners = Object.entries(teamTotals).filter(([, score]) => score === maxScore);
-        
-        if (winners.length === 1) {
-            winner = winners[0][0];
-        } else if (winners.length > 1) {
-            isTie = true;
-            tiedTeams = winners.map(w => w[0]);
-        }
-    }
-    
-    return {
-        matchId,
-        scores: matchScores,
-        teamTotals,
-        winner,
-        isTie,
-        tiedTeams,
-    };
- });
-
-
-  const openEditDialog = (school: SchoolData) => {
+ const openEditDialog = (school: SchoolData) => {
     setSelectedSchool(school);
     setIsSchoolEditDialogOpen(true);
   }
 
-
-  return (
-    <div className="container mx-auto py-10 px-4 md:px-6">
-      <div className="mb-8">
-        <h1 className="font-headline text-3xl md:text-4xl font-bold">
-          Panel de Administrador
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Gestione todos los aspectos de la competencia Conversatorio Colgemelli.
-        </p>
-      </div>
-
-      <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
-        <Tabs defaultValue="home" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-13">
-            <TabsTrigger value="home"><Home className="mr-2 h-4 w-4" />Home</TabsTrigger>
-            <TabsTrigger value="schedule"><Calendar className="mr-2 h-4 w-4" />Programación</TabsTrigger>
-            <TabsTrigger value="schools"><School className="mr-2 h-4 w-4" />Colegios</TabsTrigger>
-            <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Rondas</TabsTrigger>
-            <TabsTrigger value="bracket"><Projector className="mr-2 h-4 w-4" />Bracket</TabsTrigger>
-            <TabsTrigger value="rubric"><ListChecks className="mr-2 h-4 w-4" />Rúbrica</TabsTrigger>
-            <TabsTrigger value="draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
-            <TabsTrigger value="survey"><FileQuestion className="mr-2 h-4 w-4"/>Encuesta</TabsTrigger>
-            <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Ajustes</TabsTrigger>
-            <TabsTrigger value="judges"><User className="mr-2 h-4 w-4" />Jurados</TabsTrigger>
-            <TabsTrigger value="moderators"><KeyRound className="mr-2 h-4 w-4" />Moderadores</TabsTrigger>
-            <TabsTrigger value="debate-control"><Gavel className="mr-2 h-4 w-4" />Control del Debate</TabsTrigger>
-            <TabsTrigger value="results"><Trophy className="mr-2 h-4 w-4"/>Resultados</TabsTrigger>
-            </TabsList>
-             <TabsContent value="home">
-                <HomePageEditor />
-            </TabsContent>
-            <TabsContent value="schedule">
-                <ScheduleEditor />
-            </TabsContent>
-            <TabsContent value="schools">
-            <Card>
+  const renderContent = () => {
+    switch (activeView) {
+        case "home": return <HomePageEditor />;
+        case "schedule": return <ScheduleEditor />;
+        case "schools": return (
+             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                         <CardTitle>Gestión de Colegios</CardTitle>
@@ -546,318 +462,249 @@ function AdminDashboard() {
                 </Table>
                 </CardContent>
             </Card>
-            </TabsContent>
-            <TabsContent value="rounds">
-                <RoundManagement />
-            </TabsContent>
-            <TabsContent value="bracket">
-              <div className="space-y-6">
+        );
+        case "rounds": return <RoundManagement />;
+        case "bracket": return (
+             <div className="space-y-6">
                 <BracketEditor />
                 <TournamentBracket />
               </div>
-            </TabsContent>
-            <TabsContent value="rubric">
-                <RubricManagement />
-            </TabsContent>
-            <TabsContent value="draw">
-                <DrawAnimation />
-            </TabsContent>
-            <TabsContent value="survey">
-                <SurveyManagement />
-            </TabsContent>
-            <TabsContent value="settings">
-                <CompetitionSettings allScores={scores} />
-            </TabsContent>
-            <TabsContent value="judges">
-                <div className="grid md:grid-cols-3 gap-6">
-                    <div className="md:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Añadir Jurado</CardTitle>
-                                <CardDescription>Registre un nuevo jurado para la competencia.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleAddJudge} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="judge-name">Nombre completo</Label>
-                                        <Input id="judge-name" value={newJudgeName} onChange={(e) => setNewJudgeName(e.target.value)} placeholder="Nombre del jurado" disabled={isSubmittingJudge}/>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="judge-cedula">Cédula</Label>
-                                        <Input id="judge-cedula" value={newJudgeCedula} onChange={(e) => setNewJudgeCedula(e.target.value)} placeholder="Cédula del jurado" disabled={isSubmittingJudge}/>
-                                    </div>
-                                    <Button type="submit" className="w-full" disabled={isSubmittingJudge}>
-                                        {isSubmittingJudge && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Añadir Jurado
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </div>
-                    <div className="md:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Jurados Registrados</CardTitle>
-                                <CardDescription>Lista de todos los jurados disponibles para la competencia.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Nombre</TableHead>
-                                            <TableHead>Cédula</TableHead>
-                                            <TableHead className="text-center">Estado</TableHead>
-                                            <TableHead className="text-right">Acciones</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {loadingJudges ? (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="text-center">Cargando jurados...</TableCell>
-                                            </TableRow>
-                                        ) : judges.map((judge) => (
-                                            <TableRow key={judge.id}>
-                                                <TableCell>{judge.name}</TableCell>
-                                                <TableCell>{judge.cedula}</TableCell>
-                                                <TableCell className="text-center">
-                                                    <Badge variant={judge.status === 'active' ? 'default' : 'destructive'}>
-                                                        {judge.status === 'active' ? 'Activo' : 'Inactivo'}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">Toggle menu</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                            <DropdownMenuItem onClick={() => handleToggleJudgeStatus(judge)}>
-                                                                {judge.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
-                                                                {judge.status === 'active' ? 'Desactivar' : 'Activar'}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <AlertDialog>
-                                                                <AlertDialogTrigger asChild>
-                                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
-                                                                        <Trash2 className="mr-2 h-4 w-4"/>Eliminar
-                                                                    </DropdownMenuItem>
-                                                                </AlertDialogTrigger>
-                                                                <AlertDialogContent>
-                                                                    <AlertDialogHeader>
-                                                                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                                        <AlertDialogDescription>
-                                                                            Esta acción eliminará al jurado permanentemente.
-                                                                        </AlertDialogDescription>
-                                                                    </AlertDialogHeader>
-                                                                    <AlertDialogFooter>
-                                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                        <AlertDialogAction onClick={() => handleDeleteJudge(judge.id)} className="bg-destructive hover:bg-destructive/90">
-                                                                            Eliminar
-                                                                        </AlertDialogAction>
-                                                                    </AlertDialogFooter>
-                                                                </AlertDialogContent>
-                                                            </AlertDialog>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </div>
-            </TabsContent>
-            <TabsContent value="moderators">
-                <div className="grid md:grid-cols-3 gap-6">
-                    <div className="md:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Crear Moderador</CardTitle>
-                                <CardDescription>Cree un nuevo acceso para un moderador.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleAddModerator} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="moderator-username">Nombre de usuario</Label>
-                                        <Input id="moderator-username" value={newModeratorUsername} onChange={(e) => setNewModeratorUsername(e.target.value)} placeholder="Ej: moderador1" disabled={isSubmittingModerator}/>
-                                    </div>
-                                    <Button type="submit" className="w-full" disabled={isSubmittingModerator}>
-                                        {isSubmittingModerator && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Crear Moderador
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-                         <Card className="mt-6">
-                            <CardHeader>
-                                <CardTitle>Crear Administrador</CardTitle>
-                                <CardDescription>Añada un nuevo usuario con permisos de administrador.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Button asChild className="w-full">
-                                    <Link href="/admin/crear-usuario">
-                                        <UserPlus className="mr-2 h-4 w-4" />
-                                        Crear Nuevo Administrador
-                                    </Link>
+        );
+        case "rubric": return <RubricManagement />;
+        case "draw": return <DrawAnimation />;
+        case "survey": return <SurveyManagement />;
+        case "settings": return <CompetitionSettings allScores={scores} />;
+        case "judges": return (
+            <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-1">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Añadir Jurado</CardTitle>
+                            <CardDescription>Registre un nuevo jurado para la competencia.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleAddJudge} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="judge-name">Nombre completo</Label>
+                                    <Input id="judge-name" value={newJudgeName} onChange={(e) => setNewJudgeName(e.target.value)} placeholder="Nombre del jurado" disabled={isSubmittingJudge}/>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="judge-cedula">Cédula</Label>
+                                    <Input id="judge-cedula" value={newJudgeCedula} onChange={(e) => setNewJudgeCedula(e.target.value)} placeholder="Cédula del jurado" disabled={isSubmittingJudge}/>
+                                </div>
+                                <Button type="submit" className="w-full" disabled={isSubmittingJudge}>
+                                    {isSubmittingJudge && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Añadir Jurado
                                 </Button>
-                            </CardContent>
-                        </Card>
-                    </div>
-                    <div className="md:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Moderadores Activos</CardTitle>
-                                <CardDescription>Lista de moderadores y sus tokens de acceso.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Usuario</TableHead>
-                                            <TableHead>Token de Acceso</TableHead>
-                                            <TableHead className="text-center">Estado</TableHead>
-                                            <TableHead className="text-right">Acciones</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {loadingModerators ? (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="text-center">Cargando moderadores...</TableCell>
-                                            </TableRow>
-                                        ) : moderators.map((mod) => (
-                                            <TableRow key={mod.id}>
-                                                <TableCell className="font-medium">{mod.username}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Input type="text" readOnly value={mod.token} className="font-mono text-xs h-8"/>
-                                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToken(mod.token, mod.id)}>
-                                                            {copiedTokenId === mod.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <Badge variant={mod.status === 'active' ? 'default' : 'destructive'}>
-                                                        {mod.status === 'active' ? 'Activo' : 'Inactivo'}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">Toggle menu</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                            <DropdownMenuItem onClick={() => handleToggleModeratorStatus(mod)}>
-                                                                {mod.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
-                                                                {mod.status === 'active' ? 'Desactivar' : 'Activar'}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteModerator(mod.id)}>
-                                                                <Trash2 className="mr-2 h-4 w-4"/>Eliminar
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            </form>
+                        </CardContent>
+                    </Card>
                 </div>
-            </TabsContent>
-            <TabsContent value="debate-control">
-            <DebateControlPanel registeredSchools={schools} allScores={scores} />
-            </TabsContent>
-            <TabsContent value="results">
-            <Card>
-                <CardHeader>
-                <CardTitle>Resultados de las Rondas</CardTitle>
-                <CardDescription>
-                    Resultados detallados de cada partida, jurado por jurado.
-                </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loadingScores && <p className="text-center">Cargando resultados...</p>}
-                    {!loadingScores && processedResults.length === 0 && <p className="text-center text-muted-foreground">Aún no hay resultados para mostrar.</p>}
-                    <Accordion type="single" collapsible className="w-full">
-                        {processedResults.map(result => (
-                            <AccordionItem value={result.matchId} key={result.matchId}>
-                                <AccordionTrigger>
-                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center w-full pr-4 text-left gap-4">
-                                        <div>
-                                            <span className="font-bold text-lg capitalize">Ronda: {result.matchId.replace(/-/g, ' ')}</span>
-                                            <div className="text-xs text-muted-foreground">
-                                                {Object.entries(result.teamTotals).map(([name, total]) => `${name}: ${total}`).join(' vs ')}
-                                            </div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="text-xs text-muted-foreground font-semibold">GANADOR</div>
-                                             {result.isTie ? (
-                                                <Badge variant="destructive" className="text-lg px-4 py-1 mt-1">
-                                                    <HelpCircle className="mr-2 h-4 w-4" />
-                                                    EMPATE
-                                                </Badge>
-                                             ) : (
-                                                <Badge variant={result.winner ? 'default' : 'secondary'} className="text-lg px-4 py-1 mt-1">
-                                                    {result.winner || 'N/A'}
-                                                </Badge>
-                                             )}
-                                        </div>
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                <Table>
-                                    <TableHeader>
+                <div className="md:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Jurados Registrados</CardTitle>
+                            <CardDescription>Lista de todos los jurados disponibles para la competencia.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Nombre</TableHead>
+                                        <TableHead>Cédula</TableHead>
+                                        <TableHead className="text-center">Estado</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {loadingJudges ? (
                                         <TableRow>
-                                            <TableHead>Jurado</TableHead>
-                                            {Object.keys(result.teamTotals).map(teamName => (
-                                                <TableHead key={teamName} className="text-center">Puntaje {teamName}</TableHead>
-                                            ))}
+                                            <TableCell colSpan={4} className="text-center">Cargando jurados...</TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {result.scores.map(score => (
-                                            <TableRow key={score.id}>
-                                                <TableCell>{score.judgeName}</TableCell>
-                                                {Object.keys(result.teamTotals).map(teamName => (
-                                                    <TableCell key={teamName} className="text-center">{score.teams.find(t => t.name === teamName)?.total || 0}</TableCell>
-                                                ))}
-                                            </TableRow>
-                                        ))}
-                                        <TableRow className="bg-secondary font-bold">
-                                            <TableCell>Total</TableCell>
-                                            {Object.entries(result.teamTotals).map(([name, total]) => (
-                                                <TableCell key={name} className="text-center text-lg">{total}</TableCell>
-                                            ))}
+                                    ) : judges.map((judge) => (
+                                        <TableRow key={judge.id}>
+                                            <TableCell>{judge.name}</TableCell>
+                                            <TableCell>{judge.cedula}</TableCell>
+                                            <TableCell className="text-center">
+                                                <Badge variant={judge.status === 'active' ? 'default' : 'destructive'}>
+                                                    {judge.status === 'active' ? 'Activo' : 'Inactivo'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                            <span className="sr-only">Toggle menu</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => handleToggleJudgeStatus(judge)}>
+                                                            {judge.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
+                                                            {judge.status === 'active' ? 'Desactivar' : 'Activar'}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                                    <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                                </DropdownMenuItem>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Esta acción eliminará al jurado permanentemente.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => handleDeleteJudge(judge.id)} className="bg-destructive hover:bg-destructive/90">
+                                                                        Eliminar
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
                                         </TableRow>
-                                    </TableBody>
-                                </Table>
-                                </AccordionContent>
-                            </AccordionItem>
-                        ))}
-                    </Accordion>
-                </CardContent>
-            </Card>
-            </TabsContent>
-        </Tabs>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        );
+        case "moderators": return (
+            <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-1">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Crear Moderador</CardTitle>
+                            <CardDescription>Cree un nuevo acceso para un moderador.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleAddModerator} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="moderator-username">Nombre de usuario</Label>
+                                    <Input id="moderator-username" value={newModeratorUsername} onChange={(e) => setNewModeratorUsername(e.target.value)} placeholder="Ej: moderador1" disabled={isSubmittingModerator}/>
+                                </div>
+                                <Button type="submit" className="w-full" disabled={isSubmittingModerator}>
+                                    {isSubmittingModerator && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Crear Moderador
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                     <Card className="mt-6">
+                        <CardHeader>
+                            <CardTitle>Crear Administrador</CardTitle>
+                            <CardDescription>Añada un nuevo usuario con permisos de administrador.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Button asChild className="w-full">
+                                <Link href="/admin/crear-usuario">
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    Crear Nuevo Administrador
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+                <div className="md:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Moderadores Activos</CardTitle>
+                            <CardDescription>Lista de moderadores y sus tokens de acceso.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Usuario</TableHead>
+                                        <TableHead>Token de Acceso</TableHead>
+                                        <TableHead className="text-center">Estado</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {loadingModerators ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center">Cargando moderadores...</TableCell>
+                                        </TableRow>
+                                    ) : moderators.map((mod) => (
+                                        <TableRow key={mod.id}>
+                                            <TableCell className="font-medium">{mod.username}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="text" readOnly value={mod.token} className="font-mono text-xs h-8"/>
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToken(mod.token, mod.id)}>
+                                                        {copiedTokenId === mod.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Badge variant={mod.status === 'active' ? 'default' : 'destructive'}>
+                                                    {mod.status === 'active' ? 'Activo' : 'Inactivo'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                            <span className="sr-only">Toggle menu</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => handleToggleModeratorStatus(mod)}>
+                                                            {mod.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
+                                                            {mod.status === 'active' ? 'Desactivar' : 'Activar'}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteModerator(mod.id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        );
+        case "debate-control": return <DebateControlPanel registeredSchools={schools} allScores={scores} />;
+        case "results": return <p>Resultados...</p>;
+        default: return <HomePageEditor />;
+    }
+  }
 
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Editar Colegio</DialogTitle>
-            </DialogHeader>
-            {selectedSchool && <EditSchoolForm school={selectedSchool} onFinished={() => setIsSchoolEditDialogOpen(false)} />}
-        </DialogContent>
-      </Dialog>
+  return (
+    <div className="container mx-auto py-10 px-4 md:px-6">
+        <div className="grid md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr] gap-6">
+            <aside>
+                <AdminNav activeView={activeView} setActiveView={setActiveView} />
+            </aside>
+            <main>
+                <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
+                     {renderContent()}
+                     <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Editar Colegio</DialogTitle>
+                        </DialogHeader>
+                        {selectedSchool && <EditSchoolForm school={selectedSchool} onFinished={() => setIsSchoolEditDialogOpen(false)} />}
+                    </DialogContent>
+                </Dialog>
+            </main>
+        </div>
     </div>
   );
 }
