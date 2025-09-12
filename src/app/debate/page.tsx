@@ -48,9 +48,9 @@ export default function DebatePage() {
     return () => unsubscribe();
   }, []);
 
-  const getAskUrl = () => {
+  const getSurveyUrl = () => {
       if (typeof window !== "undefined" && debateState?.questionId) {
-          const url = new URL("/ask", window.location.origin);
+          const url = new URL("/survey", window.location.origin);
           url.searchParams.set("q_id", debateState.questionId);
           return url.toString();
       }
@@ -106,7 +106,7 @@ export default function DebatePage() {
                         <QrCode className="h-8 w-8 text-primary mb-2"/>
                         <h2 className="font-headline text-xl font-bold mb-3">¡Escanea y Pregunta!</h2>
                          <div className="bg-white p-2 rounded-md">
-                            <QRCodeSVG value={getAskUrl()} size={200} />
+                            <QRCodeSVG value={getSurveyUrl()} size={200} />
                         </div>
                     </div>
                 )}
