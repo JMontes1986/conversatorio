@@ -4,11 +4,12 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { Loader2, MessageSquare, QrCode, Zap } from 'lucide-react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { Loader2, MessageSquare, QrCode, Zap, XCircle } from 'lucide-react';
 import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
+import { Button } from '@/components/ui/button';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -59,6 +60,18 @@ export default function DebatePage() {
       }
       return "";
   }
+  
+    const handleClearStudentQuestion = async () => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                studentQuestionOverlay: ""
+            }, { merge: true });
+        } catch (error) {
+            console.error("Error clearing student question:", error);
+        }
+    };
+
 
   if (loading || !debateState) {
     return (
@@ -77,7 +90,11 @@ export default function DebatePage() {
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
-                <div className="bg-background rounded-lg shadow-2xl p-8 max-w-3xl w-full text-center animate-in fade-in-50 zoom-in-95">
+                <div className="bg-background rounded-lg shadow-2xl p-8 max-w-3xl w-full text-center animate-in fade-in-50 zoom-in-95 relative">
+                     <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-8 w-8 text-muted-foreground" onClick={handleClearStudentQuestion}>
+                        <XCircle className="h-5 w-5" />
+                        <span className="sr-only">Cerrar</span>
+                    </Button>
                     <Zap className="h-10 w-10 text-primary mx-auto mb-4" />
                     <h2 className="font-headline text-2xl font-bold mb-2">Pregunta del Público</h2>
                     <p className="text-3xl font-semibold whitespace-pre-wrap">

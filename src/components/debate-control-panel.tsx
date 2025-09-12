@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -42,6 +42,7 @@ import { Switch } from './ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { EditQuestionForm } from './edit-question-form';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { cn } from '@/lib/utils';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -651,7 +652,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     );
 }
 
-function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion }: { allPreparedQuestions: Question[], onProjectQuestion: (text: string) => void }) {
+function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projectedQuestion }: { allPreparedQuestions: Question[], onProjectQuestion: (text: string) => void, projectedQuestion: string | null }) {
     const { toast } = useToast();
     const [questions, setQuestions] = useState<StudentQuestion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -715,7 +716,10 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion }: { allP
                             <h3 className="text-lg font-semibold mb-2">Aprobadas ({approvedQuestions.length})</h3>
                             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                                 {approvedQuestions.length > 0 ? approvedQuestions.map(q => (
-                                    <div key={q.id} className="p-3 border rounded-lg">
+                                    <div key={q.id} className={cn(
+                                        "p-3 border rounded-lg transition-colors",
+                                        projectedQuestion === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
+                                    )}>
                                         <p className="text-sm font-medium">{q.text}</p>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             Para: <span className="font-semibold">{q.targetTeam || 'Ambos'}</span>
@@ -743,6 +747,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [isQrEnabled, setIsQrEnabled] = useState(false);
+    const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<string | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
@@ -761,6 +766,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
                 setIsQrEnabled(data.isQrEnabled || false);
+                setProjectedStudentQuestion(data.studentQuestionOverlay || null);
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
@@ -1047,7 +1053,21 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     <CardContent>
                          <div className="space-y-4">
                             <h3 className="font-medium text-lg">Pantalla Pública:</h3>
-                            <div className="text-xl p-4 bg-secondary rounded-md min-h-[150px] flex flex-col items-center justify-center text-center gap-4">
+                            <div className="relative text-xl p-4 bg-secondary rounded-md min-h-[150px] flex flex-col items-center justify-center text-center gap-4">
+                                {projectedStudentQuestion && (
+                                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
+                                        <div className="bg-background rounded-lg shadow-2xl p-8 max-w-3xl w-full text-center relative">
+                                            <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-8 w-8 text-muted-foreground" onClick={handleClearStudentQuestion}>
+                                                <XCircle className="h-5 w-5" />
+                                            </Button>
+                                            <HelpCircle className="h-8 w-8 text-primary mx-auto mb-3" />
+                                            <h2 className="font-headline text-lg font-bold mb-1">Pregunta del Público</h2>
+                                            <p className="text-2xl font-semibold whitespace-pre-wrap">
+                                                "{projectedStudentQuestion}"
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                                 {previewVideoUrl && "Video en pantalla. Esperando pregunta."}
                                 {previewQuestion && previewQuestion}
                                 {!previewVideoUrl && !previewQuestion && "Pantalla Limpia"}
@@ -1073,7 +1093,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onSendVideo={handleSendVideo}
                     onUploadComplete={handleUploadComplete}
                 />
-                 <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onProjectQuestion={handleProjectStudentQuestion} />
+                 <StudentQuestionsTab 
+                    allPreparedQuestions={preparedQuestions} 
+                    onProjectQuestion={handleProjectStudentQuestion} 
+                    projectedQuestion={projectedStudentQuestion}
+                 />
 
             </div>
 
@@ -1136,5 +1160,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
-
-    
