@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, CheckCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { nanoid } from "nanoid";
 import { Switch } from "./ui/switch";
+import { useDebounce } from "use-debounce";
+import { Badge } from "./ui/badge";
 
 const scheduleItemSchema = z.object({
   id: z.string(),
@@ -42,28 +44,33 @@ const defaultSchedule: FormData = {
   ]
 };
 
+type SaveStatus = "idle" | "saving" | "saved";
+
 export function ScheduleEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: defaultSchedule,
   });
+  
+  const watchedValues = form.watch();
+  const [debouncedValues] = useDebounce(watchedValues, 1000);
 
   useEffect(() => {
     const docRef = doc(db, 'siteContent', 'schedule');
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data() as FormData;
-        // Ensure 'completed' field exists to prevent Firebase error with 'undefined'
         const sanitizedData = {
             ...data,
             day1: data.day1?.map(item => ({ ...item, completed: item.completed ?? false })) || [],
             day2: data.day2?.map(item => ({ ...item, completed: item.completed ?? false })) || [],
         };
-        form.reset(sanitizedData);
+        form.reset(sanitizedData, { keepValues: true }); // Use keepValues to avoid flicker
       } else {
         form.reset(defaultSchedule);
       }
@@ -73,25 +80,30 @@ export function ScheduleEditor() {
     return () => unsubscribe();
   }, [form]);
 
-  async function onSubmit(values: FormData) {
-    setIsSubmitting(true);
+  const saveSchedule = useCallback(async (values: FormData) => {
+    setSaveStatus("saving");
     try {
       await setDoc(doc(db, 'siteContent', 'schedule'), values);
-      toast({
-        title: "¡Programación Actualizada!",
-        description: "El cronograma del evento ha sido guardado.",
-      });
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (error) {
-      console.error("Error updating schedule: ", error);
+      console.error("Error auto-saving schedule: ", error);
       toast({
         variant: "destructive",
-        title: "Error al actualizar",
-        description: "Hubo un problema al guardar los datos.",
+        title: "Error de Guardado Automático",
+        description: "No se pudieron guardar los cambios.",
       });
-    } finally {
-        setIsSubmitting(false);
+      setSaveStatus("idle");
     }
-  }
+  }, [toast]);
+
+  useEffect(() => {
+    if (!loading && form.formState.isDirty) {
+      saveSchedule(debouncedValues);
+       form.formState.isDirty = false;
+    }
+  }, [debouncedValues, loading, form.formState.isDirty, saveSchedule]);
+
 
   if (loading) {
     return (
@@ -104,20 +116,24 @@ export function ScheduleEditor() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Editor de Programación del Evento</CardTitle>
-        <CardDescription>
-          Modifique el cronograma para los días del evento. Los cambios se reflejarán en la página pública.
-        </CardDescription>
+        <div className="flex justify-between items-start">
+            <div>
+                 <CardTitle>Editor de Programación del Evento</CardTitle>
+                <CardDescription>
+                Modifique el cronograma para los días del evento. Los cambios se guardan automáticamente.
+                </CardDescription>
+            </div>
+            <div>
+                 {saveStatus === 'saving' && <Badge variant="outline"><Loader2 className="mr-2 h-3 w-3 animate-spin"/>Guardando...</Badge>}
+                {saveStatus === 'saved' && <Badge variant="secondary" className="bg-green-100 text-green-800"><CheckCircle className="mr-2 h-3 w-3"/>Guardado</Badge>}
+            </div>
+        </div>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <form className="space-y-8">
             <ScheduleDayEditor day="day1" title="Sábado, 17 de Agosto" control={form.control} />
             <ScheduleDayEditor day="day2" title="Domingo, 18 de Agosto" control={form.control} />
-            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || loading}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Guardar Programación
-            </Button>
           </form>
         </Form>
       </CardContent>
