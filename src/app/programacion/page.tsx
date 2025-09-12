@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
+import { format, parse } from 'date-fns';
+
 
 interface ScheduleItem {
   id: string;
@@ -22,28 +24,42 @@ interface ScheduleData {
 
 const defaultSchedule: ScheduleData = {
   day1: [
-    { id: 'd1-1', time: "8:00 AM - 8:30 AM", activity: "Registro y Bienvenida" },
-    { id: 'd1-2', time: "8:30 AM - 9:00 AM", activity: "Ceremonia de Apertura" },
-    { id: 'd1-3', time: "9:00 AM - 10:00 AM", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)" },
-    { id: 'd1-4', time: "10:00 AM - 10:15 AM", activity: "Receso" },
-    { id: 'd1-5', time: "10:15 AM - 11:15 AM", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)" },
-    { id: 'd1-6', time: "11:15 AM - 12:15 PM", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)" },
-    { id: 'd1-7', time: "12:15 PM - 1:30 PM", activity: "Almuerzo" },
-    { id: 'd1-8', time: "1:30 PM - 2:30 PM", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)" },
-    { id: 'd1-9', time: "2:30 PM - 3:30 PM", activity: "Anuncio de Clasificados a Cuartos de Final" },
+    { id: 'd1-1', time: "08:00", activity: "Registro y Bienvenida" },
+    { id: 'd1-2', time: "08:30", activity: "Ceremonia de Apertura" },
+    { id: 'd1-3', time: "09:00", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)" },
+    { id: 'd1-4', time: "10:00", activity: "Receso" },
+    { id: 'd1-5', time: "10:15", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)" },
+    { id: 'd1-6', time: "11:15", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)" },
+    { id: 'd1-7', time: "12:15", activity: "Almuerzo" },
+    { id: 'd1-8', time: "13:30", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)" },
+    { id: 'd1-9', time: "14:30", activity: "Anuncio de Clasificados a Cuartos de Final" },
   ],
   day2: [
-    { id: 'd2-1', time: "9:00 AM - 10:00 AM", activity: "Cuartos de Final - Enfrentamiento 1" },
-    { id: 'd2-2', time: "10:00 AM - 11:00 AM", activity: "Cuartos de Final - Enfrentamiento 2" },
-    { id: 'd2-3', time: "11:00 AM - 11:15 AM", activity: "Receso" },
-    { id: 'd2-4', time: "11:15 AM - 12:15 PM", activity: "Semifinal 1" },
-    { id: 'd2-5', time: "12:15 PM - 1:15 PM", activity: "Semifinal 2" },
-    { id: 'd2-6', time: "1:15 PM - 2:30 PM", activity: "Almuerzo" },
-    { id: 'd2-7', time: "2:30 PM - 4:00 PM", activity: "GRAN FINAL" },
-    { id: 'd2-8', time: "4:00 PM - 4:30 PM", activity: "Deliberación del Jurado" },
-    { id: 'd2-9', time: "4:30 PM - 5:00 PM", activity: "Ceremonia de Premiación y Clausura" },
+    { id: 'd2-1', time: "09:00", activity: "Cuartos de Final - Enfrentamiento 1" },
+    { id: 'd2-2', time: "10:00", activity: "Cuartos de Final - Enfrentamiento 2" },
+    { id: 'd2-3', time: "11:00", activity: "Receso" },
+    { id: 'd2-4', time: "11:15", activity: "Semifinal 1" },
+    { id: 'd2-5', time: "12:15", activity: "Semifinal 2" },
+    { id: 'd2-6', time: "13:15", activity: "Almuerzo" },
+    { id: 'd2-7', time: "14:30", activity: "GRAN FINAL" },
+    { id: 'd2-8', time: "16:00", activity: "Deliberación del Jurado" },
+    { id: 'd2-9', time: "16:30", activity: "Ceremonia de Premiación y Clausura" },
   ]
 };
+
+const formatTimeForDisplay = (timeString: string) => {
+    if (!timeString || !timeString.includes(':')) {
+        return timeString; // Return original if not in HH:mm format
+    }
+    try {
+        const date = parse(timeString, 'HH:mm', new Date());
+        return format(date, 'h:mm a');
+    } catch (e) {
+        console.error("Error formatting time:", e);
+        return timeString; // Fallback to original string
+    }
+};
+
 
 export default function ProgramacionPage() {
   const [schedule, setSchedule] = useState<ScheduleData | null>(null);
@@ -118,7 +134,7 @@ function ScheduleTable({ schedule }: { schedule: ScheduleItem[] }) {
                 <TableBody>
                     {schedule.map((item) => (
                     <TableRow key={item.id}>
-                        <TableCell className="font-medium">{item.time}</TableCell>
+                        <TableCell className="font-medium">{formatTimeForDisplay(item.time)}</TableCell>
                         <TableCell>{item.activity}</TableCell>
                     </TableRow>
                     ))}

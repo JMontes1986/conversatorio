@@ -30,12 +30,12 @@ type FormData = z.infer<typeof formSchema>;
 
 const defaultSchedule: FormData = {
   day1: [
-    { id: 'd1-1', time: "8:00 AM - 8:30 AM", activity: "Registro y Bienvenida" },
-    { id: 'd1-2', time: "8:30 AM - 9:00 AM", activity: "Ceremonia de Apertura" },
+    { id: 'd1-1', time: "08:00", activity: "Registro y Bienvenida" },
+    { id: 'd1-2', time: "08:30", activity: "Ceremonia de Apertura" },
   ],
   day2: [
-    { id: 'd2-1', time: "9:00 AM - 10:00 AM", activity: "Cuartos de Final - Enfrentamiento 1" },
-    { id: 'd2-2', time: "10:00 AM - 11:00 AM", activity: "Cuartos de Final - Enfrentamiento 2" },
+    { id: 'd2-1', time: "09:00", activity: "Cuartos de Final - Enfrentamiento 1" },
+    { id: 'd2-2', time: "10:00", activity: "Cuartos de Final - Enfrentamiento 2" },
   ]
 };
 
@@ -144,7 +144,7 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Hora</FormLabel>
-                  <FormControl><Input {...field} placeholder="Ej: 9:00 AM" /></FormControl>
+                  <FormControl><Input type="time" {...field} placeholder="Ej: 09:00" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
