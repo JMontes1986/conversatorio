@@ -21,7 +21,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Footer } from "@/components/layout/footer";
 import Link from "next/link";
 import { Label } from "@/components/ui/label";
 
@@ -48,7 +47,6 @@ function PublicPageLayout({ children }: { children: React.ReactNode }) {
                 </div>
             </header>
             <main className="flex-grow">{children}</main>
-            <Footer />
         </>
     );
 }
