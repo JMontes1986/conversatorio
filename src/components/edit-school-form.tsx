@@ -131,7 +131,6 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
     try {
       const schoolRef = doc(db, "schools", school.id);
       await updateDoc(schoolRef, values);
-      form.reset(values); // This is key to prevent continuous saving
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (error) {
@@ -143,7 +142,7 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
       });
       setSaveStatus("idle");
     }
-  }, [school.id, toast, form]);
+  }, [school.id, toast]);
 
   useEffect(() => {
     if (form.formState.isDirty) {
