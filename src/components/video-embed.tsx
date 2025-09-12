@@ -22,13 +22,8 @@ const getYouTubeId = (url: string): string | null => {
   return null;
 };
 
-const isSharePointEmbedUrl = (url: string): boolean => {
-    try {
-        const urlObj = new URL(url);
-        return urlObj.hostname.endsWith('.sharepoint.com') && urlObj.pathname.includes('/embed.aspx');
-    } catch (e) {
-        return false;
-    }
+const isIframeString = (str: string): boolean => {
+    return str.trim().startsWith('<iframe');
 }
 
 
@@ -50,20 +45,9 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({ url }) => {
     );
   }
   
-  if (isSharePointEmbedUrl(url)) {
+  if (isIframeString(url)) {
     return (
-         <div className="aspect-video w-full">
-            <iframe
-            src={url}
-            width="962"
-            height="541"
-            frameBorder="0"
-            scrolling="no"
-            allowFullScreen
-            title="OneDrive/SharePoint Video"
-            className="w-full h-full rounded-lg"
-            ></iframe>
-        </div>
+         <div className="aspect-video w-full" dangerouslySetInnerHTML={{ __html: url }} />
     )
   }
 

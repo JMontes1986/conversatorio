@@ -910,22 +910,10 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const handleSendVideo = async (question: Question) => {
         try {
             const videoValue = videoInputs[question.id] || "";
-            const isIframe = videoValue.trim().startsWith('&lt;iframe');
             
-            let finalUrl = videoValue;
-            if (isIframe) {
-                const srcMatch = videoValue.match(/src="([^"]+)"/);
-                if (srcMatch && srcMatch[1]) {
-                    finalUrl = srcMatch[1];
-                } else {
-                     toast({ variant: "destructive", title: "Error de Formato", description: "El código del iframe no es válido. No se encontró el atributo 'src'." });
-                    return;
-                }
-            }
-
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: finalUrl,
+                videoUrl: videoValue,
                 question: "",
                 questionId: "",
             }, { merge: true });
@@ -1050,25 +1038,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
 
     const handleSaveVideoLink = async (questionId: string) => {
         setSavingVideoId(questionId);
-        let urlToSave = videoInputs[questionId] || "";
-        
-        const isIframe = urlToSave.trim().startsWith('&lt;iframe');
-        if (isIframe) {
-            const srcMatch = urlToSave.match(/src="([^"]+)"/);
-            if (srcMatch && srcMatch[1]) {
-                urlToSave = srcMatch[1];
-            } else {
-                toast({ variant: "destructive", title: "Error de Formato", description: "El código del iframe no es válido. No se encontró el atributo 'src'." });
-                setSavingVideoId(null);
-                return;
-            }
-        }
+        const urlToSave = videoInputs[questionId] || "";
 
         try {
             const questionRef = doc(db, "questions", questionId);
             await updateDoc(questionRef, { videoUrl: urlToSave });
-            // Update local state to show the extracted URL if it was an iframe
-            setVideoInputs(prev => ({ ...prev, [questionId]: urlToSave }));
             toast({ title: "Video Guardado", description: "El video se ha asociado a la pregunta." });
         } catch (error) {
             console.error("Error saving video link:", error);
