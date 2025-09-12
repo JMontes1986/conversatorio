@@ -125,17 +125,8 @@ export default function DebatePage() {
                 )}
             </div>
 
-            {/* Sidebar: Timer and QR Code */}
+            {/* Sidebar: QR Code and Timer */}
             <div className="flex flex-col gap-6">
-                <div className="bg-background rounded-lg shadow-2xl p-4 flex-shrink-0">
-                   <Timer
-                        key={timer?.lastUpdated || 0}
-                        initialTime={timer?.duration || 300}
-                        title="Tiempo Restante"
-                        showControls={false}
-                        size="small"
-                    />
-                </div>
                  {showQr ? (
                     <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
                         <QrCode className="h-8 w-8 text-primary mb-2"/>
@@ -163,6 +154,15 @@ export default function DebatePage() {
                         )}
                     </div>
                 )}
+                 <div className="bg-background rounded-lg shadow-2xl p-4 flex-shrink-0">
+                   <Timer
+                        key={timer?.lastUpdated || 0}
+                        initialTime={timer?.duration || 300}
+                        title="Tiempo Restante"
+                        showControls={false}
+                        size="small"
+                    />
+                </div>
             </div>
 
         </div>
