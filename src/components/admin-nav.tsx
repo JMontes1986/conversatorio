@@ -93,6 +93,19 @@ export function AdminNav({ isCollapsed, setIsCollapsed, activeView, setActiveVie
     return (
         <TooltipProvider delayDuration={0}>
             <nav className="flex flex-col gap-4 h-full">
+                 <div className={cn("flex h-9 items-center", isCollapsed ? 'justify-center' : 'justify-between')}>
+                    {!isCollapsed && <span className="font-bold text-lg">Admin</span>}
+                     <Button
+                        variant="ghost"
+                        size='icon'
+                        className="h-9 w-9"
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                    >
+                         {isCollapsed ? <PanelRightClose /> : <PanelLeftClose />}
+                         <span className="sr-only">{isCollapsed ? 'Expandir' : 'Colapsar'}</span>
+                    </Button>
+                </div>
+                <Separator />
                 <div className="flex-grow flex flex-col gap-1">
                     {navItems.map((item) => (
                         <NavLink key={item.id} item={item} />
@@ -108,19 +121,6 @@ export function AdminNav({ isCollapsed, setIsCollapsed, activeView, setActiveVie
                     {settingsNavItems.map((item) => (
                         <NavLink key={item.id} item={item} />
                     ))}
-                </div>
-                 <div className="mt-auto">
-                    <Separator className="my-2" />
-                     <Button
-                        variant="ghost"
-                        className={cn("w-full", isCollapsed ? "justify-center" : "justify-start")}
-                        size={isCollapsed ? 'icon' : 'default'}
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                    >
-                         {isCollapsed ? <PanelRightClose /> : <PanelLeftClose />}
-                         <span className={cn("ml-2", isCollapsed && "hidden")}>Colapsar</span>
-                         <span className="sr-only">{isCollapsed ? 'Expandir' : 'Colapsar'}</span>
-                    </Button>
                 </div>
             </nav>
         </TooltipProvider>
