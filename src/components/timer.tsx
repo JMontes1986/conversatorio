@@ -34,7 +34,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   }, [initialTime]);
   
   useEffect(() => {
-    // Both public and moderator views listen to Firestore for the timer's active state
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
@@ -44,12 +43,15 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
               setIsActive(data.timer.isActive);
             }
             if (data.timer.lastUpdated) {
+                // When lastUpdated changes, we sync the time from Firestore
                 setTimeRemaining(data.timer.duration);
             }
         }
       }
     });
     return () => unsubscribe();
+    // Intentionally not depending on isActive to avoid re-subscribing on every state change.
+    // We want one subscription that SYNCs the local state from Firestore.
   }, []);
 
 
@@ -96,11 +98,10 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             await setDoc(docRef, { 
                 timer: { 
                     isActive: newIsActive,
-                    duration: initialTime,
+                    duration: timeRemaining, // Use the current time when pausing/stopping
                     lastUpdated: Date.now()
                 } 
             }, { merge: true });
-            // The local state will be updated by the onSnapshot listener for consistency
         } catch (error) {
             console.error("Error updating timer state in Firestore:", error);
         }
@@ -115,11 +116,10 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
-                    duration: initialTime,
+                    duration: initialTime, // Reset to the original time
                     lastUpdated: Date.now() // Force a refresh on all clients
                 } 
             }, { merge: true });
-            // The useEffect listener will handle setting the state locally
         } catch (error) {
             console.error("Error resetting timer state in Firestore:", error);
         }
@@ -127,8 +127,9 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   };
 
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const s = Math.max(0, seconds);
+    const minutes = Math.floor(s / 60);
+    const remainingSeconds = s % 60;
     return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
       .toString()
       .padStart(2, "0")}`;
