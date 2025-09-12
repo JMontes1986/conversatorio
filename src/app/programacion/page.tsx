@@ -1,50 +1,76 @@
 
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useState, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-const scheduleDay1 = [
-    { time: "8:00 AM - 8:30 AM", activity: "Registro y Bienvenida" },
-    { time: "8:30 AM - 9:00 AM", activity: "Ceremonia de Apertura" },
-    { time: "9:00 AM - 10:00 AM", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)" },
-    { time: "10:00 AM - 10:15 AM", activity: "Receso" },
-    { time: "10:15 AM - 11:15 AM", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)" },
-    { time: "11:15 AM - 12:15 PM", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)" },
-    { time: "12:15 PM - 1:30 PM", activity: "Almuerzo" },
-    { time: "1:30 PM - 2:30 PM", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)" },
-    { time: "2:30 PM - 3:30 PM", activity: "Anuncio de Clasificados a Cuartos de Final" },
-];
+interface ScheduleItem {
+  id: string;
+  time: string;
+  activity: string;
+}
 
-const scheduleDay2 = [
-    { time: "9:00 AM - 10:00 AM", activity: "Cuartos de Final - Enfrentamiento 1" },
-    { time: "10:00 AM - 11:00 AM", activity: "Cuartos de Final - Enfrentamiento 2" },
-    { time: "11:00 AM - 11:15 AM", activity: "Receso" },
-    { time: "11:15 AM - 12:15 PM", activity: "Semifinal 1" },
-    { time: "12:15 PM - 1:15 PM", activity: "Semifinal 2" },
-    { time: "1:15 PM - 2:30 PM", activity: "Almuerzo" },
-    { time: "2:30 PM - 4:00 PM", activity: "GRAN FINAL" },
-    { time: "4:00 PM - 4:30 PM", activity: "Deliberación del Jurado" },
-    { time: "4:30 PM - 5:00 PM", activity: "Ceremonia de Premiación y Clausura" },
-];
+interface ScheduleData {
+  day1: ScheduleItem[];
+  day2: ScheduleItem[];
+}
 
+const defaultSchedule: ScheduleData = {
+  day1: [
+    { id: 'd1-1', time: "8:00 AM - 8:30 AM", activity: "Registro y Bienvenida" },
+    { id: 'd1-2', time: "8:30 AM - 9:00 AM", activity: "Ceremonia de Apertura" },
+    { id: 'd1-3', time: "9:00 AM - 10:00 AM", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)" },
+    { id: 'd1-4', time: "10:00 AM - 10:15 AM", activity: "Receso" },
+    { id: 'd1-5', time: "10:15 AM - 11:15 AM", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)" },
+    { id: 'd1-6', time: "11:15 AM - 12:15 PM", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)" },
+    { id: 'd1-7', time: "12:15 PM - 1:30 PM", activity: "Almuerzo" },
+    { id: 'd1-8', time: "1:30 PM - 2:30 PM", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)" },
+    { id: 'd1-9', time: "2:30 PM - 3:30 PM", activity: "Anuncio de Clasificados a Cuartos de Final" },
+  ],
+  day2: [
+    { id: 'd2-1', time: "9:00 AM - 10:00 AM", activity: "Cuartos de Final - Enfrentamiento 1" },
+    { id: 'd2-2', time: "10:00 AM - 11:00 AM", activity: "Cuartos de Final - Enfrentamiento 2" },
+    { id: 'd2-3', time: "11:00 AM - 11:15 AM", activity: "Receso" },
+    { id: 'd2-4', time: "11:15 AM - 12:15 PM", activity: "Semifinal 1" },
+    { id: 'd2-5', time: "12:15 PM - 1:15 PM", activity: "Semifinal 2" },
+    { id: 'd2-6', time: "1:15 PM - 2:30 PM", activity: "Almuerzo" },
+    { id: 'd2-7', time: "2:30 PM - 4:00 PM", activity: "GRAN FINAL" },
+    { id: 'd2-8', time: "4:00 PM - 4:30 PM", activity: "Deliberación del Jurado" },
+    { id: 'd2-9', time: "4:30 PM - 5:00 PM", activity: "Ceremonia de Premiación y Clausura" },
+  ]
+};
 
 export default function ProgramacionPage() {
+  const [schedule, setSchedule] = useState<ScheduleData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const docRef = doc(db, 'siteContent', 'schedule');
+    const unsubscribe = onSnapshot(docRef, (doc) => {
+      if (doc.exists()) {
+        setSchedule(doc.data() as ScheduleData);
+      } else {
+        setSchedule(defaultSchedule);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (loading || !schedule) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8 text-center">
@@ -64,10 +90,10 @@ export default function ProgramacionPage() {
               <TabsTrigger value="day2">Domingo, 18 de Agosto</TabsTrigger>
             </TabsList>
             <TabsContent value="day1" className="mt-6">
-                <ScheduleTable schedule={scheduleDay1} />
+                <ScheduleTable schedule={schedule.day1} />
             </TabsContent>
             <TabsContent value="day2" className="mt-6">
-                <ScheduleTable schedule={scheduleDay2} />
+                <ScheduleTable schedule={schedule.day2} />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -76,7 +102,10 @@ export default function ProgramacionPage() {
   );
 }
 
-function ScheduleTable({ schedule }: { schedule: { time: string, activity: string }[] }) {
+function ScheduleTable({ schedule }: { schedule: ScheduleItem[] }) {
+    if (!schedule || schedule.length === 0) {
+        return <p className="text-center text-muted-foreground py-8">No hay programación definida para este día.</p>;
+    }
     return (
         <div className="overflow-x-auto">
             <Table>
@@ -87,8 +116,8 @@ function ScheduleTable({ schedule }: { schedule: { time: string, activity: strin
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {schedule.map((item, index) => (
-                    <TableRow key={index}>
+                    {schedule.map((item) => (
+                    <TableRow key={item.id}>
                         <TableCell className="font-medium">{item.time}</TableCell>
                         <TableCell>{item.activity}</TableCell>
                     </TableRow>
