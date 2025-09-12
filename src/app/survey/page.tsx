@@ -187,8 +187,7 @@ function PublicSurveyPage() {
                     </div>
                 )}
                 <CardHeader className="text-center">
-                    <FileQuestion className="mx-auto h-12 w-12 text-primary mb-4" />
-                    <CardTitle className="font-headline text-3xl">{surveyConfig.title}</CardTitle>
+                    <CardTitle className="font-headline text-3xl pt-6">{surveyConfig.title}</CardTitle>
                     <CardDescription className="text-lg">
                         {surveyConfig.subtitle}
                     </CardDescription>
