@@ -38,10 +38,6 @@ const baseNavLinks = [
   { href: "/debate", label: "Debate", icon: MessageSquare },
 ];
 
-const conditionalNavLinks = [
-  { href: "/survey", label: "Encuesta", icon: FileQuestion, type: 'survey' },
-]
-
 const authNavLinks = [
   { href: "/scoring", label: "Puntuación", icon: ClipboardCheck, judge: true },
   { href: "/register", label: "Registro", icon: Users, admin: true },
@@ -58,15 +54,16 @@ export function Header() {
   
   const isAuthenticated = adminUser || judgeUser || moderatorUser;
 
-  useEffect(() => {
-    const surveyConfigRef = doc(db, 'siteContent', 'survey');
-    const unsubscribe = onSnapshot(surveyConfigRef, (doc) => {
-      if (doc.exists()) {
-        setIsSurveyActive(doc.data().isActive || false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  // This check has been moved to the survey page itself to avoid permission issues for anonymous users.
+  // useEffect(() => {
+  //   const surveyConfigRef = doc(db, 'siteContent', 'survey');
+  //   const unsubscribe = onSnapshot(surveyConfigRef, (doc) => {
+  //     if (doc.exists()) {
+  //       setIsSurveyActive(doc.data().isActive || false);
+  //     }
+  //   });
+  //   return () => unsubscribe();
+  // }, []);
 
   const handleLogout = () => {
     if (adminUser) adminLogout();
@@ -76,7 +73,7 @@ export function Header() {
 
   const navLinks = [
     ...baseNavLinks,
-    ...(isSurveyActive ? conditionalNavLinks.filter(l => l.type === 'survey') : []),
+    ...(isSurveyActive ? [{ href: "/survey", label: "Encuesta", icon: FileQuestion }] : []),
     ...authNavLinks,
   ]
 

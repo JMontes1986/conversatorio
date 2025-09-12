@@ -23,6 +23,9 @@ import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { usePathname } from "next/navigation";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
 
 interface Question {
   id: string;
@@ -45,7 +48,7 @@ interface SurveyConfig {
   isActive?: boolean;
 }
 
-export default function SurveyPage() {
+function SurveyComponent() {
   const { toast } = useToast();
   const [config, setConfig] = useState<SurveyConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -279,3 +282,37 @@ export default function SurveyPage() {
     </div>
   );
 }
+
+// Separate layout for public pages to avoid auth-related data fetching in header/footer
+function PublicPageLayout({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
+    const noHeaderFooter = pathname === '/debate' || pathname === '/ask';
+    
+    // Minimal header/footer for public pages like /ask
+    return (
+        <>
+            {!noHeaderFooter && (
+                <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
+                    <div className="container mx-auto flex h-16 items-center justify-center px-4 md:px-6">
+                         <Link href="/" className="flex items-center gap-2">
+                            <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={60} height={60} />
+                            <span className="font-headline text-lg font-bold">Conversatorio Colgemelli</span>
+                        </Link>
+                    </div>
+                </header>
+            )}
+            {children}
+            {!noHeaderFooter && <Footer />}
+        </>
+    );
+}
+
+
+export default function SurveyPage() {
+    const pathname = usePathname();
+    if (pathname === '/ask') {
+        return <PublicPageLayout><SurveyComponent /></PublicPageLayout>;
+    }
+    return <SurveyComponent />;
+}
+

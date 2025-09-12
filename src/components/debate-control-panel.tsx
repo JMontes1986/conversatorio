@@ -87,6 +87,7 @@ interface StudentQuestion {
     id: string;
     text: string;
     relatedDebateQuestionId: string;
+    targetTeam: string;
     status: 'pending' | 'approved' | 'rejected';
     createdAt: any;
 }
@@ -700,6 +701,9 @@ function StudentQuestionsTab({ allPreparedQuestions, onSendTempMessage }: { allP
                                     <div key={q.id} className="p-3 border rounded-lg bg-secondary/50">
                                         <p className="text-sm font-medium">{q.text}</p>
                                         <p className="text-xs text-muted-foreground mt-1">
+                                            Para: <span className="font-semibold">{q.targetTeam || 'Ambos'}</span>
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1">
                                             Relacionada con: "{getRelatedDebateQuestionText(q.relatedDebateQuestionId)}"
                                         </p>
                                         <div className="flex justify-end gap-2 mt-2">
@@ -716,6 +720,9 @@ function StudentQuestionsTab({ allPreparedQuestions, onSendTempMessage }: { allP
                                 {approvedQuestions.length > 0 ? approvedQuestions.map(q => (
                                     <div key={q.id} className="p-3 border rounded-lg">
                                         <p className="text-sm font-medium">{q.text}</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Para: <span className="font-semibold">{q.targetTeam || 'Ambos'}</span>
+                                        </p>
                                          <p className="text-xs text-muted-foreground mt-1">
                                             Relacionada con: "{getRelatedDebateQuestionText(q.relatedDebateQuestionId)}"
                                         </p>

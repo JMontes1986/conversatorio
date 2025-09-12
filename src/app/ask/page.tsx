@@ -6,10 +6,21 @@ import { useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Send, Loader2, CheckCircle, Lightbulb } from 'lucide-react';
+import { Send, Loader2, CheckCircle, Lightbulb, Users } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+
+interface Team {
+    name: string;
+}
+interface DebateState {
+    currentRound: string;
+    teams: Team[];
+    questionId: string;
+}
 
 export default function AskQuestionPage() {
     const searchParams = useSearchParams();
@@ -20,6 +31,8 @@ export default function AskQuestionPage() {
     const [studentQuestion, setStudentQuestion] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [debateState, setDebateState] = useState<DebateState | null>(null);
+    const [targetTeam, setTargetTeam] = useState<string>("");
 
     useEffect(() => {
         const q_id = searchParams.get('q_id');
@@ -32,8 +45,16 @@ export default function AskQuestionPage() {
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: 'Pregunta de debate no encontrada.'});
                 }
+            });
+
+            const debateStateRef = doc(db, "debateState", "current");
+            const unsubscribe = onSnapshot(debateStateRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    setDebateState(docSnap.data() as DebateState);
+                }
                 setLoading(false);
             });
+            return () => unsubscribe();
         } else {
             setLoading(false);
         }
@@ -45,12 +66,17 @@ export default function AskQuestionPage() {
             toast({ variant: 'destructive', title: 'Error', description: 'Su pregunta no puede estar vacía.'});
             return;
         }
+        if (!targetTeam) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Por favor, seleccione a quién va dirigida la pregunta.'});
+            return;
+        }
 
         setIsSubmitting(true);
         try {
             await addDoc(collection(db, 'studentQuestions'), {
                 text: studentQuestion,
                 relatedDebateQuestionId: questionId,
+                targetTeam: targetTeam,
                 status: 'pending',
                 createdAt: serverTimestamp(),
             });
@@ -114,7 +140,7 @@ export default function AskQuestionPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label htmlFor="student-question" className="block text-sm font-medium text-muted-foreground mb-2">
                                 Basado en el tema, ¿qué pregunta tienes para los participantes?
@@ -124,10 +150,36 @@ export default function AskQuestionPage() {
                                 value={studentQuestion}
                                 onChange={(e) => setStudentQuestion(e.target.value)}
                                 placeholder="Escriba su pregunta aquí..."
-                                rows={5}
+                                rows={4}
                                 disabled={isSubmitting}
                             />
                         </div>
+
+                        {debateState && debateState.teams && debateState.teams.length > 0 && (
+                            <div>
+                                <Label className="block text-sm font-medium text-muted-foreground mb-2">
+                                   ¿A quién va dirigida su pregunta?
+                                </Label>
+                                <RadioGroup
+                                    onValueChange={setTargetTeam}
+                                    value={targetTeam}
+                                    className="grid grid-cols-1 gap-2"
+                                    disabled={isSubmitting}
+                                >
+                                    {debateState.teams.map(team => (
+                                        <div className="flex items-center space-x-2" key={team.name}>
+                                            <RadioGroupItem value={team.name} id={team.name}/>
+                                            <Label htmlFor={team.name} className="font-normal">{team.name}</Label>
+                                        </div>
+                                    ))}
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="Ambos Equipos" id="ambos" />
+                                        <Label htmlFor="ambos" className="font-normal">Ambos Equipos</Label>
+                                    </div>
+                                </RadioGroup>
+                            </div>
+                        )}
+
                         <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
                             Enviar Pregunta
