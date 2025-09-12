@@ -37,6 +37,7 @@ import { Trash2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from './ui/progress';
 import { nanoid } from 'nanoid';
+import { Switch } from './ui/switch';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -700,7 +701,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
-    const [previewTempMessage, setPreviewTempMessage] = useState("");
+    const [isQrEnabled, setIsQrEnabled] = useState(false);
     const [tempMessageInput, setTempMessageInput] = useState("");
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
@@ -718,7 +719,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 const data = docSnap.data();
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
-                setPreviewTempMessage(data.temporaryMessage || "");
+                setIsQrEnabled(data.isQrEnabled || false);
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
@@ -791,9 +792,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 question: question.text,
                 questionId: question.id,
                 videoUrl: "", 
-                temporaryMessage: ""
             }, { merge: true });
-            toast({ title: "Pregunta Enviada", description: "La pregunta y el QR son ahora visibles." });
+            toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
              console.error("Error setting question: ", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar la pregunta." });
@@ -807,7 +807,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 videoUrl: videoInputs[question.id] || "",
                 question: "",
                 questionId: "",
-                temporaryMessage: "", 
             }, { merge: true });
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
         } catch (error) {
@@ -823,7 +822,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 question: "Esperando pregunta del moderador...",
                 questionId: "",
                 videoUrl: "",
-                temporaryMessage: ""
             }, { merge: true });
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
         } catch (error) {
@@ -837,8 +835,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                temporaryMessage: message,
-                question: "",
+                question: message, // Use question field to display temp message
                 questionId: "",
                 videoUrl: ""
             }, { merge: true });
@@ -857,19 +854,20 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             return;
         }
         sendTempMessage(tempMessageInput);
+        setTempMessageInput("");
     }
     
-    const handleClearTemporaryMessage = async () => {
+    const handleToggleQr = async (enabled: boolean) => {
+        setIsQrEnabled(enabled);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { temporaryMessage: "" }, { merge: true });
-            setTempMessageInput("");
-            toast({ title: "Mensaje Temporal Limpiado" });
+            await setDoc(docRef, { isQrEnabled: enabled }, { merge: true });
+            toast({ title: "Ajuste de QR Guardado" });
         } catch (error) {
-            console.error("Error clearing temporary message:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo limpiar el mensaje." });
+             console.error("Error toggling QR: ", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar el estado del QR." });
         }
-    }
+    };
 
 
     const handleAddQuestion = async (newQuestionInput: string, newQuestionRound: string) => {
@@ -987,10 +985,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                          <div className="space-y-4">
                             <h3 className="font-medium text-lg">Pantalla Pública:</h3>
                             <div className="text-xl p-4 bg-secondary rounded-md min-h-[150px] flex flex-col items-center justify-center text-center gap-4">
-                                <span className="text-muted-foreground whitespace-pre-wrap">{previewTempMessage}</span>
-                                {previewVideoUrl && !previewTempMessage && "Video en pantalla. Esperando pregunta."}
-                                {previewQuestion && !previewTempMessage && previewQuestion}
-                                {!previewVideoUrl && !previewQuestion && !previewTempMessage && "Pantalla Limpia"}
+                                {previewVideoUrl && "Video en pantalla. Esperando pregunta."}
+                                {previewQuestion && previewQuestion}
+                                {!previewVideoUrl && !previewQuestion && "Pantalla Limpia"}
                             </div>
                         </div>
                     </CardContent>
@@ -1029,6 +1026,19 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                                  <TimerSettings />
                             </div>
                        </div>
+                        <div className="space-y-2 rounded-lg border p-3">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="qr-switch" className="font-medium">Habilitar QR para Preguntas del Público</Label>
+                                 <Switch
+                                    id="qr-switch"
+                                    checked={isQrEnabled}
+                                    onCheckedChange={handleToggleQr}
+                                />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Si está activo, el QR aparecerá junto a la pregunta en la pantalla de debate.
+                            </p>
+                        </div>
                         <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
                             <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Pública
                        </Button>
@@ -1057,14 +1067,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                                 Enviar Mensaje
                             </Button>
                         </div>
-
-                         <Button onClick={handleClearTemporaryMessage} variant="outline" className="w-full mt-2">
-                            <Eraser className="mr-2 h-4 w-4"/>
-                            Limpiar Mensaje
-                        </Button>
                     </CardContent>
                 </Card>
             </div>
         </div>
     );
 }
+
+    
