@@ -10,6 +10,7 @@ interface Judge {
   id: string;
   name: string;
   cedula: string;
+  status?: 'active' | 'inactive';
 }
 
 interface JudgeAuthContextType {
@@ -46,7 +47,8 @@ export function JudgeProvider({ children }: { children: ReactNode }) {
     try {
       const q = query(
         collection(db, "judges"),
-        where("cedula", "==", cedula)
+        where("cedula", "==", cedula),
+        where("status", "==", "active")
       );
       const querySnapshot = await getDocs(q);
 
@@ -55,12 +57,22 @@ export function JudgeProvider({ children }: { children: ReactNode }) {
         const judgeData: Judge = { 
             id: judgeDoc.id,
             cedula: judgeDoc.data().cedula,
-            name: judgeDoc.data().name
+            name: judgeDoc.data().name,
+            status: judgeDoc.data().status
         };
         localStorage.setItem(JUDGE_STORAGE_KEY, JSON.stringify(judgeData));
         setJudge(judgeData);
         return true;
       }
+      
+      // If no active judge is found, check if it exists but is inactive
+      const inactiveQuery = query(collection(db, "judges"), where("cedula", "==", cedula));
+      const inactiveSnapshot = await getDocs(inactiveQuery);
+      if (!inactiveSnapshot.empty) {
+          // Judge exists but is not active
+          return false;
+      }
+
       return false;
     } catch (error) {
       console.error("Judge login failed:", error);
@@ -97,3 +109,5 @@ export function useJudgeAuth() {
   }
   return context;
 }
+
+    

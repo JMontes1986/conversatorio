@@ -66,6 +66,7 @@ interface JudgeData {
     id: string;
     name: string;
     cedula: string;
+    status: 'active' | 'inactive';
 }
 interface ModeratorData {
     id: string;
@@ -134,7 +135,12 @@ function AdminDashboard() {
     const unsubscribeJudges = onSnapshot(judgesQuery, (querySnapshot) => {
         const judgesData: JudgeData[] = [];
         querySnapshot.forEach((doc) => {
-            judgesData.push({ id: doc.id, ...doc.data() } as JudgeData);
+            const data = doc.data();
+            judgesData.push({ 
+                id: doc.id,
+                ...data,
+                status: data.status || 'active' // Default to active for older records
+            } as JudgeData);
         });
         setJudges(judgesData);
         setLoadingJudges(false);
@@ -186,9 +192,10 @@ function AdminDashboard() {
         await addDoc(collection(db, "judges"), {
             name: newJudgeName,
             cedula: newJudgeCedula,
+            status: 'active',
             createdAt: serverTimestamp(),
         });
-        toast({ title: "Jurado Añadido", description: "El nuevo jurado ha sido registrado." });
+        toast({ title: "Jurado Añadido", description: "El nuevo jurado ha sido registrado como activo." });
         setNewJudgeName("");
         setNewJudgeCedula("");
     } catch (error) {
@@ -240,6 +247,16 @@ function AdminDashboard() {
     }
   };
 
+  const handleDeleteJudge = async (judgeId: string) => {
+    try {
+      await deleteDoc(doc(db, "judges", judgeId));
+      toast({ title: "Jurado Eliminado" });
+    } catch (error) {
+      console.error("Error deleting judge:", error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el jurado." });
+    }
+  };
+
   const handleDeleteSchool = async (schoolId: string) => {
     try {
       await deleteDoc(doc(db, "schools", schoolId));
@@ -262,6 +279,21 @@ function AdminDashboard() {
     } catch (error) {
          console.error("Error toggling moderator status:", error);
          toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar el estado del moderador." });
+    }
+  }
+  
+    const handleToggleJudgeStatus = async (judge: JudgeData) => {
+    const newStatus = judge.status === 'active' ? 'inactive' : 'active';
+    try {
+        const judgeRef = doc(db, "judges", judge.id);
+        await updateDoc(judgeRef, { status: newStatus });
+        toast({
+            title: "Estado Actualizado",
+            description: `El jurado ${judge.name} ahora está ${newStatus === 'active' ? 'activo' : 'inactivo'}.`
+        });
+    } catch (error) {
+         console.error("Error toggling judge status:", error);
+         toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar el estado del jurado." });
     }
   }
 
@@ -569,17 +601,63 @@ function AdminDashboard() {
                                         <TableRow>
                                             <TableHead>Nombre</TableHead>
                                             <TableHead>Cédula</TableHead>
+                                            <TableHead className="text-center">Estado</TableHead>
+                                            <TableHead className="text-right">Acciones</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {loadingJudges ? (
                                             <TableRow>
-                                                <TableCell colSpan={2} className="text-center">Cargando jurados...</TableCell>
+                                                <TableCell colSpan={4} className="text-center">Cargando jurados...</TableCell>
                                             </TableRow>
                                         ) : judges.map((judge) => (
                                             <TableRow key={judge.id}>
                                                 <TableCell>{judge.name}</TableCell>
                                                 <TableCell>{judge.cedula}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={judge.status === 'active' ? 'default' : 'destructive'}>
+                                                        {judge.status === 'active' ? 'Activo' : 'Inactivo'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                                <span className="sr-only">Toggle menu</span>
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                            <DropdownMenuItem onClick={() => handleToggleJudgeStatus(judge)}>
+                                                                {judge.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
+                                                                {judge.status === 'active' ? 'Desactivar' : 'Activar'}
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                                        <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                                    </DropdownMenuItem>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            Esta acción eliminará al jurado permanentemente.
+                                                                        </AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteJudge(judge.id)} className="bg-destructive hover:bg-destructive/90">
+                                                                            Eliminar
+                                                                        </AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -786,3 +864,5 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
+
+    

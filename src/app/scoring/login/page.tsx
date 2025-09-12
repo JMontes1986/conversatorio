@@ -58,14 +58,14 @@ export default function JudgeLoginPage() {
         });
         router.push("/scoring");
       } else {
-        throw new Error("Invalid cedula");
+        throw new Error("Invalid cedula or inactive judge");
       }
     } catch (error) {
       console.error("Error signing in: ", error);
       toast({
         variant: "destructive",
         title: "Error de Acceso",
-        description: "El número de cédula no se encuentra registrado. Por favor, contacte al administrador.",
+        description: "Cédula no registrada o jurado inactivo. Contacte al administrador.",
       });
     } finally {
       setIsSubmitting(false);
@@ -109,5 +109,7 @@ export default function JudgeLoginPage() {
     </div>
   );
 }
+
+    
 
     
