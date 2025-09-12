@@ -11,6 +11,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -104,6 +105,7 @@ export default function DebatePage() {
   const { question, questionId, videoUrl, timer, isQrEnabled, sidebarImageUrl, studentQuestionOverlay, questionSize } = debateState;
   const showVideo = !!videoUrl;
   const showQr = isQrEnabled && !!questionId;
+  const liveUrl = getLiveUrl();
   
   const sizeClasses = {
       xs: 'text-2xl md:text-3xl lg:text-4xl',
@@ -168,9 +170,11 @@ export default function DebatePage() {
                         <>
                             <QrCode className="h-8 w-8 text-primary mb-2"/>
                             <h2 className="font-headline text-xl font-bold mb-3">¡Escanea y Pregunta!</h2>
-                            <div className="bg-white p-2 rounded-md">
-                                <QRCodeSVG value={getLiveUrl()} size={200} />
-                            </div>
+                             <Link href={liveUrl} target="_blank" className="cursor-pointer">
+                                <div className="bg-white p-2 rounded-md">
+                                    <QRCodeSVG value={liveUrl} size={200} />
+                                </div>
+                             </Link>
                         </>
                     ) : (
                          <div className="relative w-full h-full">
@@ -203,9 +207,11 @@ export default function DebatePage() {
                      <div className="fixed top-4 right-4 z-20 bg-background/80 backdrop-blur-sm rounded-lg shadow-2xl p-4 flex flex-col items-center text-center animate-in fade-in-50">
                         <QrCode className="h-6 w-6 text-primary mb-1"/>
                         <h2 className="font-headline text-md font-bold mb-2">¡Escanea y Pregunta!</h2>
-                         <div className="bg-white p-1 rounded-md">
-                            <QRCodeSVG value={getLiveUrl()} size={128} />
-                        </div>
+                         <Link href={liveUrl} target="_blank" className="cursor-pointer">
+                            <div className="bg-white p-1 rounded-md">
+                                <QRCodeSVG value={liveUrl} size={128} />
+                            </div>
+                         </Link>
                     </div>
                 )}
                  <div className="fixed bottom-4 right-4 z-20">
