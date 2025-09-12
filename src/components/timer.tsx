@@ -31,8 +31,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   useEffect(() => {
     setTimeRemaining(initialTime);
-    // Resetting active state should be handled by Firestore to ensure sync
-    setIsActive(false);
   }, [initialTime]);
   
   useEffect(() => {
@@ -41,9 +39,10 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        if (data.timer && typeof data.timer.isActive === 'boolean') {
-            setIsActive(data.timer.isActive);
-            // If the timer was reset, sync the time remaining
+        if (data.timer) {
+            if (typeof data.timer.isActive === 'boolean' && data.timer.isActive !== isActive) {
+              setIsActive(data.timer.isActive);
+            }
             if (data.timer.lastUpdated && timeRemaining !== data.timer.duration) {
                 setTimeRemaining(data.timer.duration);
             }
@@ -51,7 +50,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       }
     });
     return () => unsubscribe();
-  }, [timeRemaining]);
+  }, []);
 
 
   useEffect(() => {
@@ -101,6 +100,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     lastUpdated: Date.now()
                 } 
             }, { merge: true });
+            // The local state will be updated by the onSnapshot listener for consistency
         } catch (error) {
             console.error("Error updating timer state in Firestore:", error);
         }
