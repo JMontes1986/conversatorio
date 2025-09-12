@@ -99,3 +99,4 @@ Para ejecutar este proyecto en un entorno de desarrollo local:
 La aplicación estará disponible en `http://localhost:3000`.
 
 <!-- Punto de Restauración No. 2 -->
+<!-- Punto de Restauración No. 3 -->
