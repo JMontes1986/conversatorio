@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -38,6 +39,8 @@ import { Slider } from '@/components/ui/slider';
 import { Progress } from './ui/progress';
 import { nanoid } from 'nanoid';
 import { Switch } from './ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { EditQuestionForm } from './edit-question-form';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -395,6 +398,8 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadingFile, setUploadingFile] = useState<{ file: File, questionId: string } | null>(null);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
     
     const roundsByPhase = useMemo(() => {
         const grouped = debateRounds.reduce((acc: any, round: RoundData) => {
@@ -466,6 +471,11 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         );
     }, [uploadingFile, onUploadComplete]);
 
+    const openEditDialog = (question: Question) => {
+        setSelectedQuestion(question);
+        setIsEditDialogOpen(true);
+    };
+
 
     const questionsByRound = preparedQuestions.reduce((acc: any, q: Question) => {
         (acc[q.round] = acc[q.round] || []).push(q);
@@ -474,6 +484,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
 
 
     return (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <Card>
             <CardHeader>
                 <CardTitle>Gestión de Preguntas y Videos</CardTitle>
@@ -570,24 +581,37 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
 
                                                 <div className="flex items-center justify-end gap-2 pt-2">
                                                     <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button size="sm" variant="ghost" className="text-destructive text-xs h-8 w-8 p-0">
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button size="icon" variant="ghost" className="h-8 w-8">
+                                                                     <PenLine className="h-4 w-4"/>
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent>
+                                                                 <DropdownMenuItem onClick={() => openEditDialog(q)}>
+                                                                    <PenLine className="mr-2 h-4 w-4" /> Editar
+                                                                </DropdownMenuItem>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <DropdownMenuItem className="text-destructive" onSelect={(e) => e.preventDefault()}>
+                                                                        <Trash2 className="mr-2 h-4 w-4"/>Eliminar
+                                                                    </DropdownMenuItem>
+                                                                </AlertDialogTrigger>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                         <AlertDialogContent>
                                                             <AlertDialogHeader>
-                                                            <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Esta acción no se puede deshacer. Se eliminará la pregunta y su video asociado de la lista de preparación.
-                                                            </AlertDialogDescription>
+                                                                <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Esta acción no se puede deshacer. Se eliminará la pregunta de la lista de preparación.
+                                                                </AlertDialogDescription>
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => onDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => onDeleteQuestion(q.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
+                                                    
                                                     <Button size="sm" variant="outline" onClick={() => onSendVideo(q)} disabled={!videoInputs[q.id]}>
                                                         <Video className="mr-2 h-4 w-4" /> Enviar Video
                                                     </Button>
@@ -608,7 +632,20 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                     )}
                </div>
             </CardContent>
+             <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Pregunta</DialogTitle>
+                </DialogHeader>
+                {selectedQuestion && (
+                    <EditQuestionForm 
+                        question={selectedQuestion} 
+                        allRounds={debateRounds}
+                        onFinished={() => setIsEditDialogOpen(false)} 
+                    />
+                )}
+            </DialogContent>
         </Card>
+        </Dialog>
     );
 }
 
@@ -1073,5 +1110,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
-
-    
