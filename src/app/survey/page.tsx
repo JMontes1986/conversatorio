@@ -196,47 +196,51 @@ function PublicSurveyPage() {
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                             {surveyConfig.sections.map((section) => (
-                                <div key={section.id} className="space-y-6 rounded-lg border p-6">
+                                <div key={section.id} className="space-y-6 rounded-lg border p-4 md:p-6">
                                     <h2 className="text-xl font-semibold">{section.title}</h2>
                                     {section.questions.map((question) => (
-                                        <FormField
-                                            key={question.id}
-                                            control={form.control}
-                                            name={question.id}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="font-medium text-base">
-                                                        {question.text}
-                                                        {question.required && <span className="text-destructive"> *</span>}
-                                                    </FormLabel>
-                                                    <FormControl>
-                                                        {question.type === 'rating' ? (
-                                                            <RadioGroup
-                                                                onValueChange={field.onChange}
-                                                                defaultValue={field.value}
-                                                                className="flex flex-wrap items-center justify-center gap-4 pt-2"
-                                                            >
-                                                                {[1, 2, 3, 4, 5].map((value) => (
-                                                                     <FormItem key={value} className="flex flex-col items-center space-y-2">
-                                                                        <FormLabel className="font-normal text-sm">{value}</FormLabel>
-                                                                        <FormControl>
-                                                                            <RadioGroupItem value={String(value)} />
-                                                                        </FormControl>
-                                                                    </FormItem>
-                                                                ))}
-                                                            </RadioGroup>
-                                                        ) : (
-                                                            <Textarea
-                                                                placeholder="Escriba su respuesta aquí..."
-                                                                rows={3}
-                                                                {...field}
-                                                            />
-                                                        )}
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                        <Card key={question.id}>
+                                            <CardContent className="p-4">
+                                                <FormField
+                                                    control={form.control}
+                                                    name={question.id}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="font-medium text-base">
+                                                                {question.text}
+                                                                {question.required && <span className="text-destructive"> *</span>}
+                                                            </FormLabel>
+                                                            <FormControl>
+                                                                {question.type === 'rating' ? (
+                                                                    <RadioGroup
+                                                                        onValueChange={field.onChange}
+                                                                        defaultValue={field.value}
+                                                                        className="flex flex-wrap items-center justify-center gap-4 pt-4"
+                                                                    >
+                                                                        {[1, 2, 3, 4, 5].map((value) => (
+                                                                            <FormItem key={value} className="flex flex-col items-center space-y-2">
+                                                                                <FormLabel className="font-bold text-xl">{value}</FormLabel>
+                                                                                <FormControl>
+                                                                                    <RadioGroupItem value={String(value)} className="h-5 w-5" />
+                                                                                </FormControl>
+                                                                            </FormItem>
+                                                                        ))}
+                                                                    </RadioGroup>
+                                                                ) : (
+                                                                    <Textarea
+                                                                        placeholder="Escriba su respuesta aquí..."
+                                                                        rows={3}
+                                                                        {...field}
+                                                                        className="mt-2"
+                                                                    />
+                                                                )}
+                                                            </FormControl>
+                                                            <FormMessage className="text-center pt-2" />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </CardContent>
+                                        </Card>
                                     ))}
                                 </div>
                             ))}
