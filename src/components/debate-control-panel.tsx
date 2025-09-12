@@ -1096,7 +1096,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-3 space-y-6">
                 <Card>
                     <CardHeader>
                          <CardTitle className="flex items-center justify-between"><span className="flex items-center gap-2"><Video className="h-6 w-6"/> Vista Previa del Debate</span></CardTitle>
@@ -1128,10 +1128,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     </CardContent>
                 </Card>
                 <Tabs defaultValue="round-config">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
+                        <TabsTrigger value="messages"><Send className="mr-2 h-4 w-4"/>Mensajes</TabsTrigger>
                         <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
                     <TabsContent value="round-config">
@@ -1160,6 +1161,33 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                             onProjectQuestion={handleProjectStudentQuestion} 
                             projectedQuestion={projectedStudentQuestion}
                         />
+                    </TabsContent>
+                    <TabsContent value="messages">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
+                                <CardDescription>Muestre un mensaje de texto en la pantalla pública. Esto reemplazará la pregunta o el video.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="temp-message-input">Texto del Mensaje</Label>
+                                    <Textarea 
+                                        id="temp-message-input"
+                                        placeholder="Ej: ¡Sigan nuestras redes sociales!"
+                                        value={tempMessageInput}
+                                        onChange={(e) => setTempMessageInput(e.target.value)}
+                                        rows={2}
+                                    />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2 justify-end pt-2">
+                                    <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage}>
+                                        {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                        Enviar Mensaje
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                     <TabsContent value="display-settings">
                         <div className="grid md:grid-cols-2 gap-6">
@@ -1197,34 +1225,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                         </div>
                     </TabsContent>
                 </Tabs>
-            </div>
-
-            <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
-                        <CardDescription>Muestre un mensaje de texto en la pantalla pública. Esto reemplazará la pregunta o el video.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                         <div className="space-y-2">
-                            <Label htmlFor="temp-message-input">Texto del Mensaje</Label>
-                            <Textarea 
-                                id="temp-message-input"
-                                placeholder="Ej: ¡Sigan nuestras redes sociales!"
-                                value={tempMessageInput}
-                                onChange={(e) => setTempMessageInput(e.target.value)}
-                                rows={2}
-                            />
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 justify-end pt-2">
-                            <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage}>
-                                {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                Enviar Mensaje
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
         </div>
     );
