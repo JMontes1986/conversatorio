@@ -25,7 +25,7 @@ interface DebateState {
   isQrEnabled: boolean;
   sidebarImageUrl?: string;
   studentQuestionOverlay?: string;
-  questionSize?: 'normal' | 'large' | 'xl' | 'xxl';
+  questionSize?: 'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl';
 }
 
 export default function DebatePage() {
@@ -106,6 +106,8 @@ export default function DebatePage() {
   const showQr = isQrEnabled && !!questionId;
   
   const sizeClasses = {
+      xs: 'text-2xl md:text-3xl lg:text-4xl',
+      sm: 'text-3xl md:text-4xl lg:text-5xl',
       normal: 'text-4xl md:text-5xl lg:text-7xl',
       large: 'text-5xl md:text-6xl lg:text-8xl',
       xl: 'text-6xl md:text-7xl lg:text-9xl',

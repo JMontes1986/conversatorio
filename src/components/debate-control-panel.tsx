@@ -800,7 +800,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [sidebarImageUrl, setSidebarImageUrl] = useState("");
     const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<string | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
-    const [tempMessageSize, setTempMessageSize] = useState<'normal' | 'large' | 'xl' | 'xxl'>('normal');
+    const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
@@ -1190,6 +1190,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                                             <SelectValue placeholder="Seleccione un tamaño" />
                                         </SelectTrigger>
                                         <SelectContent>
+                                            <SelectItem value="xs">Muy Pequeña</SelectItem>
+                                            <SelectItem value="sm">Pequeña</SelectItem>
                                             <SelectItem value="normal">Normal</SelectItem>
                                             <SelectItem value="large">Grande</SelectItem>
                                             <SelectItem value="xl">Muy Grande</SelectItem>
@@ -1247,4 +1249,5 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
+
 
