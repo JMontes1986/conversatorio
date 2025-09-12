@@ -66,7 +66,6 @@ export default function DebatePage() {
   }
 
   const { question, questionId, videoUrl, timer, isQrEnabled } = debateState;
-  const showQuestion = question && question !== "Esperando pregunta del moderador...";
   const showVideo = !!videoUrl;
   const showQr = isQrEnabled && !!questionId;
 
