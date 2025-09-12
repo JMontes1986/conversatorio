@@ -144,21 +144,23 @@ export default function DebatePage() {
                             <QRCodeSVG value={getLiveUrl()} size={200} />
                         </div>
                     </div>
-                ) : sidebarImageUrl ? (
-                     <div className="bg-background rounded-lg shadow-2xl p-4 flex flex-col items-center justify-center flex-grow text-center overflow-hidden">
-                        <div className="relative w-full h-full">
-                            <Image
-                                src={sidebarImageUrl}
-                                alt="Imagen de barra lateral"
-                                fill
-                                className="object-contain"
-                            />
-                        </div>
-                    </div>
                 ) : (
-                    <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
-                         <ImageIcon className="h-8 w-8 text-muted-foreground mb-2"/>
-                         <p className="text-sm text-muted-foreground">Espacio de imagen</p>
+                     <div className="bg-background rounded-lg shadow-2xl p-4 flex flex-col items-center justify-center flex-grow text-center overflow-hidden">
+                        {sidebarImageUrl ? (
+                            <div className="relative w-full h-full">
+                                <Image
+                                    src={sidebarImageUrl}
+                                    alt="Imagen de barra lateral"
+                                    fill
+                                    className="object-contain"
+                                />
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center text-muted-foreground">
+                                <ImageIcon className="h-8 w-8 mb-2"/>
+                                <p className="text-sm">Espacio de imagen</p>
+                           </div>
+                        )}
                     </div>
                 )}
             </div>
