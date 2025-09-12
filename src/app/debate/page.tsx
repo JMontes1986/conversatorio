@@ -1,16 +1,16 @@
 
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { Loader2, MessageSquare, QrCode, Zap, XCircle, Image as ImageIcon } from 'lucide-react';
+import { Loader2, QrCode, Zap, XCircle, Image as ImageIcon, Expand, Minimize } from 'lucide-react';
 import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
+import { cn } from '@/lib/utils';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -30,6 +30,7 @@ interface DebateState {
 export default function DebatePage() {
   const [debateState, setDebateState] = useState<DebateState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   useEffect(() => {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -107,17 +108,26 @@ export default function DebatePage() {
             </div>
         )}
 
-        <div className="flex-grow grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+        <div className={cn("flex-grow grid grid-cols-1 gap-6 h-full", !isFullScreen && "lg:grid-cols-4")}>
             
             {/* Main Content: Question or Video */}
-            <div className="lg:col-span-3 bg-background rounded-lg shadow-2xl flex flex-col items-center justify-center p-6 md:p-12 text-center">
+            <div className={cn(
+                "relative bg-background rounded-lg shadow-2xl flex flex-col items-center justify-center p-6 md:p-12 text-center",
+                !isFullScreen && "lg:col-span-3",
+                isFullScreen && "fixed inset-0 z-10 p-12 md:p-20"
+            )}>
+                 <Button variant="ghost" size="icon" className="absolute top-4 right-4 h-10 w-10 text-muted-foreground z-20" onClick={() => setIsFullScreen(!isFullScreen)}>
+                    {isFullScreen ? <Minimize className="h-6 w-6" /> : <Expand className="h-6 w-6" />}
+                    <span className="sr-only">{isFullScreen ? "Minimizar" : "Expandir"}</span>
+                </Button>
+
                  {showVideo ? (
                     <div className="w-full h-full flex items-center justify-center">
                         <VideoEmbed url={videoUrl} />
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full">
-                        <h1 className="font-headline text-3xl md:text-5xl lg:text-7xl font-bold whitespace-pre-wrap">
+                        <h1 className="font-headline text-4xl md:text-5xl lg:text-7xl font-bold whitespace-pre-wrap">
                             {question}
                         </h1>
                     </div>
@@ -125,34 +135,33 @@ export default function DebatePage() {
             </div>
 
             {/* Sidebar: QR Code and Timer */}
-            <div className="flex flex-col gap-6">
-                 {showQr ? (
-                    <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
-                        <QrCode className="h-8 w-8 text-primary mb-2"/>
-                        <h2 className="font-headline text-xl font-bold mb-3">¡Escanea y Pregunta!</h2>
-                         <div className="bg-white p-2 rounded-md">
-                            <QRCodeSVG value={getLiveUrl()} size={200} />
-                        </div>
-                    </div>
-                ) : (
-                     <div className="bg-background rounded-lg shadow-2xl p-4 flex flex-col items-center justify-center flex-grow text-center overflow-hidden">
-                        {sidebarImageUrl ? (
-                            <div className="relative w-full h-full">
-                                <Image
-                                    src={sidebarImageUrl}
-                                    alt="Imagen de barra lateral"
-                                    fill
-                                    className="object-contain"
-                                />
+            {!isFullScreen && (
+              <div className="flex flex-col gap-6">
+                 <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
+                    {showQr ? (
+                        <>
+                            <QrCode className="h-8 w-8 text-primary mb-2"/>
+                            <h2 className="font-headline text-xl font-bold mb-3">¡Escanea y Pregunta!</h2>
+                            <div className="bg-white p-2 rounded-md">
+                                <QRCodeSVG value={getLiveUrl()} size={200} />
                             </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center text-muted-foreground">
-                                <ImageIcon className="h-8 w-8 mb-2"/>
-                                <p className="text-sm">Espacio de imagen</p>
-                           </div>
-                        )}
-                    </div>
-                )}
+                        </>
+                    ) : sidebarImageUrl ? (
+                        <div className="relative w-full h-full">
+                            <Image
+                                src={sidebarImageUrl}
+                                alt="Imagen de barra lateral"
+                                fill
+                                className="object-contain"
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center text-muted-foreground">
+                            <ImageIcon className="h-8 w-8 mb-2"/>
+                            <p className="text-sm">Espacio de imagen</p>
+                        </div>
+                    )}
+                 </div>
                  <div className="bg-background rounded-lg shadow-2xl p-4 flex-shrink-0">
                    <Timer
                         key={timer?.lastUpdated || 0}
@@ -162,9 +171,34 @@ export default function DebatePage() {
                         size="small"
                     />
                 </div>
-            </div>
-
+              </div>
+            )}
         </div>
+        
+        {/* Floating elements for fullscreen mode */}
+        {isFullScreen && (
+            <>
+                {showQr && (
+                     <div className="fixed bottom-4 left-4 z-20 bg-background/80 backdrop-blur-sm rounded-lg shadow-2xl p-4 flex flex-col items-center text-center animate-in fade-in-50">
+                        <QrCode className="h-6 w-6 text-primary mb-1"/>
+                        <h2 className="font-headline text-md font-bold mb-2">¡Escanea y Pregunta!</h2>
+                         <div className="bg-white p-1 rounded-md">
+                            <QRCodeSVG value={getLiveUrl()} size={128} />
+                        </div>
+                    </div>
+                )}
+                 <div className="fixed bottom-4 right-4 z-20">
+                   <Timer
+                        key={`fs-${timer?.lastUpdated || 0}`}
+                        initialTime={timer?.duration || 300}
+                        title="Tiempo Restante"
+                        showControls={false}
+                        size="small"
+                    />
+                </div>
+            </>
+        )}
+
     </div>
   );
 }
