@@ -49,7 +49,6 @@ type SaveStatus = "idle" | "saving" | "saved";
 export function ScheduleEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   
   const form = useForm<FormData>({
@@ -60,30 +59,11 @@ export function ScheduleEditor() {
   const watchedValues = form.watch();
   const [debouncedValues] = useDebounce(watchedValues, 1000);
 
-  useEffect(() => {
-    const docRef = doc(db, 'siteContent', 'schedule');
-    const unsubscribe = onSnapshot(docRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data() as FormData;
-        const sanitizedData = {
-            ...data,
-            day1: data.day1?.map(item => ({ ...item, completed: item.completed ?? false })) || [],
-            day2: data.day2?.map(item => ({ ...item, completed: item.completed ?? false })) || [],
-        };
-        form.reset(sanitizedData, { keepValues: true }); // Use keepValues to avoid flicker
-      } else {
-        form.reset(defaultSchedule);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [form]);
-
   const saveSchedule = useCallback(async (values: FormData) => {
     setSaveStatus("saving");
     try {
       await setDoc(doc(db, 'siteContent', 'schedule'), values);
+      form.reset(values); // Reset the form with the new saved values
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (error) {
@@ -95,12 +75,33 @@ export function ScheduleEditor() {
       });
       setSaveStatus("idle");
     }
-  }, [toast]);
+  }, [toast, form]);
+
+  useEffect(() => {
+    const docRef = doc(db, 'siteContent', 'schedule');
+    const unsubscribe = onSnapshot(docRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data() as Partial<FormData>;
+        const sanitizedData: FormData = {
+            title: data.title || defaultSchedule.title,
+            subtitle: data.subtitle || defaultSchedule.subtitle,
+            imageUrl: data.imageUrl || defaultSchedule.imageUrl,
+            day1: data.day1 && data.day1.length > 0 ? data.day1.map(item => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
+            day2: data.day2 && data.day2.length > 0 ? data.day2.map(item => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
+        };
+        form.reset(sanitizedData);
+      } else {
+        form.reset(defaultSchedule);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [form]);
 
   useEffect(() => {
     if (!loading && form.formState.isDirty) {
       saveSchedule(debouncedValues);
-       form.formState.isDirty = false;
     }
   }, [debouncedValues, loading, form.formState.isDirty, saveSchedule]);
 
