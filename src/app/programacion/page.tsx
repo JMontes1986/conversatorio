@@ -144,12 +144,12 @@ function ScheduleTable({ schedule }: { schedule: ScheduleItem[] }) {
                 </TableHeader>
                 <TableBody>
                     {schedule.map((item) => (
-                    <TableRow key={item.id} className={cn(item.completed && "text-muted-foreground")}>
+                    <TableRow key={item.id}>
                         <TableCell className="font-medium whitespace-nowrap">{formatTimeRange(item.time, item.endTime)}</TableCell>
                         <TableCell>
                             <div className="flex items-center gap-2">
                                 {item.completed && <CheckCircle className="h-4 w-4 text-green-500 shrink-0"/>}
-                                <span className={cn(item.completed && "line-through")}>{item.activity}</span>
+                                <span>{item.activity}</span>
                             </div>
                         </TableCell>
                     </TableRow>
