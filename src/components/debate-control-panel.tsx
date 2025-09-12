@@ -94,6 +94,10 @@ interface StudentQuestion {
     status: 'pending' | 'approved' | 'rejected';
     createdAt: any;
 }
+interface StudentQuestionOverlay {
+    text: string;
+    target: string;
+}
 
 
 function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
@@ -653,7 +657,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     );
 }
 
-function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projectedQuestion }: { allPreparedQuestions: Question[], onProjectQuestion: (text: string) => void, projectedQuestion: string | null }) {
+function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projectedQuestion }: { allPreparedQuestions: Question[], onProjectQuestion: (question: StudentQuestion) => void, projectedQuestion: StudentQuestionOverlay | null }) {
     const { toast } = useToast();
     const [questions, setQuestions] = useState<StudentQuestion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -719,7 +723,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                 {approvedQuestions.length > 0 ? approvedQuestions.map(q => (
                                     <div key={q.id} className={cn(
                                         "p-3 border rounded-lg transition-colors",
-                                        projectedQuestion === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
+                                        projectedQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
                                     )}>
                                         <p className="text-sm font-medium">{q.text}</p>
                                         <p className="text-xs text-muted-foreground mt-1">
@@ -729,7 +733,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                             Relacionada con: "{getRelatedDebateQuestionText(q.relatedDebateQuestionId)}"
                                         </p>
                                         <div className="flex justify-end gap-2 mt-2">
-                                            <Button size="sm" onClick={() => onProjectQuestion(q.text)}><Send className="h-4 w-4 mr-1"/> Proyectar</Button>
+                                            <Button size="sm" onClick={() => onProjectQuestion(q)}><Send className="h-4 w-4 mr-1"/> Proyectar</Button>
                                         </div>
                                     </div>
                                 )) : <p className="text-sm text-muted-foreground text-center py-4">No hay preguntas aprobadas.</p>}
@@ -798,7 +802,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [isQrEnabled, setIsQrEnabled] = useState(false);
     const [sidebarImageUrl, setSidebarImageUrl] = useState("");
-    const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<string | null>(null);
+    const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<StudentQuestionOverlay | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
     const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
@@ -932,11 +936,15 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     }
     
-    const handleProjectStudentQuestion = async (message: string) => {
+    const handleProjectStudentQuestion = async (question: StudentQuestion) => {
+        const overlay: StudentQuestionOverlay = {
+            text: question.text,
+            target: question.targetTeam || 'Ambos'
+        };
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                studentQuestionOverlay: message
+                studentQuestionOverlay: overlay
             }, { merge: true });
             toast({ title: "Pregunta del Público Proyectada" });
         } catch (error) {
@@ -949,7 +957,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                studentQuestionOverlay: ""
+                studentQuestionOverlay: null
             }, { merge: true });
             toast({ title: "Pregunta del Público Ocultada" });
         } catch (error) {
@@ -1119,7 +1127,10 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                                             <HelpCircle className="h-8 w-8 text-primary mx-auto mb-3" />
                                             <h2 className="font-headline text-lg font-bold mb-1">Pregunta del Público</h2>
                                             <p className="text-2xl font-semibold whitespace-pre-wrap">
-                                                "{projectedStudentQuestion}"
+                                                "{projectedStudentQuestion.text}"
+                                            </p>
+                                            <p className="mt-2 text-base text-muted-foreground">
+                                                Para: <span className="font-semibold text-primary">{projectedStudentQuestion.target}</span>
                                             </p>
                                         </div>
                                     </div>
@@ -1249,5 +1260,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
-
-

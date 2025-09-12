@@ -15,6 +15,11 @@ import Link from 'next/link';
 
 const DEBATE_STATE_DOC_ID = "current";
 
+interface StudentQuestionOverlay {
+    text: string;
+    target: string;
+}
+
 interface DebateState {
   question: string;
   questionId: string;
@@ -25,7 +30,7 @@ interface DebateState {
   };
   isQrEnabled: boolean;
   sidebarImageUrl?: string;
-  studentQuestionOverlay?: string;
+  studentQuestionOverlay?: StudentQuestionOverlay | null;
   questionSize?: 'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl';
 }
 
@@ -49,7 +54,7 @@ export default function DebatePage() {
           timer: { duration: 5 * 60, lastUpdated: Date.now() },
           isQrEnabled: false,
           sidebarImageUrl: "",
-          studentQuestionOverlay: "",
+          studentQuestionOverlay: null,
           questionSize: 'normal',
         });
       }
@@ -86,7 +91,7 @@ export default function DebatePage() {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                studentQuestionOverlay: ""
+                studentQuestionOverlay: null
             }, { merge: true });
         } catch (error) {
             console.error("Error clearing student question:", error);
@@ -122,15 +127,18 @@ export default function DebatePage() {
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
-                <div className="bg-background rounded-lg shadow-2xl p-8 max-w-3xl w-full text-center animate-in fade-in-50 zoom-in-95 relative">
+                <div className="bg-background rounded-lg shadow-2xl p-8 max-w-4xl w-full text-center animate-in fade-in-50 zoom-in-95 relative">
                      <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-8 w-8 text-muted-foreground" onClick={handleClearStudentQuestion}>
                         <XCircle className="h-5 w-5" />
                         <span className="sr-only">Cerrar</span>
                     </Button>
                     <Zap className="h-10 w-10 text-primary mx-auto mb-4" />
                     <h2 className="font-headline text-2xl font-bold mb-2">Pregunta del Público</h2>
-                    <p className="text-3xl font-semibold whitespace-pre-wrap">
-                        "{studentQuestionOverlay}"
+                    <p className="text-3xl lg:text-4xl font-semibold whitespace-pre-wrap">
+                        "{studentQuestionOverlay.text}"
+                    </p>
+                    <p className="mt-4 text-lg text-muted-foreground font-medium">
+                        Para: <span className="font-bold text-primary">{studentQuestionOverlay.target}</span>
                     </p>
                 </div>
             </div>
