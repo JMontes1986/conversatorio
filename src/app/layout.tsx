@@ -7,6 +7,8 @@ import { AuthProvider } from '@/context/auth-context';
 import { JudgeProvider } from '@/context/judge-auth-context';
 import { ModeratorProvider } from '@/context/moderator-auth-context';
 import './globals.css';
+import { inter, spaceGrotesk } from './fonts';
+import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Conversatorio Colgemelli',
@@ -47,11 +49,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="scroll-smooth">
+    <html lang="es" className={cn("scroll-smooth", inter.variable, spaceGrotesk.variable)}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
