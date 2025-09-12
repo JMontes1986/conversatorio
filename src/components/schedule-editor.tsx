@@ -12,10 +12,9 @@ import { Loader2, Trash2, PlusCircle, Save, CheckCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { nanoid } from "nanoid";
 import { Switch } from "./ui/switch";
-import { useDebounce } from "use-debounce";
 import { Badge } from "./ui/badge";
 
 const scheduleItemSchema = z.object({
@@ -64,6 +63,7 @@ export function ScheduleEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const isInitialLoad = useRef(true);
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -71,10 +71,8 @@ export function ScheduleEditor() {
   });
   
   const watchedValues = form.watch();
-  const [debouncedValues] = useDebounce(watchedValues, 1000);
 
   const saveSchedule = useCallback(async (values: FormData) => {
-    if (!form.formState.isDirty) return;
     setSaveStatus("saving");
     try {
       await setDoc(doc(db, 'siteContent', 'schedule'), values);
@@ -89,7 +87,7 @@ export function ScheduleEditor() {
       });
       setSaveStatus("idle");
     }
-  }, [toast, form.formState.isDirty]);
+  }, [toast]);
 
   useEffect(() => {
     const docRef = doc(db, 'siteContent', 'schedule');
@@ -105,16 +103,26 @@ export function ScheduleEditor() {
         form.reset(defaultSchedule);
       }
       setLoading(false);
+      // Set a flag to indicate the initial data load is complete.
+      setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 50);
     });
 
     return () => unsubscribe();
   }, [form]);
-
+  
   useEffect(() => {
-    if (!loading && form.formState.isDirty) {
-      saveSchedule(debouncedValues);
-    }
-  }, [debouncedValues, loading, form.formState.isDirty, saveSchedule]);
+    // Don't save on initial load or while loading.
+    if (isInitialLoad.current || loading) return;
+
+    const subscription = form.watch((value, { name, type }) => {
+      if (type === 'change') {
+         saveSchedule(value as FormData);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, saveSchedule, loading]);
 
 
   if (loading) {
@@ -158,6 +166,15 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     control,
     name: day
   });
+  
+  const [debouncedAppend] = React.useCallback(
+    debounce((data) => append(data), 300),
+    [append]
+  );
+  
+  const handleAppend = () => {
+    debouncedAppend({ id: nanoid(), time: "", endTime: "", activity: "", completed: false })
+  }
 
   return (
     <div className="space-y-4 rounded-md border p-4">
@@ -167,7 +184,7 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append({ id: nanoid(), time: "", endTime: "", activity: "", completed: false })}
+          onClick={handleAppend}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Añadir Actividad
         </Button>
@@ -245,3 +262,17 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     </div>
   );
 }
+
+// Simple debounce function
+function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  return (...args: Parameters<F>): void => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => func(...args), waitFor);
+  };
+}
+
+    
