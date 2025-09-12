@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /moderator/
+Disallow: /scoring/
+Disallow: /register/
+
+Sitemap: https://conversatorio-colgemelli.web.app/sitemap.xml
