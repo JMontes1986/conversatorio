@@ -45,6 +45,7 @@ import { BracketEditor } from '@/components/bracket-editor';
 import { SurveyManagement } from '@/components/survey-management';
 import { ScheduleEditor } from '@/components/schedule-editor';
 import { AdminNav } from '@/components/admin-nav';
+import { cn } from '@/lib/utils';
 
 
 interface SchoolData {
@@ -88,6 +89,8 @@ interface MatchResults {
 function AdminDashboard() {
   const { toast } = useToast();
   const [activeView, setActiveView] = useState("home");
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [judges, setJudges] = useState<JudgeData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
@@ -689,9 +692,17 @@ function AdminDashboard() {
 
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
-        <div className="grid md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr] gap-6">
+        <div className={cn(
+            "grid gap-6 transition-all duration-300",
+            isCollapsed ? "md:grid-cols-[70px_1fr]" : "md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]"
+        )}>
             <aside>
-                <AdminNav activeView={activeView} setActiveView={setActiveView} />
+                <AdminNav 
+                    isCollapsed={isCollapsed} 
+                    setIsCollapsed={setIsCollapsed} 
+                    activeView={activeView} 
+                    setActiveView={setActiveView} 
+                />
             </aside>
             <main>
                 <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>

@@ -16,8 +16,12 @@ import {
     User, 
     KeyRound, 
     Gavel, 
-    Trophy 
+    Trophy,
+    PanelLeftClose,
+    PanelRightClose
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { Separator } from "./ui/separator";
 
 const navItems = [
     { id: "home", label: "Home", icon: Home },
@@ -39,49 +43,86 @@ const settingsNavItems = [
 ];
 
 interface AdminNavProps {
+    isCollapsed: boolean;
+    setIsCollapsed: (collapsed: boolean) => void;
     activeView: string;
     setActiveView: (view: string) => void;
 }
 
-export function AdminNav({ activeView, setActiveView }: AdminNavProps) {
+export function AdminNav({ isCollapsed, setIsCollapsed, activeView, setActiveView }: AdminNavProps) {
+    const NavLink = ({ item }: { item: typeof navItems[0] }) => {
+        const linkContent = (
+            <>
+                <item.icon className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+                <span className={cn("truncate", isCollapsed && "hidden")}>{item.label}</span>
+            </>
+        );
+
+        if (isCollapsed) {
+            return (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant={activeView === item.id ? "secondary" : "ghost"}
+                            className={cn("justify-center", activeView === item.id && "font-bold")}
+                            size="icon"
+                            onClick={() => setActiveView(item.id)}
+                        >
+                            {linkContent}
+                            <span className="sr-only">{item.label}</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                        <p>{item.label}</p>
+                    </TooltipContent>
+                </Tooltip>
+            );
+        }
+
+        return (
+            <Button
+                variant={activeView === item.id ? "secondary" : "ghost"}
+                className={cn("justify-start", activeView === item.id && "font-bold")}
+                onClick={() => setActiveView(item.id)}
+            >
+                {linkContent}
+            </Button>
+        );
+    };
+
     return (
-        <nav className="flex flex-col gap-4">
-             <div className="flex flex-col gap-1">
-                {navItems.map((item) => (
-                    <Button
-                        key={item.id}
-                        variant={activeView === item.id ? "secondary" : "ghost"}
-                        className={cn(
-                            "justify-start",
-                            activeView === item.id && "font-bold"
-                        )}
-                        onClick={() => setActiveView(item.id)}
+        <TooltipProvider delayDuration={0}>
+            <nav className="flex flex-col gap-4 h-full">
+                <div className="flex-grow flex flex-col gap-1">
+                    {navItems.map((item) => (
+                        <NavLink key={item.id} item={item} />
+                    ))}
+                    
+                    <Separator className={cn("my-4", isCollapsed && "my-2")} />
+
+                    {!isCollapsed && (
+                         <h3 className="px-4 text-xs font-semibold text-muted-foreground tracking-wider uppercase mb-2">
+                            Ajustes
+                        </h3>
+                    )}
+                    {settingsNavItems.map((item) => (
+                        <NavLink key={item.id} item={item} />
+                    ))}
+                </div>
+                 <div className="mt-auto">
+                    <Separator className="my-2" />
+                     <Button
+                        variant="ghost"
+                        className={cn("w-full", isCollapsed ? "justify-center" : "justify-start")}
+                        size={isCollapsed ? 'icon' : 'default'}
+                        onClick={() => setIsCollapsed(!isCollapsed)}
                     >
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {item.label}
+                         {isCollapsed ? <PanelRightClose /> : <PanelLeftClose />}
+                         <span className={cn("ml-2", isCollapsed && "hidden")}>Colapsar</span>
+                         <span className="sr-only">{isCollapsed ? 'Expandir' : 'Colapsar'}</span>
                     </Button>
-                ))}
-            </div>
-             <div className="flex flex-col gap-1">
-                 <h3 className="px-4 text-xs font-semibold text-muted-foreground tracking-wider uppercase mt-4 mb-2">
-                    Ajustes de Usuarios y Competencia
-                </h3>
-                {settingsNavItems.map((item) => (
-                    <Button
-                        key={item.id}
-                        variant={activeView === item.id ? "secondary" : "ghost"}
-                        className={cn(
-                            "justify-start",
-                            activeView === item.id && "font-bold"
-                        )}
-                        onClick={() => setActiveView(item.id)}
-                    >
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {item.label}
-                    </Button>
-                ))}
-            </div>
-        </nav>
+                </div>
+            </nav>
+        </TooltipProvider>
     );
 }
-
