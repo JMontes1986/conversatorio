@@ -39,7 +39,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       if (doc.exists()) {
         const data = doc.data();
         if (data.timer) {
-            if (typeof data.timer.isActive === 'boolean' && data.timer.isActive !== isActive) {
+            if (typeof data.timer.isActive === 'boolean') {
               setIsActive(data.timer.isActive);
             }
             if (data.timer.lastUpdated) {
@@ -50,8 +50,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       }
     });
     return () => unsubscribe();
-    // Intentionally not depending on isActive to avoid re-subscribing on every state change.
-    // We want one subscription that SYNCs the local state from Firestore.
   }, []);
 
 
@@ -62,7 +60,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         setTimeRemaining((time) => time - 1);
       }, 1000);
     } else if (timeRemaining <= 0 && isActive) {
-      // Only the moderator's panel should be able to stop the timer and play the sound
       if (showControls) {
           toggleTimer(); 
           playSound();
@@ -91,14 +88,13 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     }
     const newIsActive = !isActive;
 
-    // The moderator panel is the source of truth, it writes the new state to Firestore
     if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 timer: { 
                     isActive: newIsActive,
-                    duration: timeRemaining, // Use the current time when pausing/stopping
+                    duration: timeRemaining > 0 ? timeRemaining : 0, // Use the current time when pausing/stopping
                     lastUpdated: Date.now()
                 } 
             }, { merge: true });
@@ -109,7 +105,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   };
 
   const resetTimer = async () => {
-    // Moderator is the only one who can reset
     if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
