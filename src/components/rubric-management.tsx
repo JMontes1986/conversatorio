@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -98,7 +99,7 @@ export function RubricManagement() {
 
     return (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-1">
                     <Card>
                         <CardHeader>
