@@ -800,6 +800,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [sidebarImageUrl, setSidebarImageUrl] = useState("");
     const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<string | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
+    const [tempMessageSize, setTempMessageSize] = useState<'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
@@ -891,6 +892,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 question: question.text,
                 questionId: question.id,
                 videoUrl: "", 
+                questionSize: 'normal',
             }, { merge: true });
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
@@ -921,6 +923,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 question: "Esperando pregunta del moderador...",
                 questionId: "",
                 videoUrl: "",
+                questionSize: 'normal',
             }, { merge: true });
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
         } catch (error) {
@@ -966,7 +969,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
              setDoc(docRef, { 
                 question: tempMessageInput,
                 questionId: "",
-                videoUrl: ""
+                videoUrl: "",
+                questionSize: tempMessageSize,
             }, { merge: true });
             toast({ title: "Mensaje Temporal Enviado" });
             setTempMessageInput("");
@@ -1178,6 +1182,20 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                                         onChange={(e) => setTempMessageInput(e.target.value)}
                                         rows={2}
                                     />
+                                </div>
+                                <div className="space-y-2">
+                                     <Label htmlFor="temp-message-size">Tamaño de la Letra</Label>
+                                      <Select onValueChange={(value) => setTempMessageSize(value as any)} defaultValue={tempMessageSize}>
+                                        <SelectTrigger id="temp-message-size">
+                                            <SelectValue placeholder="Seleccione un tamaño" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="normal">Normal</SelectItem>
+                                            <SelectItem value="large">Grande</SelectItem>
+                                            <SelectItem value="xl">Muy Grande</SelectItem>
+                                            <SelectItem value="xxl">Gigante</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div className="flex flex-wrap gap-2 justify-end pt-2">

@@ -25,6 +25,7 @@ interface DebateState {
   isQrEnabled: boolean;
   sidebarImageUrl?: string;
   studentQuestionOverlay?: string;
+  questionSize?: 'normal' | 'large' | 'xl' | 'xxl';
 }
 
 export default function DebatePage() {
@@ -47,7 +48,8 @@ export default function DebatePage() {
           timer: { duration: 5 * 60, lastUpdated: Date.now() },
           isQrEnabled: false,
           sidebarImageUrl: "",
-          studentQuestionOverlay: ""
+          studentQuestionOverlay: "",
+          questionSize: 'normal',
         });
       }
       setLoading(false);
@@ -99,9 +101,17 @@ export default function DebatePage() {
     );
   }
 
-  const { question, questionId, videoUrl, timer, isQrEnabled, sidebarImageUrl, studentQuestionOverlay } = debateState;
+  const { question, questionId, videoUrl, timer, isQrEnabled, sidebarImageUrl, studentQuestionOverlay, questionSize } = debateState;
   const showVideo = !!videoUrl;
   const showQr = isQrEnabled && !!questionId;
+  
+  const sizeClasses = {
+      normal: 'text-4xl md:text-5xl lg:text-7xl',
+      large: 'text-5xl md:text-6xl lg:text-8xl',
+      xl: 'text-6xl md:text-7xl lg:text-9xl',
+      xxl: 'text-7xl md:text-8xl lg:text-9xl tracking-tighter',
+  };
+
 
   return (
     <div className="relative flex flex-col h-screen bg-secondary text-foreground p-4 md:p-8 overflow-hidden">
@@ -141,7 +151,7 @@ export default function DebatePage() {
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full">
-                        <h1 className="font-headline text-4xl md:text-5xl lg:text-7xl font-bold whitespace-pre-wrap">
+                        <h1 className={cn("font-headline font-bold whitespace-pre-wrap", sizeClasses[questionSize || 'normal'])}>
                             {question}
                         </h1>
                     </div>
