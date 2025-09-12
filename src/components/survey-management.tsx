@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send, TrendingUp, TrendingDown, FileDown } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send, TrendingUp, TrendingDown, FileDown, Printer } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -387,6 +387,75 @@ export function SurveyManagement() {
         document.body.removeChild(link);
     };
 
+    const handleDownloadSurveyTemplate = () => {
+        const doc = new jsPDF();
+        const survey = form.getValues();
+        const margin = 15;
+        let y = margin + 10;
+
+        doc.setFontSize(18);
+        doc.setFont("helvetica", "bold");
+        doc.text(survey.title, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
+        y += 8;
+
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "normal");
+        const subtitleLines = doc.splitTextToSize(survey.subtitle, doc.internal.pageSize.getWidth() - margin * 2);
+        doc.text(subtitleLines, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
+        y += subtitleLines.length * 5 + 10;
+
+        survey.sections.forEach(section => {
+            if (y > 260) {
+                doc.addPage();
+                y = margin;
+            }
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text(section.title, margin, y);
+            y += 8;
+
+            section.questions.forEach(question => {
+                if (y > 270) {
+                    doc.addPage();
+                    y = margin;
+                }
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "normal");
+                const questionText = `${question.text}${question.required ? " *" : ""}`;
+                const questionLines = doc.splitTextToSize(questionText, doc.internal.pageSize.getWidth() - margin * 2);
+                doc.text(questionLines, margin, y);
+                y += questionLines.length * 5;
+
+                if (question.type === 'rating') {
+                    y += 4;
+                    const boxSize = 6;
+                    const boxMargin = 4;
+                    const startX = margin + 50;
+                    doc.setFontSize(10);
+                    for (let i = 1; i <= 5; i++) {
+                        doc.rect(startX + (i - 1) * (boxSize + boxMargin), y - 2, boxSize, boxSize);
+                        doc.text(String(i), startX + (i - 1) * (boxSize + boxMargin) + (boxSize/2) , y + boxSize + 2, {align: 'center'});
+                    }
+                    y += 12;
+                } else if (question.type === 'text') {
+                    y += 2;
+                    const lineHeight = 7;
+                    for (let i = 0; i < 3; i++) {
+                        if (y > 280) {
+                             doc.addPage();
+                             y = margin;
+                        }
+                        doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y);
+                        y += lineHeight;
+                    }
+                    y += 5;
+                }
+            });
+             y += 5;
+        });
+
+        doc.save("plantilla_encuesta.pdf");
+    }
 
 
   if (loading) {
@@ -546,6 +615,9 @@ export function SurveyManagement() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <CardTitle className="flex items-center gap-2"><BarChart className="h-6 w-6"/>Dashboard de Resultados ({responses.length} respuestas)</CardTitle>
                         <div className="flex gap-2">
+                             <Button variant="outline" size="sm" onClick={handleDownloadSurveyTemplate}>
+                                <Printer className="mr-2 h-4 w-4" /> Imprimir Encuesta
+                            </Button>
                              <Button variant="outline" size="sm" onClick={handleDownloadCSV} disabled={responses.length === 0}>
                                 <FileDown className="mr-2 h-4 w-4" /> CSV
                             </Button>
@@ -730,3 +802,4 @@ function QuestionFields({ control, sectionIndex }: { control: Control<FormData>,
     
 
     
+
