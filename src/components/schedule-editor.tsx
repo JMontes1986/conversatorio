@@ -167,7 +167,7 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     name: day
   });
   
-  const [debouncedAppend] = React.useCallback(
+  const debouncedAppend = React.useCallback(
     debounce((data) => append(data), 300),
     [append]
   );
