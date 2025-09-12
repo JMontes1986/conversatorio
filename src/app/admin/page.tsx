@@ -561,43 +561,25 @@ function AdminDashboard() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>Jurados Registrados</CardTitle>
-                                <CardDescription>Lista de jurados para la competencia.</CardDescription>
+                                <CardDescription>Lista de todos los jurados disponibles para la competencia.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[80px]">#</TableHead>
                                             <TableHead>Nombre</TableHead>
                                             <TableHead>Cédula</TableHead>
-                                            <TableHead><span className="sr-only">Acciones</span></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {loadingJudges ? (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="text-center">Cargando jurados...</TableCell>
+                                                <TableCell colSpan={2} className="text-center">Cargando jurados...</TableCell>
                                             </TableRow>
-                                        ) : judges.map((judge, index) => (
+                                        ) : judges.map((judge) => (
                                             <TableRow key={judge.id}>
-                                                <TableCell className="font-medium">Jurado {index + 1}</TableCell>
                                                 <TableCell>{judge.name}</TableCell>
                                                 <TableCell>{judge.cedula}</TableCell>
-                                                <TableCell>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                <span className="sr-only">Toggle menu</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                            <DropdownMenuItem><FilePen className="mr-2 h-4 w-4"/>Editar</DropdownMenuItem>
-                                                            <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4"/>Eliminar</DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
