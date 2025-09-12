@@ -7,8 +7,9 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle } from "lucide-react";
 import { format, parse } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 
 interface ScheduleItem {
@@ -16,6 +17,7 @@ interface ScheduleItem {
   time: string;
   endTime: string;
   activity: string;
+  completed?: boolean;
 }
 
 interface ScheduleData {
@@ -25,26 +27,26 @@ interface ScheduleData {
 
 const defaultSchedule: ScheduleData = {
   day1: [
-    { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida" },
-    { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura" },
-    { id: 'd1-3', time: "09:00", endTime: "10:00", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)" },
-    { id: 'd1-4', time: "10:00", endTime: "10:15", activity: "Receso" },
-    { id: 'd1-5', time: "10:15", endTime: "11:15", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)" },
-    { id: 'd1-6', time: "11:15", endTime: "12:15", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)" },
-    { id: 'd1-7', time: "12:15", endTime: "13:30", activity: "Almuerzo" },
-    { id: 'd1-8', time: "13:30", endTime: "14:30", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)" },
-    { id: 'd1-9', time: "14:30", endTime: "15:00", activity: "Anuncio de Clasificados a Cuartos de Final" },
+    { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
+    { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
+    { id: 'd1-3', time: "09:00", endTime: "10:00", activity: "Fase de Grupos - Ronda 1 (Grupo A vs Grupo B)", completed: false },
+    { id: 'd1-4', time: "10:00", endTime: "10:15", activity: "Receso", completed: false },
+    { id: 'd1-5', time: "10:15", endTime: "11:15", activity: "Fase de Grupos - Ronda 2 (Grupo C vs Grupo D)", completed: false },
+    { id: 'd1-6', time: "11:15", endTime: "12:15", activity: "Fase de Grupos - Ronda 3 (Grupo A vs Grupo C)", completed: false },
+    { id: 'd1-7', time: "12:15", endTime: "13:30", activity: "Almuerzo", completed: false },
+    { id: 'd1-8', time: "13:30", endTime: "14:30", activity: "Fase de Grupos - Ronda 4 (Grupo B vs Grupo D)", completed: false },
+    { id: 'd1-9', time: "14:30", endTime: "15:00", activity: "Anuncio de Clasificados a Cuartos de Final", completed: false },
   ],
   day2: [
-    { id: 'd2-1', time: "09:00", endTime: "10:00", activity: "Cuartos de Final - Enfrentamiento 1" },
-    { id: 'd2-2', time: "10:00", endTime: "11:00", activity: "Cuartos de Final - Enfrentamiento 2" },
-    { id: 'd2-3', time: "11:00", endTime: "11:15", activity: "Receso" },
-    { id: 'd2-4', time: "11:15", endTime: "12:15", activity: "Semifinal 1" },
-    { id: 'd2-5', time: "12:15", endTime: "13:15", activity: "Semifinal 2" },
-    { id: 'd2-6', time: "13:15", endTime: "14:30", activity: "Almuerzo" },
-    { id: 'd2-7', time: "14:30", endTime: "16:00", activity: "GRAN FINAL" },
-    { id: 'd2-8', time: "16:00", endTime: "16:30", activity: "Deliberación del Jurado" },
-    { id: 'd2-9', time: "16:30", endTime: "17:00", activity: "Ceremonia de Premiación y Clausura" },
+    { id: 'd2-1', time: "09:00", endTime: "10:00", activity: "Cuartos de Final - Enfrentamiento 1", completed: false },
+    { id: 'd2-2', time: "10:00", endTime: "11:00", activity: "Cuartos de Final - Enfrentamiento 2", completed: false },
+    { id: 'd2-3', time: "11:00", endTime: "11:15", activity: "Receso", completed: false },
+    { id: 'd2-4', time: "11:15", endTime: "12:15", activity: "Semifinal 1", completed: false },
+    { id: 'd2-5', time: "12:15", endTime: "13:15", activity: "Semifinal 2", completed: false },
+    { id: 'd2-6', time: "13:15", endTime: "14:30", activity: "Almuerzo", completed: false },
+    { id: 'd2-7', time: "14:30", endTime: "16:00", activity: "GRAN FINAL", completed: false },
+    { id: 'd2-8', time: "16:00", endTime: "16:30", activity: "Deliberación del Jurado", completed: false },
+    { id: 'd2-9', time: "16:30", endTime: "17:00", activity: "Ceremonia de Premiación y Clausura", completed: false },
   ]
 };
 
@@ -142,9 +144,14 @@ function ScheduleTable({ schedule }: { schedule: ScheduleItem[] }) {
                 </TableHeader>
                 <TableBody>
                     {schedule.map((item) => (
-                    <TableRow key={item.id}>
+                    <TableRow key={item.id} className={cn(item.completed && "text-muted-foreground")}>
                         <TableCell className="font-medium whitespace-nowrap">{formatTimeRange(item.time, item.endTime)}</TableCell>
-                        <TableCell>{item.activity}</TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-2">
+                                {item.completed && <CheckCircle className="h-4 w-4 text-green-500 shrink-0"/>}
+                                <span className={cn(item.completed && "line-through")}>{item.activity}</span>
+                            </div>
+                        </TableCell>
                     </TableRow>
                     ))}
                 </TableBody>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,14 @@ import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
 import { nanoid } from "nanoid";
+import { Switch } from "./ui/switch";
 
 const scheduleItemSchema = z.object({
   id: z.string(),
   time: z.string().min(1, "La hora de inicio es requerida."),
   endTime: z.string().min(1, "La hora de finalización es requerida."),
   activity: z.string().min(3, "La actividad es requerida."),
+  completed: z.boolean().optional(),
 });
 
 const formSchema = z.object({
@@ -31,12 +33,12 @@ type FormData = z.infer<typeof formSchema>;
 
 const defaultSchedule: FormData = {
   day1: [
-    { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida" },
-    { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura" },
+    { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
+    { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
   ],
   day2: [
-    { id: 'd2-1', time: "09:00", endTime: "10:00", activity: "Cuartos de Final - Enfrentamiento 1" },
-    { id: 'd2-2', time: "10:00", endTime: "11:00", activity: "Cuartos de Final - Enfrentamiento 2" },
+    { id: 'd2-1', time: "09:00", endTime: "10:00", activity: "Cuartos de Final - Enfrentamiento 1", completed: false },
+    { id: 'd2-2', time: "10:00", endTime: "11:00", activity: "Cuartos de Final - Enfrentamiento 2", completed: false },
   ]
 };
 
@@ -131,14 +133,31 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append({ id: nanoid(), time: "", endTime: "", activity: "" })}
+          onClick={() => append({ id: nanoid(), time: "", endTime: "", activity: "", completed: false })}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Añadir Actividad
         </Button>
       </div>
       <div className="space-y-4">
         {fields.map((field, index) => (
-          <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-4 items-start bg-secondary/30 p-3 rounded-md">
+          <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-4 items-center bg-secondary/30 p-3 rounded-md relative">
+             <div className="absolute top-2 right-12">
+                 <FormField
+                    control={control}
+                    name={`${day}.${index}.completed`}
+                    render={({ field }) => (
+                         <FormItem className="flex items-center space-x-2">
+                             <FormControl>
+                                <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                />
+                            </FormControl>
+                            <FormLabel className="text-xs">Completado</FormLabel>
+                        </FormItem>
+                    )}
+                    />
+             </div>
             <div className="grid grid-cols-2 gap-2">
                 <FormField
                 control={control}
