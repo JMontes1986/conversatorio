@@ -130,7 +130,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       .padStart(2, "0")}`;
   };
 
-  const progress = (timeRemaining / initialTime) * 100;
+  const progress = initialTime > 0 ? (timeRemaining / initialTime) * 100 : 0;
 
   if (size === 'small') {
       return (
