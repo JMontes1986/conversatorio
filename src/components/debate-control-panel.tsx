@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -650,7 +651,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
     );
 }
 
-function StudentQuestionsTab({ allPreparedQuestions, onSendTempMessage }: { allPreparedQuestions: Question[], onSendTempMessage: (text: string) => void }) {
+function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion }: { allPreparedQuestions: Question[], onProjectQuestion: (text: string) => void }) {
     const { toast } = useToast();
     const [questions, setQuestions] = useState<StudentQuestion[]>([]);
     const [loading, setLoading] = useState(true);
@@ -676,10 +677,6 @@ function StudentQuestionsTab({ allPreparedQuestions, onSendTempMessage }: { allP
     
     const getRelatedDebateQuestionText = (relatedId: string) => {
         return allPreparedQuestions.find(q => q.id === relatedId)?.text || "Pregunta General";
-    }
-    
-    const handleProjectQuestion = (text: string) => {
-        onSendTempMessage(text);
     }
     
     const pendingQuestions = questions.filter(q => q.status === 'pending');
@@ -727,7 +724,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onSendTempMessage }: { allP
                                             Relacionada con: "{getRelatedDebateQuestionText(q.relatedDebateQuestionId)}"
                                         </p>
                                         <div className="flex justify-end gap-2 mt-2">
-                                            <Button size="sm" onClick={() => handleProjectQuestion(q.text)}><Send className="h-4 w-4 mr-1"/> Proyectar</Button>
+                                            <Button size="sm" onClick={() => onProjectQuestion(q.text)}><Send className="h-4 w-4 mr-1"/> Proyectar</Button>
                                         </div>
                                     </div>
                                 )) : <p className="text-sm text-muted-foreground text-center py-4">No hay preguntas aprobadas.</p>}
@@ -874,21 +871,29 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     }
     
-    const sendTempMessage = async (message: string) => {
-        setIsSendingTempMessage(true);
+    const handleProjectStudentQuestion = async (message: string) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                question: message, // Use question field to display temp message
-                questionId: "",
-                videoUrl: ""
+                studentQuestionOverlay: message
             }, { merge: true });
-            toast({ title: "Mensaje Temporal Enviado" });
+            toast({ title: "Pregunta del Público Proyectada" });
         } catch (error) {
-            console.error("Error sending temporary message:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el mensaje." });
-        } finally {
-            setIsSendingTempMessage(false);
+            console.error("Error projecting student question:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo proyectar la pregunta." });
+        }
+    };
+
+     const handleClearStudentQuestion = async () => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                studentQuestionOverlay: ""
+            }, { merge: true });
+            toast({ title: "Pregunta del Público Ocultada" });
+        } catch (error) {
+            console.error("Error clearing student question:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo ocultar la pregunta." });
         }
     };
 
@@ -897,8 +902,22 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             toast({ variant: "destructive", title: "Error", description: "El mensaje no puede estar vacío." });
             return;
         }
-        sendTempMessage(tempMessageInput);
-        setTempMessageInput("");
+        setIsSendingTempMessage(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+             setDoc(docRef, { 
+                question: tempMessageInput,
+                questionId: "",
+                videoUrl: ""
+            }, { merge: true });
+            toast({ title: "Mensaje Temporal Enviado" });
+            setTempMessageInput("");
+        } catch (error) {
+             console.error("Error sending temporary message:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el mensaje." });
+        } finally {
+            setIsSendingTempMessage(false);
+        }
     }
     
     const handleToggleQr = async (enabled: boolean) => {
@@ -1054,7 +1073,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     onSendVideo={handleSendVideo}
                     onUploadComplete={handleUploadComplete}
                 />
-                 <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onSendTempMessage={sendTempMessage} />
+                 <StudentQuestionsTab allPreparedQuestions={preparedQuestions} onProjectQuestion={handleProjectStudentQuestion} />
 
             </div>
 
@@ -1072,19 +1091,19 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                        </div>
                         <div className="space-y-2 rounded-lg border p-3">
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="qr-switch" className="font-medium">Habilitar QR para Preguntas del Público</Label>
+                                <Label htmlFor="qr-switch" className="font-medium">Habilitar QR para Preguntas</Label>
                                  <Switch
                                     id="qr-switch"
                                     checked={isQrEnabled}
                                     onCheckedChange={handleToggleQr}
                                 />
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                                Si está activo, el QR aparecerá junto a la pregunta en la pantalla de debate.
-                            </p>
+                             <Button variant="outline" size="sm" className="w-full mt-2" onClick={handleClearStudentQuestion}>
+                                <EyeOff className="mr-2 h-4 w-4"/> Ocultar Pregunta del Público
+                            </Button>
                         </div>
                         <Button variant="outline" size="sm" className="w-full" onClick={handleClearScreen}>
-                            <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Pública
+                            <RefreshCw className="mr-2 h-4 w-4"/> Limpiar Pantalla Principal
                        </Button>
                     </CardContent>
                 </Card>

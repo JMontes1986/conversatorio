@@ -1,10 +1,11 @@
 
+
 "use client";
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Loader2, MessageSquare, QrCode } from 'lucide-react';
+import { Loader2, MessageSquare, QrCode, Zap } from 'lucide-react';
 import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
@@ -20,6 +21,7 @@ interface DebateState {
     lastUpdated: number;
   };
   isQrEnabled: boolean;
+  studentQuestionOverlay?: string;
 }
 
 export default function DebatePage() {
@@ -40,6 +42,7 @@ export default function DebatePage() {
           videoUrl: "",
           timer: { duration: 5 * 60, lastUpdated: Date.now() },
           isQrEnabled: false,
+          studentQuestionOverlay: ""
         });
       }
       setLoading(false);
@@ -65,12 +68,25 @@ export default function DebatePage() {
     );
   }
 
-  const { question, questionId, videoUrl, timer, isQrEnabled } = debateState;
+  const { question, questionId, videoUrl, timer, isQrEnabled, studentQuestionOverlay } = debateState;
   const showVideo = !!videoUrl;
   const showQr = isQrEnabled && !!questionId;
 
   return (
-    <div className="flex flex-col h-screen bg-secondary text-foreground p-4 md:p-8 overflow-hidden">
+    <div className="relative flex flex-col h-screen bg-secondary text-foreground p-4 md:p-8 overflow-hidden">
+        {/* Student Question Overlay */}
+        {studentQuestionOverlay && (
+             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
+                <div className="bg-background rounded-lg shadow-2xl p-8 max-w-3xl w-full text-center animate-in fade-in-50 zoom-in-95">
+                    <Zap className="h-10 w-10 text-primary mx-auto mb-4" />
+                    <h2 className="font-headline text-2xl font-bold mb-2">Pregunta del Público</h2>
+                    <p className="text-3xl font-semibold whitespace-pre-wrap">
+                        "{studentQuestionOverlay}"
+                    </p>
+                </div>
+            </div>
+        )}
+
         <div className="flex-grow grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
             
             {/* Main Content: Question or Video */}
