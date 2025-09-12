@@ -730,4 +730,3 @@ function QuestionFields({ control, sectionIndex }: { control: Control<FormData>,
     
 
     
-
