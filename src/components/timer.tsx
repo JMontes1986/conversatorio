@@ -31,29 +31,27 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   useEffect(() => {
     setTimeRemaining(initialTime);
-    // When initialTime changes, reset the timer but don't auto-start it.
-    // The active state should only be controlled by user interaction (moderator)
-    // or by the Firestore listener for the public view.
-    if (!showControls) {
-       setIsActive(false);
-    }
-  }, [initialTime, showControls]);
+    // Resetting active state should be handled by Firestore to ensure sync
+    setIsActive(false);
+  }, [initialTime]);
   
   useEffect(() => {
-    // Public view timer logic: listens to firestore for active state
-    if (!showControls) {
-      const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-      const unsubscribe = onSnapshot(docRef, (doc) => {
-        if (doc.exists()) {
-          const data = doc.data();
-          if (data.timer && typeof data.timer.isActive === 'boolean') {
-              setIsActive(data.timer.isActive);
-          }
+    // Both public and moderator views listen to Firestore for the timer's active state
+    const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+    const unsubscribe = onSnapshot(docRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        if (data.timer && typeof data.timer.isActive === 'boolean') {
+            setIsActive(data.timer.isActive);
+            // If the timer was reset, sync the time remaining
+            if (data.timer.lastUpdated && timeRemaining !== data.timer.duration) {
+                setTimeRemaining(data.timer.duration);
+            }
         }
-      });
-      return () => unsubscribe();
-    }
-  }, [showControls]);
+      }
+    });
+    return () => unsubscribe();
+  }, [timeRemaining]);
 
 
   useEffect(() => {
@@ -63,8 +61,11 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         setTimeRemaining((time) => time - 1);
       }, 1000);
     } else if (timeRemaining <= 0 && isActive) {
-      setIsActive(false);
-      if (showControls) playSound();
+      // Only the moderator's panel should be able to stop the timer and play the sound
+      if (showControls) {
+          toggleTimer(); 
+          playSound();
+      }
     }
     return () => {
       if (interval) {
@@ -88,17 +89,16 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       await Tone.start();
     }
     const newIsActive = !isActive;
-    setIsActive(newIsActive);
 
-    // If controls are shown, it means this is the moderator/admin panel.
-    // We need to update the active state in Firestore so the public view can sync.
+    // The moderator panel is the source of truth, it writes the new state to Firestore
     if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 timer: { 
                     isActive: newIsActive,
-                    duration: initialTime 
+                    duration: initialTime,
+                    lastUpdated: Date.now()
                 } 
             }, { merge: true });
         } catch (error) {
@@ -108,18 +108,18 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   };
 
   const resetTimer = async () => {
-    setIsActive(false);
-    setTimeRemaining(initialTime);
-     if (showControls) {
+    // Moderator is the only one who can reset
+    if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
                     duration: initialTime,
-                    lastUpdated: Date.now() // Force a refresh on public view
+                    lastUpdated: Date.now() // Force a refresh on all clients
                 } 
             }, { merge: true });
+            // The useEffect listener will handle setting the state locally
         } catch (error) {
             console.error("Error resetting timer state in Firestore:", error);
         }
