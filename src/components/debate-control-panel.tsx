@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -551,15 +552,15 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                 <p className="flex-grow text-sm font-medium">{q.text}</p>
                                                 
                                                 <div className="space-y-2">
-                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Video Asociado</Label>
+                                                    <Label htmlFor={`video-url-${q.id}`} className="text-xs flex items-center gap-1"><Video className="h-3 w-3"/> Video Asociado (YouTube, SharePoint, etc.)</Label>
                                                     
                                                     <Textarea
                                                         id={`video-url-${q.id}`}
-                                                        placeholder="Pegue aquí el enlace de YouTube o el código &lt;iframe&gt; de SharePoint/OneDrive."
+                                                        placeholder="Pegue aquí el código <iframe> completo de SharePoint/OneDrive, o la URL de YouTube."
                                                         value={videoInputs[q.id] || ''}
                                                         onChange={(e) => setVideoInputs((prev: any) => ({...prev, [q.id]: e.target.value}))}
                                                         disabled={savingVideoId === q.id || (uploadingFile?.questionId === q.id)}
-                                                        rows={3}
+                                                        rows={4}
                                                     />
 
                                                     <div className="flex items-center gap-2">
@@ -908,9 +909,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     };
     
     const handleSendVideo = async (question: Question) => {
+        const videoValue = videoInputs[question.id] || "";
+        if (!videoValue) {
+            toast({ variant: "destructive", title: "Error", description: "No hay video asociado a esta pregunta." });
+            return;
+        }
+
         try {
-            const videoValue = videoInputs[question.id] || "";
-            
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
                 videoUrl: videoValue,
@@ -1147,8 +1152,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                         </div>
                     </CardContent>
                 </Card>
-                <Tabs defaultValue="round-config">
-                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-5">
+                <Tabs defaultValue="round-config" className="w-full">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-5 h-auto sm:h-10">
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>

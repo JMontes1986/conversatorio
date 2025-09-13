@@ -479,7 +479,7 @@ function AdminDashboard() {
         case "settings": return <CompetitionSettings allScores={scores} />;
         case "judges": return (
             <div className="grid md:grid-cols-3 gap-6">
-                <div className="md:col-span-1">
+                <div className="md:col-span-3 lg:col-span-1">
                     <Card>
                         <CardHeader>
                             <CardTitle>Añadir Jurado</CardTitle>
@@ -503,7 +503,7 @@ function AdminDashboard() {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="md:col-span-2">
+                <div className="md:col-span-3 lg:col-span-2">
                     <Card>
                         <CardHeader>
                             <CardTitle>Jurados Registrados</CardTitle>
@@ -583,7 +583,7 @@ function AdminDashboard() {
         );
         case "moderators": return (
             <div className="grid md:grid-cols-3 gap-6">
-                <div className="md:col-span-1">
+                <div className="md:col-span-3 lg:col-span-1">
                     <Card>
                         <CardHeader>
                             <CardTitle>Crear Moderador</CardTitle>
@@ -617,7 +617,7 @@ function AdminDashboard() {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="md:col-span-2">
+                <div className="md:col-span-3 lg:col-span-2">
                     <Card>
                         <CardHeader>
                             <CardTitle>Moderadores Activos</CardTitle>
@@ -691,31 +691,24 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="container mx-auto py-10 px-4 md:px-6">
-        <div className={cn(
-            "grid gap-6 transition-all duration-300",
-            isCollapsed ? "md:grid-cols-[70px_1fr]" : "md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]"
-        )}>
-            <aside>
-                <AdminNav 
-                    isCollapsed={isCollapsed} 
-                    setIsCollapsed={setIsCollapsed} 
-                    activeView={activeView} 
-                    setActiveView={setActiveView} 
-                />
-            </aside>
-            <main>
-                <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
-                     {renderContent()}
-                     <DialogContent className="max-w-3xl">
-                        <DialogHeader>
-                            <DialogTitle>Editar Colegio</DialogTitle>
-                        </DialogHeader>
-                        {selectedSchool && <EditSchoolForm school={selectedSchool} onFinished={() => setIsSchoolEditDialogOpen(false)} />}
-                    </DialogContent>
-                </Dialog>
-            </main>
-        </div>
+    <div className="flex flex-col md:flex-row min-h-screen">
+        <AdminNav 
+            isCollapsed={isCollapsed} 
+            setIsCollapsed={setIsCollapsed} 
+            activeView={activeView} 
+            setActiveView={setActiveView} 
+        />
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
+            <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
+                    {renderContent()}
+                    <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Editar Colegio</DialogTitle>
+                    </DialogHeader>
+                    {selectedSchool && <EditSchoolForm school={selectedSchool} onFinished={() => setIsSchoolEditDialogOpen(false)} />}
+                </DialogContent>
+            </Dialog>
+        </main>
     </div>
   );
 }

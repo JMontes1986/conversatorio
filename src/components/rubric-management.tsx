@@ -100,7 +100,7 @@ export function RubricManagement() {
     return (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-1">
+                <div className="md:col-span-3 lg:col-span-1">
                     <Card>
                         <CardHeader>
                             <CardTitle>Añadir Criterio</CardTitle>
@@ -137,7 +137,7 @@ export function RubricManagement() {
                         </CardContent>
                     </Card>
                 </div>
-                <div className="md:col-span-2">
+                <div className="md:col-span-3 lg:col-span-2">
                     <Card>
                         <CardHeader>
                             <CardTitle>Rúbrica de Evaluación</CardTitle>

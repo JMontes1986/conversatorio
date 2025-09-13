@@ -75,7 +75,7 @@ function ModeratorDashboard() {
                 </p>
             </div>
             <Tabs defaultValue="debate-control" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
                     <TabsTrigger value="rounds"><Swords className="mr-2 h-4 w-4" />Gestión de Rondas</TabsTrigger>
                     <TabsTrigger value="draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo de Grupos</TabsTrigger>
                     <TabsTrigger value="debate-control"><Gavel className="mr-2 h-4 w-4" />Control del Debate</TabsTrigger>
