@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, getDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Timer } from "@/components/timer";
@@ -48,6 +48,8 @@ import { TieBreaker } from './tie-breaker';
 
 
 const DEBATE_STATE_DOC_ID = "current";
+const DRAW_STATE_DOC_ID = "liveDraw";
+
 
 interface Question {
     id: string;
@@ -101,6 +103,18 @@ interface StudentQuestionOverlay {
     text: string;
     target: string;
 }
+type Matchup = {
+    roundName: string;
+    teams: string[];
+}
+type Phase = {
+    name: string;
+    matchups: Matchup[];
+}
+type LiveDrawState = {
+    phases: Phase[];
+}
+
 
 
 function getWinnersOfRound(scores: ScoreData[], roundName: string): string[] {
@@ -295,11 +309,44 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         }
         setIsSubmitting(true);
         try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { 
+            const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const teamNames = validTeams.map(t => t.name);
+
+            // Update the main debate state
+            await setDoc(debateStateRef, { 
                 currentRound,
-                teams: validTeams.map(t => ({ name: t.name })) // Store only name
+                teams: teamNames.map(name => ({ name }))
             }, { merge: true });
+            
+            // Update the live draw state
+            const roundData = debateRounds.find(r => r.name === currentRound);
+            if (roundData) {
+                const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+                const drawStateSnap = await getDoc(drawStateRef);
+                const currentDrawState: LiveDrawState = drawStateSnap.exists() ? drawStateSnap.data() as LiveDrawState : { phases: [] };
+
+                let phase = currentDrawState.phases.find(p => p.name === roundData.phase);
+                if (!phase) {
+                    phase = { name: roundData.phase, matchups: [] };
+                    currentDrawState.phases.push(phase);
+                }
+
+                const matchupIndex = phase.matchups.findIndex(m => m.roundName === currentRound);
+                const newMatchup = { roundName: currentRound, teams: teamNames };
+
+                if (matchupIndex > -1) {
+                    phase.matchups[matchupIndex] = newMatchup;
+                } else {
+                    phase.matchups.push(newMatchup);
+                }
+                
+                const phaseOrder = ["Fase de Grupos", "Fase de semifinales", "Fase de Finales", "FINAL"];
+                currentDrawState.phases.sort((a,b) => phaseOrder.indexOf(a.name) - phaseOrder.indexOf(b.name));
+
+
+                await setDoc(drawStateRef, currentDrawState);
+            }
+            
             toast({ title: "Configuración Actualizada", description: `La ronda activa es ${currentRound}.` });
         } catch (error) {
             console.error("Error updating round:", error);
@@ -418,7 +465,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         <Card>
             <CardHeader>
                 <CardTitle>Configurar Ronda y Equipos</CardTitle>
-                <CardDescription>Establezca la ronda activa y los equipos que se enfrentan. Para las fases finales, el sistema pre-filtrará a los equipos clasificados.</CardDescription>
+                <CardDescription>Establezca la ronda activa y los equipos que se enfrentan. Esto se mostrará en el marcador y en las llaves del torneo.</CardDescription>
             </CardHeader>
             <CardContent>
                  {unresolvedTieInfo && (
@@ -1395,5 +1442,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
-
-    

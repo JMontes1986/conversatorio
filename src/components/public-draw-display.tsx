@@ -4,8 +4,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { Loader2, Swords, Users } from "lucide-react";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
   Tooltip,
@@ -16,32 +16,24 @@ import {
 
 const DRAW_STATE_DOC_ID = "liveDraw";
 
-type Team = {
-  id: string;
-  name: string;
-  round: string | null;
-};
+type Matchup = {
+    roundName: string;
+    teams: string[];
+}
 
-type RoundData = {
-    id: string;
+type Phase = {
     name: string;
-    phase: string;
+    matchups: Matchup[];
 }
 
-type SchoolData = {
-    id: string;
-    teamName: string;
-    participants: { name: string }[];
+type DrawState = {
+    phases: Phase[];
 }
+
 
 export function PublicDrawDisplay() {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [rounds, setRounds] = useState<RoundData[]>([]);
-  const [allSchools, setAllSchools] = useState<SchoolData[]>([]);
+  const [drawState, setDrawState] = useState<DrawState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
-  const [activeTab, setActiveTab] = useState("groups");
 
   useEffect(() => {
     setLoading(true);
@@ -49,76 +41,35 @@ export function PublicDrawDisplay() {
     
     const unsubscribeDraw = onSnapshot(drawStateRef, (docSnap) => {
         if (docSnap.exists()) {
-            const data = docSnap.data();
-            setTeams(data.teams || []);
-            setRounds(data.rounds || []);
-            setIsDrawing(data.isDrawing || false);
-            setIsFinished(data.isFinished || false);
-            setActiveTab(data.activeTab || 'groups');
+            const data = docSnap.data() as DrawState;
+            setDrawState(data);
         }
+        setLoading(false);
     }, (error) => {
         console.error("Error fetching live draw state:", error);
-    });
-
-    const schoolsQuery = query(collection(db, "schools"), where("status", "==", "Verificado"));
-    const unsubscribeSchools = onSnapshot(schoolsQuery, (snapshot) => {
-        const fetchedSchools = snapshot.docs.map(doc => ({
-            id: doc.id,
-            teamName: doc.data().teamName,
-            participants: doc.data().participants || [],
-        })) as SchoolData[];
-        setAllSchools(fetchedSchools);
-        setLoading(false);
-    }, (error) => {
-        console.error("Error fetching schools:", error);
         setLoading(false);
     });
-
 
     return () => {
         unsubscribeDraw();
-        unsubscribeSchools();
     };
   }, []);
-
-  const getRoundTeams = (roundName: string) => {
-    return teams.filter(t => t.round === roundName);
-  }
-
-  const getTeamParticipants = (teamName: string) => {
-    const school = allSchools.find(s => s.teamName === teamName);
-    return school?.participants || [];
-  }
-
-  const animationStyles = useMemo(() => {
-    if (rounds.length === 0) return '';
-    
-    const numRounds = rounds.length;
-    const baseWidth = 100 / numRounds;
-    
-    return rounds.map((round, index) => `
-        @keyframes fly-to-round-${index + 1} {
-          0% { transform: translate(var(--tx, 0), var(--ty, 0)); opacity: 1; }
-          100% { transform: translate(calc(-50vw + ${baseWidth * (index + 0.5)}vw), -20vh) scale(0); opacity: 0; }
-        }
-    `).join('\n');
-  }, [rounds]);
 
   const CurrentDraw = () => {
     if (loading) {
         return (
             <div className="flex justify-center items-center min-h-[400px]">
                 <Loader2 className="h-8 w-8 animate-spin" />
-                <p className="ml-4">Esperando inicio del sorteo...</p>
+                <p className="ml-4">Cargando llaves del torneo...</p>
             </div>
         );
     }
 
-    if (teams.length === 0 || rounds.length === 0) {
+    if (!drawState || drawState.phases.length === 0) {
         return (
             <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
                 <p className="text-muted-foreground text-center px-4">
-                    El sorteo para esta fase no ha sido configurado o iniciado aún.
+                    El sorteo o las llaves del torneo no han sido configurados o iniciados aún.
                 </p>
             </div>
         );
@@ -126,34 +77,35 @@ export function PublicDrawDisplay() {
     
     return (
       <TooltipProvider>
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.max(1, rounds.length)} gap-6 min-h-[400px]`}>
-            {rounds.map(round => (
-                <Card key={round.id} className="flex flex-col">
-                <CardHeader>
-                    <CardTitle className="font-headline text-center">{round.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex-grow space-y-2 relative">
-                    {getRoundTeams(round.name).map((team) => {
-                       const participants = getTeamParticipants(team.name);
-                       return (
-                        <Tooltip key={team.id}>
-                            <TooltipTrigger asChild>
-                                <div className="p-3 bg-secondary rounded-md text-secondary-foreground font-medium text-center animate-in fade-in-50 duration-500 cursor-pointer">
-                                    {team.name}
-                                </div>
-                            </TooltipTrigger>
-                            {participants.length > 0 && (
-                               <TooltipContent>
-                                    <p className="font-bold mb-2">Participantes:</p>
-                                    <ul className="list-disc pl-4">
-                                       {participants.map((p, i) => <li key={i}>{p.name}</li>)}
-                                    </ul>
-                                </TooltipContent>
-                            )}
-                        </Tooltip>
-                       )
-                    })}
-                </CardContent>
+        <div className="space-y-8">
+            {drawState.phases.map(phase => (
+                 <Card key={phase.name}>
+                    <CardHeader>
+                        <CardTitle className="font-headline text-xl md:text-2xl flex items-center gap-3">
+                            <Users className="h-6 w-6 text-primary"/>
+                            {phase.name}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {phase.matchups.map(matchup => (
+                             <Card key={matchup.roundName} className="bg-background">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base text-center font-semibold">{matchup.roundName}</CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex items-center justify-center p-4">
+                                   {matchup.teams.length > 1 ? (
+                                        <div className="flex items-center gap-3 text-sm font-medium text-center">
+                                            <span>{matchup.teams[0]}</span>
+                                            <Swords className="h-5 w-5 text-muted-foreground shrink-0"/>
+                                            <span>{matchup.teams[1]}</span>
+                                        </div>
+                                   ) : (
+                                        <div className="text-sm font-medium">{matchup.teams[0] || 'Equipo pendiente'}</div>
+                                   )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </CardContent>
                 </Card>
             ))}
         </div>
@@ -164,54 +116,13 @@ export function PublicDrawDisplay() {
   return (
     <div className="w-full max-w-6xl mx-auto">
         <div className="space-y-1 mb-8 text-center">
-            <h1 className="font-headline text-3xl md:text-4xl font-bold">Sorteo en Vivo</h1>
+            <h1 className="font-headline text-3xl md:text-4xl font-bold">Llaves del Torneo</h1>
             <p className="text-muted-foreground mt-2">
-                Los equipos están siendo asignados a sus respectivas rondas. ¡Mucha suerte a todos!
+                Enfrentamientos actuales y futuros del conversatorio.
             </p>
         </div>
         
         <CurrentDraw />
-
-        <div className={cn(
-            "fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center transition-opacity duration-300",
-            isDrawing ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}>
-            <div className="relative w-64 h-64">
-            {teams.map((team, index) => {
-                const angle = (index / (teams.length || 1)) * 2 * Math.PI;
-                const x = Math.cos(angle) * 120;
-                const y = Math.sin(angle) * 120;
-                const roundIndex = rounds.findIndex(r => r.name === team.round) + 1;
-                
-                return (
-                <div
-                    key={team.id}
-                    className={cn(
-                    "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-2 bg-primary text-primary-foreground rounded-md shadow-lg transition-all duration-1000 ease-in-out",
-                    isDrawing && team.round === null ? "opacity-100" : "opacity-0"
-                    )}
-                    style={{
-                    animation: isDrawing && roundIndex > 0 ? `fly-to-round-${roundIndex} 1s ${index * 0.1}s forwards ease-in-out` : "none",
-                    transform: `translate(${x}px, ${y}px) rotate(${angle}rad)`
-                    }}
-                >
-                    {team.name}
-                </div>
-                );
-            })}
-            </div>
-        </div>
-
-        {isFinished && (
-            <div className="mt-8 text-center flex flex-col items-center gap-4 animate-in fade-in-50">
-                <h2 className="font-headline text-2xl font-bold">¡Sorteo Completado!</h2>
-                <p className="text-muted-foreground">Los grupos han sido definidos.</p>
-            </div>
-        )}
-        
-        <style jsx>{`
-            ${animationStyles}
-        `}</style>
     </div>
   );
 }
