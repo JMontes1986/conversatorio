@@ -69,8 +69,6 @@ export function ScheduleEditor() {
     resolver: zodResolver(formSchema),
     defaultValues: defaultSchedule,
   });
-  
-  const watchedValues = form.watch();
 
   const saveSchedule = useCallback(async (values: FormData) => {
     setSaveStatus("saving");
@@ -114,10 +112,10 @@ export function ScheduleEditor() {
   
   useEffect(() => {
     // Don't save on initial load or while loading.
-    if (isInitialLoad.current || loading) return;
+    if (loading) return;
 
     const subscription = form.watch((value, { name, type }) => {
-      if (type === 'change') {
+      if (!isInitialLoad.current && type === 'change') {
          saveSchedule(value as FormData);
       }
     });
@@ -257,3 +255,4 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     </div>
   );
 }
+
