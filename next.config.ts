@@ -43,9 +43,6 @@ const nextConfig: NextConfig = {
       // Extend the timeout for server actions to 2 minutes for lengthy operations like video uploads.
       executionTimeout: 120,
     },
-    // Allow all cross-origin requests in development. This is safe for Firebase Studio
-    // and is required to avoid warnings that may become errors in future Next.js versions.
-    allowedDevOrigins: ['*'],
   }
 };
 

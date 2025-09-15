@@ -232,22 +232,24 @@ function ScoringPanel() {
     }
   };
 
-  const ScoreButtons = ({ teamName, criteriaId }: { teamName: string, criteriaId: string }) => (
-    <div className="flex justify-center items-center gap-1 md:gap-2">
-      {[1, 2, 3, 4, 5].map((value) => (
-        <Button
-          key={value}
-          variant={(scores[teamName]?.[criteriaId]) === value ? 'default' : 'outline'}
-          size="icon"
-          className="h-8 w-8 md:h-9 md:w-9 rounded-full"
-          onClick={() => handleScoreChange(teamName, criteriaId, value)}
-          disabled={isSubmitting}
-        >
-          {value}
-        </Button>
-      ))}
-    </div>
-  );
+  const ScoreButtons = useMemo(() => {
+    return ({ teamName, criteriaId }: { teamName: string, criteriaId: string }) => (
+        <div className="flex justify-center items-center gap-1 md:gap-2">
+        {[1, 2, 3, 4, 5].map((value) => (
+            <Button
+            key={value}
+            variant={(scores[teamName]?.[criteriaId]) === value ? 'default' : 'outline'}
+            size="icon"
+            className="h-8 w-8 md:h-9 md:w-9 rounded-full"
+            onClick={() => handleScoreChange(teamName, criteriaId, value)}
+            disabled={isSubmitting}
+            >
+            {value}
+            </Button>
+        ))}
+        </div>
+    );
+  }, [scores, isSubmitting]);
   
   const getCriterionName = (id: string) => {
     return rubricCriteria.find(c => c.id === id)?.name || 'Criterio Desconocido';
