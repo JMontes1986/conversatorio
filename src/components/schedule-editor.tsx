@@ -255,4 +255,3 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     </div>
   );
 }
-

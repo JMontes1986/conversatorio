@@ -18,9 +18,8 @@ import { Loader2, UserPlus, Trash2, Users, CheckCircle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Separator } from "@/components/ui/separator";
-import { useDebounce } from "use-debounce";
 import { Badge } from "./ui/badge";
 
 const participantSchema = z.object({
@@ -110,6 +109,8 @@ function DynamicFieldArray({ control, name, label, buttonText, Icon }: {
 export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onFinished: () => void }) {
   const { toast } = useToast();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const isInitialLoad = useRef(true);
+
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -122,9 +123,6 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
       attendees: school.attendees || [],
     },
   });
-  
-  const watchedValues = form.watch();
-  const [debouncedValues] = useDebounce(watchedValues, 1000);
 
   const handleAutoSave = useCallback(async (values: FormData) => {
     setSaveStatus("saving");
@@ -144,11 +142,22 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
     }
   }, [school.id, toast]);
 
+    useEffect(() => {
+        // Set a flag to indicate the initial data load is complete.
+        setTimeout(() => {
+            isInitialLoad.current = false;
+        }, 50);
+    }, []);
+
+
   useEffect(() => {
-    if (form.formState.isDirty) {
-      handleAutoSave(debouncedValues);
-    }
-  }, [debouncedValues, form.formState.isDirty, handleAutoSave]);
+    const subscription = form.watch((value, { name, type }) => {
+      if (!isInitialLoad.current && type === 'change') {
+        handleAutoSave(value as FormData);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, handleAutoSave]);
 
 
   return (
