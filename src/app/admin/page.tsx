@@ -30,22 +30,23 @@ import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
 import Link from 'next/link';
 import { nanoid } from 'nanoid';
-import { DebateControlPanel } from '@/components/debate-control-panel';
-import { RoundManagement } from '@/components/round-management';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EditSchoolForm } from '@/components/edit-school-form';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DrawAnimation } from '@/components/draw-animation';
-import { RubricManagement } from '@/components/rubric-management';
-import { HomePageEditor } from '@/components/home-page-editor';
-import { CompetitionSettings } from '@/components/competition-settings';
-import { TournamentBracket } from '@/components/tournament-bracket';
-import { BracketEditor } from '@/components/bracket-editor';
-import { SurveyManagement } from '@/components/survey-management';
-import { ScheduleEditor } from '@/components/schedule-editor';
 import { AdminNav } from '@/components/admin-nav';
-import { cn } from '@/lib/utils';
+import dynamic from 'next/dynamic';
+
+const HomePageEditor = dynamic(() => import('@/components/home-page-editor').then(mod => mod.HomePageEditor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const ScheduleEditor = dynamic(() => import('@/components/schedule-editor').then(mod => mod.ScheduleEditor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const RoundManagement = dynamic(() => import('@/components/round-management').then(mod => mod.RoundManagement), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const BracketEditor = dynamic(() => import('@/components/bracket-editor').then(mod => mod.BracketEditor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const TournamentBracket = dynamic(() => import('@/components/tournament-bracket').then(mod => mod.TournamentBracket), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const RubricManagement = dynamic(() => import('@/components/rubric-management').then(mod => mod.RubricManagement), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const DrawAnimation = dynamic(() => import('@/components/draw-animation').then(mod => mod.DrawAnimation), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const SurveyManagement = dynamic(() => import('@/components/survey-management').then(mod => mod.SurveyManagement), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const CompetitionSettings = dynamic(() => import('@/components/competition-settings').then(mod => mod.CompetitionSettings), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const DebateControlPanel = dynamic(() => import('@/components/debate-control-panel').then(mod => mod.DebateControlPanel), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 interface SchoolData {
