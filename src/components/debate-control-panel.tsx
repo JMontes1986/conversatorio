@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -318,7 +319,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         }, {} as Record<string, RoundData[]>);
         
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
-            const phaseOrder = ["Fase de Grupos", "Fase de Finales", "FINAL"];
+            const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
             return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
         });
         
@@ -419,7 +420,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
             if (a === 'General') return -1;
             if (b === 'General') return 1;
-            const phaseOrder = ["Fase de Grupos", "Fase de Finales", "FINAL"];
+            const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
             return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
         });
         

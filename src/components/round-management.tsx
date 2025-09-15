@@ -28,7 +28,7 @@ interface RoundData {
     phase: string;
 }
 
-const competitionPhases = ["Fase de Grupos", "Fase de Finales", "FINAL"];
+const competitionPhases = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
 
 export function RoundManagement() {
     const { toast } = useToast();
@@ -104,8 +104,8 @@ export function RoundManagement() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-1">
                 <Card>
                     <CardHeader>
                         <CardTitle>Crear Ronda</CardTitle>
@@ -131,6 +131,7 @@ export function RoundManagement() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Fase de Grupos">Fase de Grupos</SelectItem>
+                                        <SelectItem value="Fase de octavos">Fase de octavos</SelectItem>
                                         <SelectItem value="Fase de Finales">Fase de Finales</SelectItem>
                                         <SelectItem value="FINAL">FINAL</SelectItem>
                                     </SelectContent>
@@ -144,7 +145,7 @@ export function RoundManagement() {
                     </CardContent>
                 </Card>
             </div>
-            <div className="lg:col-span-2">
+            <div className="md:col-span-2">
                 <Card>
                     <CardHeader>
                         <CardTitle>Rondas del Torneo</CardTitle>
@@ -230,5 +231,3 @@ export function RoundManagement() {
         </div>
     );
 }
-
-    
