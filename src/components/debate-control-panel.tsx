@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -70,6 +69,8 @@ interface SchoolData {
 interface ScoreData {
     id: string;
     matchId: string;
+    judgeId?: string;
+    judgeName?: string;
     teams: { name: string; total: number }[];
 }
 
@@ -225,9 +226,12 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
    const unresolvedTieInfo = useMemo(() => {
         const roundTotals: Record<string, Record<string, number>> = {};
 
-        // 1. Calculate total scores for all teams in each round
+        // 1. Calculate total scores for all teams in each round/match
         allScores.forEach(score => {
-            const roundName = score.matchId.split('-bye-')[0]; // Group bye scores with their round
+            // A match is defined by its ID, excluding system-generated tiebreakers
+            if (score.judgeId === 'system') return;
+            
+            const roundName = score.matchId.split('-bye-')[0];
             if (!roundTotals[roundName]) {
                 roundTotals[roundName] = {};
             }
@@ -238,26 +242,35 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                 roundTotals[roundName][team.name] += team.total;
             });
         });
+        
+        const sortedRoundNames = Object.keys(roundTotals).sort();
 
-        // 2. Find the first round with a tie
-        for (const roundName of Object.keys(roundTotals)) {
+        // 2. Find the first round with a tie that hasn't been resolved
+        for (const roundName of sortedRoundNames) {
             const totals = roundTotals[roundName];
             const scores = Object.values(totals);
             
-            // Check for a tie (at least two teams with the same max score)
-            const maxScore = Math.max(...scores);
-            const teamsWithMaxScore = Object.keys(totals).filter(team => totals[team] === maxScore);
+            // Check for a tie (at least two teams with the same score)
+            const scoreCounts = scores.reduce((acc, score) => {
+                acc[score] = (acc[score] || 0) + 1;
+                return acc;
+            }, {} as Record<number, number>);
 
-            if (teamsWithMaxScore.length > 1) {
-                // Check if a tie-breaker score has already been submitted for this round
-                 const tieBreakerExists = allScores.some(s => s.matchId === roundName && s.judgeId === 'system' && s.judgeName === 'Desempate por Dado');
+            const tiedScore = Object.keys(scoreCounts).find(score => scoreCounts[parseInt(score)] > 1);
+
+            if (tiedScore) {
+                const tiedValue = parseInt(tiedScore);
+                const teamsInTie = Object.keys(totals).filter(team => totals[team] === tiedValue);
                 
-                if (!tieBreakerExists) {
+                // Check if a tie-breaker score has already been submitted for this specific round
+                const tieBreakerExists = allScores.some(s => s.matchId === roundName && s.judgeId === 'system');
+
+                if (!tieBreakerExists && teamsInTie.length > 1) {
                     return {
                         roundName: roundName,
-                        team1: teamsWithMaxScore[0],
-                        team2: teamsWithMaxScore[1],
-                        score: maxScore,
+                        team1: teamsInTie[0],
+                        team2: teamsInTie[1],
+                        score: tiedValue,
                     };
                 }
             }
@@ -741,7 +754,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                     </Button>
                                                      <Button size="sm" onClick={() => onSendQuestion(q)}>
                                                         <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
-                                                    </Button>
+                                                     </Button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1382,3 +1395,5 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         </div>
     );
 }
+
+    

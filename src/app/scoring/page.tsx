@@ -257,7 +257,11 @@ function ScoringPanel() {
 
 
   if (loadingDebateState || loadingRubric || loadingHistory) {
-    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
+    return (
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      );
   }
 
   return (
@@ -405,7 +409,7 @@ function ScoringPanel() {
                 </div>
             </>
         ) : null
-      )}
+      }
 
 
        <Card className="mt-12">
@@ -471,5 +475,5 @@ export default function ScoringPage() {
         <JudgeAuth>
             <ScoringPanel />
         </JudgeAuth>
-    )
+    );
 }
