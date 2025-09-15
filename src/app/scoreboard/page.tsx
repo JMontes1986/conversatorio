@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { GroupStageResults } from "@/components/group-stage-results";
 import { KnockoutStageResults } from "@/components/knockout-stage-results";
 import { FinalResultCard } from "@/components/final-result-card";
+import { OctavosStageResults } from "@/components/octavos-stage-results";
 
 export default function ScoreboardPage() {
     return (
@@ -29,10 +30,21 @@ export default function ScoreboardPage() {
                         <GroupStageResults />
                     </CardContent>
                 </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados de Octavos de Final</CardTitle>
+                        <CardDescription>Puntuaciones de las primeras rondas eliminatorias.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <OctavosStageResults />
+                    </CardContent>
+                </Card>
+
                  <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
-                        <CardDescription>Puntuaciones de las rondas eliminatorias.</CardDescription>
+                        <CardDescription>Puntuaciones de Cuartos, Semifinales y Final.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <KnockoutStageResults />
