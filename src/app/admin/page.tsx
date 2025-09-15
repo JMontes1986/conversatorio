@@ -47,6 +47,10 @@ const DrawAnimation = dynamic(() => import('@/components/draw-animation').then(m
 const SurveyManagement = dynamic(() => import('@/components/survey-management').then(mod => mod.SurveyManagement), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const CompetitionSettings = dynamic(() => import('@/components/competition-settings').then(mod => mod.CompetitionSettings), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const DebateControlPanel = dynamic(() => import('@/components/debate-control-panel').then(mod => mod.DebateControlPanel), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const GroupStageResults = dynamic(() => import('@/components/group-stage-results').then(mod => mod.GroupStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const SemifinalsStageResults = dynamic(() => import('@/components/semifinals-stage-results').then(mod => mod.SemifinalsStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const KnockoutStageResults = dynamic(() => import('@/components/knockout-stage-results').then(mod => mod.KnockoutStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const FinalResultCard = dynamic(() => import('@/components/final-result-card').then(mod => mod.FinalResultCard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 interface SchoolData {
@@ -76,14 +80,16 @@ interface ScoreData {
     matchId: string;
     judgeName: string;
     teams: { name: string; total: number }[];
+    createdAt: { seconds: number };
 }
-interface MatchResults {
-    matchId: string;
-    scores: ScoreData[];
-    teamTotals: Record<string, number>;
-    winner: string | null;
-    isTie: boolean;
-    tiedTeams: string[];
+interface RoundData {
+    id: string;
+    name: string;
+    phase: string;
+}
+interface DebateState {
+    currentRound: string;
+    teams: { name: string }[];
 }
 
 
@@ -96,11 +102,11 @@ function AdminDashboard() {
   const [judges, setJudges] = useState<JudgeData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
   const [moderators, setModerators] = useState<ModeratorData[]>([]);
+  const [allRounds, setAllRounds] = useState<RoundData[]>([]);
+  const [debateState, setDebateState] = useState<DebateState | null>(null);
 
-  const [loadingSchools, setLoadingSchools] = useState(true);
-  const [loadingJudges, setLoadingJudges] = useState(true);
-  const [loadingScores, setLoadingScores] = useState(true);
-  const [loadingModerators, setLoadingModerators] = useState(true);
+
+  const [loading, setLoading] = useState(true);
   
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeCedula, setNewJudgeCedula] = useState("");
@@ -114,71 +120,49 @@ function AdminDashboard() {
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+
     const schoolsQuery = query(collection(db, "schools"), orderBy("createdAt", "desc"));
     const unsubscribeSchools = onSnapshot(schoolsQuery, (querySnapshot) => {
-        const schoolsData: SchoolData[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            schoolsData.push({
-                id: doc.id,
-                ...data
-            } as SchoolData);
-        });
-        setSchools(schoolsData);
-        setLoadingSchools(false);
-    }, (error) => {
-        console.error("Error fetching schools:", error);
-        setLoadingSchools(false);
-    });
+        setSchools(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SchoolData)));
+    }, (error) => console.error("Error fetching schools:", error));
 
     const judgesQuery = query(collection(db, "judges"), orderBy("createdAt", "asc"));
     const unsubscribeJudges = onSnapshot(judgesQuery, (querySnapshot) => {
-        const judgesData: JudgeData[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            judgesData.push({ 
-                id: doc.id,
-                ...data,
-                status: data.status || 'active' // Default to active for older records
-            } as JudgeData);
-        });
-        setJudges(judgesData);
-        setLoadingJudges(false);
-    }, (error) => {
-        console.error("Error fetching judges:", error);
-        setLoadingJudges(false);
-    });
+        setJudges(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), status: doc.data().status || 'active' } as JudgeData)));
+    }, (error) => console.error("Error fetching judges:", error));
 
     const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
     const unsubscribeScores = onSnapshot(scoresQuery, (querySnapshot) => {
-        const scoresData: ScoreData[] = [];
-        querySnapshot.forEach((doc) => {
-            scoresData.push({ id: doc.id, ...doc.data()} as ScoreData);
-        });
-        setScores(scoresData);
-        setLoadingScores(false);
+        setScores(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data()} as ScoreData)));
     });
     
      const moderatorsQuery = query(collection(db, "moderators"), orderBy("createdAt", "asc"));
      const unsubscribeModerators = onSnapshot(moderatorsQuery, (querySnapshot) => {
-        const moderatorsData: ModeratorData[] = [];
-        querySnapshot.forEach((doc) => {
-            moderatorsData.push({ id: doc.id, ...doc.data() } as ModeratorData);
+        setModerators(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ModeratorData)));
+     }, (error) => console.error("Error fetching moderators:", error));
+
+    const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
+    const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
+        setAllRounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData)));
+    });
+    
+    const debateStateRef = doc(db, "debateState", "current");
+    const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
+        setDebateState(docSnap.exists() ? (docSnap.data() as DebateState) : null);
+    });
+    
+    const allUnsubs = [unsubscribeSchools, unsubscribeJudges, unsubscribeScores, unsubscribeModerators, unsubscribeRounds, unsubscribeDebateState];
+    
+    // This is a simple way to wait for the first snapshot of all queries
+    Promise.all(allUnsubs.map(unsub => new Promise(resolve => {
+        const tempUnsub = onSnapshot(query(collection(db, (unsub as any)._query.path.segments[0])) , () => {
+            resolve(true);
+            tempUnsub();
         });
-        setModerators(moderatorsData);
-        setLoadingModerators(false);
-     }, (error) => {
-        console.error("Error fetching moderators:", error);
-        setLoadingModerators(false);
-     });
+    }))).then(() => setLoading(false));
 
-
-    return () => {
-        unsubscribeSchools();
-        unsubscribeJudges();
-        unsubscribeScores();
-        unsubscribeModerators();
-    };
+    return () => allUnsubs.forEach(unsub => unsub());
   }, []);
 
  const handleAddJudge = async (e: React.FormEvent) => {
@@ -358,7 +342,7 @@ function AdminDashboard() {
                     </TableRow>
                     </TableHeader>
                     
-                    {loadingSchools ? (
+                    {loading ? (
                         <TableBody>
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center">Cargando colegios...</TableCell>
@@ -521,7 +505,7 @@ function AdminDashboard() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {loadingJudges ? (
+                                    {loading ? (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center">Cargando jurados...</TableCell>
                                         </TableRow>
@@ -635,7 +619,7 @@ function AdminDashboard() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {loadingModerators ? (
+                                    {loading ? (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center">Cargando moderadores...</TableCell>
                                         </TableRow>
@@ -686,7 +670,55 @@ function AdminDashboard() {
             </div>
         );
         case "debate-control": return <DebateControlPanel registeredSchools={schools} allScores={scores} />;
-        case "results": return <p>Resultados...</p>;
+        case "results": return (
+            <div className="space-y-8">
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados de la Fase de Grupos</CardTitle>
+                        <CardDescription>Puntuaciones de las rondas iniciales.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <GroupStageResults resultsPublished={true} />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados de Semifinales</CardTitle>
+                        <CardDescription>Puntuaciones de las primeras rondas eliminatorias.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <SemifinalsStageResults 
+                             allScores={scores}
+                             allRounds={allRounds}
+                             debateState={debateState}
+                             resultsPublished={true}
+                             loading={loading}
+                        />
+                    </CardContent>
+                </Card>
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
+                        <CardDescription>Puntuaciones de Cuartos, Semifinales y Final.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                       <KnockoutStageResults 
+                             allScores={scores}
+                             allRounds={allRounds}
+                             debateState={debateState}
+                             resultsPublished={true}
+                             loading={loading}
+                        />
+                    </CardContent>
+                </Card>
+
+                <FinalResultCard scores={scores} resultsPublished={true} loading={loading} />
+                
+                <TournamentBracket />
+            </div>
+        );
         default: return <HomePageEditor />;
     }
   }
