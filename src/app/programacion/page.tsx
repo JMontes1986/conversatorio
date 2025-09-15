@@ -21,11 +21,15 @@ interface ScheduleItem {
 }
 
 interface ScheduleData {
+  day1Date: string;
+  day2Date: string;
   day1: ScheduleItem[];
   day2: ScheduleItem[];
 }
 
 const defaultSchedule: ScheduleData = {
+  day1Date: "Sábado, 17 de Agosto",
+  day2Date: "Domingo, 18 de Agosto",
   day1: [
     { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
     { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
@@ -80,7 +84,11 @@ export default function ProgramacionPage() {
     const docRef = doc(db, 'siteContent', 'schedule');
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
-        setSchedule(doc.data() as ScheduleData);
+        const data = doc.data();
+        setSchedule({
+            ...defaultSchedule,
+            ...data
+        });
       } else {
         setSchedule(defaultSchedule);
       }
@@ -113,8 +121,8 @@ export default function ProgramacionPage() {
         <CardContent className="p-4 md:p-6">
           <Tabs defaultValue="day1" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="day1">Sábado, 17 de Agosto</TabsTrigger>
-              <TabsTrigger value="day2">Domingo, 18 de Agosto</TabsTrigger>
+              <TabsTrigger value="day1">{schedule.day1Date}</TabsTrigger>
+              <TabsTrigger value="day2">{schedule.day2Date}</TabsTrigger>
             </TabsList>
             <TabsContent value="day1" className="mt-6">
                 <ScheduleTable schedule={schedule.day1} />

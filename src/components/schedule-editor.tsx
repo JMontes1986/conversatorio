@@ -26,6 +26,8 @@ const scheduleItemSchema = z.object({
 });
 
 const formSchema = z.object({
+  day1Date: z.string().optional(),
+  day2Date: z.string().optional(),
   day1: z.array(scheduleItemSchema),
   day2: z.array(scheduleItemSchema),
 });
@@ -33,6 +35,8 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const defaultSchedule: FormData = {
+  day1Date: "Sábado, 17 de Agosto",
+  day2Date: "Domingo, 18 de Agosto",
   day1: [
     { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
     { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
@@ -93,6 +97,8 @@ export function ScheduleEditor() {
       if (doc.exists()) {
         const data = doc.data();
         const sanitizedData: FormData = {
+            ...defaultSchedule,
+            ...data,
             day1: data.day1 && data.day1.length > 0 ? data.day1.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
             day2: data.day2 && data.day2.length > 0 ? data.day2.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
         };
@@ -111,16 +117,13 @@ export function ScheduleEditor() {
   }, [form]);
   
   useEffect(() => {
-    // Don't save on initial load or while loading.
-    if (loading) return;
-
     const subscription = form.watch((value, { name, type }) => {
       if (!isInitialLoad.current && type === 'change') {
          saveSchedule(value as FormData);
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, saveSchedule, loading]);
+  }, [form, saveSchedule]);
 
 
   if (loading) {
@@ -150,8 +153,32 @@ export function ScheduleEditor() {
       <CardContent>
         <Form {...form}>
           <form className="space-y-8">
-            <ScheduleDayEditor day="day1" title="Sábado, 17 de Agosto" control={form.control} />
-            <ScheduleDayEditor day="day2" title="Domingo, 18 de Agosto" control={form.control} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <FormField
+                control={form.control}
+                name="day1Date"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Fecha Día 1</FormLabel>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                 <FormField
+                control={form.control}
+                name="day2Date"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Fecha Día 2</FormLabel>
+                    <FormControl><Input {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            </div>
+            <ScheduleDayEditor day="day1" title="Actividades Día 1" control={form.control} />
+            <ScheduleDayEditor day="day2" title="Actividades Día 2" control={form.control} />
           </form>
         </Form>
       </CardContent>
