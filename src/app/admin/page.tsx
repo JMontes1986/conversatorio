@@ -125,7 +125,11 @@ function AdminDashboard() {
     const schoolsQuery = query(collection(db, "schools"), orderBy("createdAt", "desc"));
     const unsubscribeSchools = onSnapshot(schoolsQuery, (querySnapshot) => {
         setSchools(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SchoolData)));
-    }, (error) => console.error("Error fetching schools:", error));
+        setLoading(false); // Set loading to false after the first data fetch
+    }, (error) => {
+        console.error("Error fetching schools:", error);
+        setLoading(false);
+    });
 
     const judgesQuery = query(collection(db, "judges"), orderBy("createdAt", "asc"));
     const unsubscribeJudges = onSnapshot(judgesQuery, (querySnapshot) => {
@@ -152,17 +156,14 @@ function AdminDashboard() {
         setDebateState(docSnap.exists() ? (docSnap.data() as DebateState) : null);
     });
     
-    const allUnsubs = [unsubscribeSchools, unsubscribeJudges, unsubscribeScores, unsubscribeModerators, unsubscribeRounds, unsubscribeDebateState];
-    
-    // This is a simple way to wait for the first snapshot of all queries
-    Promise.all(allUnsubs.map(unsub => new Promise(resolve => {
-        const tempUnsub = onSnapshot(query(collection(db, (unsub as any)._query.path.segments[0])) , () => {
-            resolve(true);
-            tempUnsub();
-        });
-    }))).then(() => setLoading(false));
-
-    return () => allUnsubs.forEach(unsub => unsub());
+    return () => {
+        unsubscribeSchools();
+        unsubscribeJudges();
+        unsubscribeScores();
+        unsubscribeModerators();
+        unsubscribeRounds();
+        unsubscribeDebateState();
+    };
   }, []);
 
  const handleAddJudge = async (e: React.FormEvent) => {
