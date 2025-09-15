@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2 } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, getDoc, writeBatch } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Timer } from "@/components/timer";
@@ -34,7 +34,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from "@/components/ui/select";
-import { Trash2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from './ui/progress';
 import { nanoid } from 'nanoid';
@@ -845,17 +844,63 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
         }
     };
     
+    const handleClearProcessedQuestions = async () => {
+        const questionsToDelete = questions.filter(q => q.status === 'approved' || q.status === 'rejected');
+        if (questionsToDelete.length === 0) {
+            toast({ description: "No hay preguntas procesadas para limpiar." });
+            return;
+        }
+
+        const batch = writeBatch(db);
+        questionsToDelete.forEach(q => {
+            batch.delete(doc(db, "studentQuestions", q.id));
+        });
+
+        try {
+            await batch.commit();
+            toast({ title: "Limpieza Completada", description: "Se han eliminado las preguntas aprobadas y rechazadas." });
+        } catch (error) {
+            console.error("Error clearing questions:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron limpiar las preguntas.' });
+        }
+    };
+
+    
     const getRelatedDebateQuestionText = (relatedId: string) => {
         return allPreparedQuestions.find(q => q.id === relatedId)?.text || "Pregunta General";
     }
     
     const pendingQuestions = questions.filter(q => q.status === 'pending');
     const approvedQuestions = questions.filter(q => q.status === 'approved');
+    const rejectedQuestions = questions.filter(q => q.status === 'rejected');
+
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><HelpCircle className="h-6 w-6"/>Preguntas del Público</CardTitle>
+                <div className="flex justify-between items-center">
+                    <CardTitle className="flex items-center gap-2"><HelpCircle className="h-6 w-6"/>Preguntas del Público</CardTitle>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                             <Button variant="outline" size="sm" disabled={approvedQuestions.length === 0 && rejectedQuestions.length === 0}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Limpiar Preguntas Procesadas
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción eliminará permanentemente todas las preguntas que ya han sido aprobadas o rechazadas. Las preguntas pendientes no se verán afectadas.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleClearProcessedQuestions}>Sí, limpiar</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
                 <CardDescription>Revise, apruebe y proyecte las preguntas enviadas por los estudiantes.</CardDescription>
             </CardHeader>
             <CardContent>
