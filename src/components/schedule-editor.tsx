@@ -167,13 +167,8 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     name: day
   });
   
-  const debouncedAppend = React.useCallback(
-    debounce((data) => append(data), 300),
-    [append]
-  );
-  
   const handleAppend = () => {
-    debouncedAppend({ id: nanoid(), time: "", endTime: "", activity: "", completed: false })
+    append({ id: nanoid(), time: "", endTime: "", activity: "", completed: false })
   }
 
   return (
@@ -262,17 +257,3 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
     </div>
   );
 }
-
-// Simple debounce function
-function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-
-  return (...args: Parameters<F>): void => {
-    if (timeout) {
-      clearTimeout(timeout);
-    }
-    timeout = setTimeout(() => func(...args), waitFor);
-  };
-}
-
-    
