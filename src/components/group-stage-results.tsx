@@ -1,10 +1,11 @@
 
+
 "use client";
 
 import React from "react";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, where, doc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, doc } from "firebase/firestore";
 import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
@@ -38,11 +39,14 @@ type MatchResult = {
     isBye?: boolean;
 }
 
-export function GroupStageResults() {
+interface GroupStageResultsProps {
+    resultsPublished: boolean;
+}
+
+export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) {
     const [groupRounds, setGroupRounds] = useState<RoundData[]>([]);
     const [scores, setScores] = useState<ScoreData[]>([]);
     const [drawnTeams, setDrawnTeams] = useState<DrawnTeam[]>([]);
-    const [resultsPublished, setResultsPublished] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -65,23 +69,15 @@ export function GroupStageResults() {
         const drawStateRef = doc(db, "drawState", "liveDraw");
         const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
              if (docSnap.exists()) {
-                const data = docSnap.data();
-                setDrawnTeams(data.teams || []);
-            }
-        });
-
-        const settingsRef = doc(db, "settings", "competition");
-        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setResultsPublished(docSnap.data().resultsPublished || false);
+                setDrawnTeams(docSnap.data().teams || []);
             }
             setLoading(false);
         });
 
+
         return () => {
             unsubscribeRounds();
             unsubscribeScores();
-            unsubscribeSettings();
             unsubscribeDrawState();
         };
     }, []);
@@ -90,7 +86,6 @@ export function GroupStageResults() {
         const roundScores = scores.filter(s => s.matchId === round.name);
         const teamsForRound = drawnTeams.filter(t => t.round === round.name).map(t => t.name);
         
-        // Handle bye score
         const byeScore = scores.find(s => s.matchId.startsWith(`${round.name}-bye-`));
         if (byeScore) {
             const winnerTeam = byeScore.teams[0];
@@ -108,7 +103,6 @@ export function GroupStageResults() {
             }
         }
         
-        // Handle scored match
         if (roundScores.length > 0) {
             const teamTotals: Record<string, number> = {};
             const judges = new Set<string>();
@@ -142,7 +136,6 @@ export function GroupStageResults() {
             };
         }
 
-        // Handle drawn but unscored match
         if (teamsForRound.length > 0) {
              return {
                 id: round.id,
@@ -157,8 +150,6 @@ export function GroupStageResults() {
              }
         }
 
-
-        // No scores, no draw
         return { id: round.id, name: round.name, match: null };
     });
 

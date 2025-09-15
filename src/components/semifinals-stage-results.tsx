@@ -2,9 +2,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, doc, orderBy } from "firebase/firestore";
+import React, { useMemo } from "react";
 import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
@@ -38,49 +36,15 @@ type MatchResult = {
     isPending?: boolean;
 }
 
+interface SemifinalsStageResultsProps {
+    allScores: ScoreData[];
+    allRounds: RoundData[];
+    debateState: DebateState | null;
+    resultsPublished: boolean;
+    loading: boolean;
+}
 
-export function SemifinalsStageResults() {
-    const [allScores, setAllScores] = useState<ScoreData[]>([]);
-    const [allRounds, setAllRounds] = useState<RoundData[]>([]);
-    const [debateState, setDebateState] = useState<DebateState | null>(null);
-    const [resultsPublished, setResultsPublished] = useState(false);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
-        const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
-            const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScoreData));
-            setAllScores(scoresData);
-        });
-
-        const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
-        const unsubscribeRounds = onSnapshot(roundsQuery, (snapshot) => {
-            const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-            setAllRounds(roundsData);
-        });
-        
-        const debateStateRef = doc(db, "debateState", "current");
-        const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setDebateState(docSnap.data() as DebateState);
-            }
-        });
-        
-        const settingsRef = doc(db, "settings", "competition");
-        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setResultsPublished(docSnap.data().resultsPublished || false);
-            }
-            setLoading(false);
-        });
-
-        return () => {
-            unsubscribeScores();
-            unsubscribeSettings();
-            unsubscribeDebateState();
-            unsubscribeRounds();
-        };
-    }, []);
+export function SemifinalsStageResults({ allScores, allRounds, debateState, resultsPublished, loading }: SemifinalsStageResultsProps) {
 
     const semifinalsResults = useMemo(() => {
         if (loading) return [];
@@ -95,17 +59,19 @@ export function SemifinalsStageResults() {
 
         const matches: Record<string, ScoreData[]> = {};
         semifinalsScores.forEach(score => {
-            if (!matches[score.matchId]) {
-                matches[score.matchId] = [];
+            const matchId = score.matchId.split('-bye-')[0]; // Group bye scores with their round
+            if (!matches[matchId]) {
+                matches[matchId] = [];
             }
-            matches[score.matchId].push(score);
+            matches[matchId].push(score);
         });
 
         const processedMatches: MatchResult[] = Object.entries(matches).map(([matchId, scores]) => {
             const teamTotals: Record<string, number> = {};
             
-            if (matchId.includes('-bye-')) {
-                const team = scores[0].teams[0];
+            if (scores.some(s => s.matchId.includes('-bye-'))) {
+                 const byeScore = scores.find(s => s.matchId.includes('-bye-'))!;
+                const team = byeScore.teams[0];
                 return {
                     id: matchId,
                     teams: [{ name: team.name, total: team.total }],
@@ -155,10 +121,9 @@ export function SemifinalsStageResults() {
             }
         }
         
+        const roundOrder = allRounds.map(r => r.name);
         processedMatches.sort((a, b) => {
-             const aDate = matches[a.id]?.[0]?.createdAt.seconds || Infinity;
-             const bDate = matches[b.id]?.[0]?.createdAt.seconds || Infinity;
-             return aDate - bDate;
+             return roundOrder.indexOf(a.id) - roundOrder.indexOf(b.id);
         });
 
 

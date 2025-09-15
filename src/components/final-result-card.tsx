@@ -1,9 +1,8 @@
 
+
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, doc } from "firebase/firestore";
+import React, { useMemo } from "react";
 import { Loader2, Trophy, Swords, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
@@ -17,7 +16,7 @@ type ScoreData = {
 }
 
 const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null => {
-    const roundScores = scores.filter(s => s.matchId === roundName);
+    const roundScores = scores.filter(s => s.matchId.startsWith(roundName));
     if (roundScores.length === 0) return null;
 
     const teamTotals: Record<string, number> = {};
@@ -35,37 +34,18 @@ const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null
     return winner;
 };
 
-export function FinalResultCard() {
-    const [scores, setScores] = useState<ScoreData[]>([]);
-    const [resultsPublished, setResultsPublished] = useState(false);
-    const [loading, setLoading] = useState(true);
+interface FinalResultCardProps {
+    scores: ScoreData[];
+    resultsPublished: boolean;
+    loading: boolean;
+}
 
-    useEffect(() => {
-        const scoresQuery = query(collection(db, "scores"), orderBy("createdAt", "desc"));
-        const unsubscribeScores = onSnapshot(scoresQuery, (snapshot) => {
-            const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScoreData));
-            setScores(scoresData);
-        });
-        
-        const settingsRef = doc(db, "settings", "competition");
-        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
-            if (docSnap.exists()) {
-                setResultsPublished(docSnap.data().resultsPublished || false);
-            }
-            setLoading(false);
-        });
-
-        return () => {
-            unsubscribeScores();
-            unsubscribeSettings();
-        };
-    }, []);
-
+export function FinalResultCard({ scores, resultsPublished, loading }: FinalResultCardProps) {
     const finalMatch = useMemo(() => {
-        const winnerRonda6 = getWinnerOfRound(scores, "Ronda 6");
-        const winnerRonda7 = getWinnerOfRound(scores, "Ronda 7");
+        const winnerSemifinal1 = getWinnerOfRound(scores, "Semifinal 1");
+        const winnerSemifinal2 = getWinnerOfRound(scores, "Semifinal 2");
 
-        const finalRoundScores = scores.filter(s => s.matchId.includes("Final") || s.matchId === "Ronda 10");
+        const finalRoundScores = scores.filter(s => s.matchId.startsWith("FINAL"));
 
         if (finalRoundScores.length > 0) {
              const teamTotals: Record<string, number> = {};
@@ -85,11 +65,11 @@ export function FinalResultCard() {
             }
         }
         
-        if (winnerRonda6 && winnerRonda7) {
+        if (winnerSemifinal1 && winnerSemifinal2) {
             return {
                 teams: [
-                    { name: winnerRonda6, total: 0 },
-                    { name: winnerRonda7, total: 0 }
+                    { name: winnerSemifinal1, total: 0 },
+                    { name: winnerSemifinal2, total: 0 }
                 ],
                 winner: null,
                 isTie: false,
@@ -169,7 +149,7 @@ export function FinalResultCard() {
                      )
                 ) : (
                     <div className="text-center text-muted-foreground p-8">
-                        Esperando a los ganadores de las semifinales (Ronda 6 y 7) para definir la final...
+                        Esperando a los ganadores de las semifinales para definir la final...
                     </div>
                 )}
             </CardContent>
