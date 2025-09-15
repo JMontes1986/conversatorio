@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -222,37 +222,49 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         return registeredSchools;
     }, [currentRound, debateRounds, allScores, registeredSchools]);
     
-    const tieInfo = useMemo(() => {
-        if (!currentRound || teams.length !== 2) return null;
+   const unresolvedTieInfo = useMemo(() => {
+        const roundTotals: Record<string, Record<string, number>> = {};
 
-        const roundScores = allScores.filter(s => s.matchId === currentRound);
-        if (roundScores.length === 0) return null;
-
-        const teamTotals: Record<string, number> = {};
-        roundScores.forEach(score => {
+        // 1. Calculate total scores for all teams in each round
+        allScores.forEach(score => {
+            const roundName = score.matchId.split('-bye-')[0]; // Group bye scores with their round
+            if (!roundTotals[roundName]) {
+                roundTotals[roundName] = {};
+            }
             score.teams.forEach(team => {
-                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
-                teamTotals[team.name] += team.total;
+                if (!roundTotals[roundName][team.name]) {
+                    roundTotals[roundName][team.name] = 0;
+                }
+                roundTotals[roundName][team.name] += team.total;
             });
         });
 
-        const team1Name = teams[0].name;
-        const team2Name = teams[1].name;
+        // 2. Find the first round with a tie
+        for (const roundName of Object.keys(roundTotals)) {
+            const totals = roundTotals[roundName];
+            const scores = Object.values(totals);
+            
+            // Check for a tie (at least two teams with the same max score)
+            const maxScore = Math.max(...scores);
+            const teamsWithMaxScore = Object.keys(totals).filter(team => totals[team] === maxScore);
 
-        if (team1Name && team2Name && teamTotals[team1Name] === teamTotals[team2Name]) {
-             // Ensure both teams are in the totals (i.e., scores have been submitted)
-             if (teamTotals[team1Name] !== undefined) {
-                 return {
-                    team1: team1Name,
-                    team2: team2Name,
-                    score: teamTotals[team1Name],
-                 };
-             }
+            if (teamsWithMaxScore.length > 1) {
+                // Check if a tie-breaker score has already been submitted for this round
+                 const tieBreakerExists = allScores.some(s => s.matchId === roundName && s.judgeId === 'system' && s.judgeName === 'Desempate por Dado');
+                
+                if (!tieBreakerExists) {
+                    return {
+                        roundName: roundName,
+                        team1: teamsWithMaxScore[0],
+                        team2: teamsWithMaxScore[1],
+                        score: maxScore,
+                    };
+                }
+            }
         }
 
         return null;
-
-    }, [currentRound, teams, allScores]);
+    }, [allScores]);
 
 
     const handleRoundChange = useCallback((roundName: string) => {
@@ -396,6 +408,26 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                 <CardDescription>Establezca la ronda activa y los equipos que se enfrentan. Para las fases finales, el sistema pre-filtrará a los equipos clasificados.</CardDescription>
             </CardHeader>
             <CardContent>
+                 {unresolvedTieInfo && (
+                    <Card className="mb-6 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                                <AlertTriangle className="h-5 w-5" />
+                                ¡Empate Detectado!
+                            </CardTitle>
+                             <CardDescription className="text-amber-600 dark:text-amber-500">
+                                Se ha detectado un empate en la ronda <strong>{unresolvedTieInfo.roundName}</strong>. Utilice la herramienta de desempate para continuar.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <TieBreaker
+                                roundName={unresolvedTieInfo.roundName}
+                                team1={unresolvedTieInfo.team1}
+                                team2={unresolvedTieInfo.team2}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
                 <form onSubmit={handleUpdateRound} className="space-y-4 max-w-lg">
                     <div className="space-y-2">
                         <Label htmlFor="current-round">Ronda de Debate Activa</Label>
@@ -474,26 +506,6 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                         </Button>
                     )}
                 </form>
-                 {tieInfo && (
-                    <Card className="mt-6 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                                <AlertTriangle className="h-5 w-5" />
-                                ¡Empate Detectado!
-                            </CardTitle>
-                             <CardDescription className="text-amber-600 dark:text-amber-500">
-                                Se ha detectado un empate en la ronda actual. Utilice la herramienta de desempate.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <TieBreaker
-                                roundName={currentRound}
-                                team1={tieInfo.team1}
-                                team2={tieInfo.team2}
-                            />
-                        </CardContent>
-                    </Card>
-                )}
             </CardContent>
         </Card>
     );
