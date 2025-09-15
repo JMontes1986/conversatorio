@@ -65,7 +65,7 @@ export function PublicDrawDisplay() {
         );
     }
 
-    if (!drawState || drawState.phases.length === 0) {
+    if (!drawState || !drawState.phases || drawState.phases.length === 0) {
         return (
             <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
                 <p className="text-muted-foreground text-center px-4">
@@ -126,3 +126,4 @@ export function PublicDrawDisplay() {
     </div>
   );
 }
+
