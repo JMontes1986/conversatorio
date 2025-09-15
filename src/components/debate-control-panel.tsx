@@ -1091,7 +1091,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 questionSize: tempMessageSize,
             }, { merge: true });
             toast({ title: "Mensaje Temporal Enviado" });
-            setTempMessageInput("");
         } catch (error) {
              console.error("Error sending temporary message:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el mensaje." });
