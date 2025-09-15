@@ -138,7 +138,9 @@ function ScoringPanel() {
     return pastScores.some(score => score.matchId === debateState.currentRound || score.matchId.startsWith(debateState.currentRound + '-bye'));
   }, [pastScores, debateState.currentRound, judge]);
   
-  const isByeRound = debateState.currentRound.includes('-bye-') || debateState.teams.length === 1;
+  const isByeRound = useMemo(() => {
+    return debateState.currentRound.includes('-bye-') || debateState.teams.length === 1;
+  }, [debateState]);
 
 
   const handleScoreChange = (teamName: string, criteriaId: string, value: number) => {
@@ -267,7 +269,7 @@ function ScoringPanel() {
         </div>
       </div>
       
-      {debateState.teams.length > 0 && (
+      {debateState.teams.length > 0 ? (
          <div className="flex justify-center items-center mb-8 space-x-2 md:space-x-4 flex-wrap">
             {debateState.teams.map((team, index) => (
                 <div key={`${team.name}-${index}`} className="flex items-center">
@@ -276,10 +278,15 @@ function ScoringPanel() {
                 </div>
             ))}
         </div>
+      ) : isByeRound ? null : (
+           <Card>
+                <CardContent className="pt-6">
+                    <p className="text-center text-muted-foreground">Esperando a que el moderador configure los equipos para la ronda actual...</p>
+                </CardContent>
+            </Card>
       )}
 
-      {debateState.teams.length > 0 ? (
-        hasAlreadyScoredCurrentRound ? (
+      { hasAlreadyScoredCurrentRound ? (
             <Card className="bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
                 <CardContent className="pt-6 text-center text-green-700 dark:text-green-300">
                     <CheckCircle2 className="h-12 w-12 mx-auto mb-4"/>
@@ -291,11 +298,11 @@ function ScoringPanel() {
             <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
                 <CardContent className="pt-6 text-center text-blue-700 dark:text-blue-300">
                     <Info className="h-12 w-12 mx-auto mb-4"/>
-                    <h3 className="text-xl font-bold">Avance Automático</h3>
-                    <p className="text-muted-foreground text-blue-600 dark:text-blue-400">No se requiere calificación para esta ronda, ya que un equipo avanzó automáticamente (bye).</p>
+                    <h3 className="text-xl font-bold">Avance Automático (Bye)</h3>
+                    <p className="text-muted-foreground text-blue-600 dark:text-blue-400">No se requiere calificación para esta ronda, ya que un equipo avanzó automáticamente.</p>
                 </CardContent>
             </Card>
-        ) : (
+        ) : debateState.teams.length > 0 ? (
             <>
                 <Card>
                     <CardHeader>
@@ -395,13 +402,7 @@ function ScoringPanel() {
                     </Button>
                 </div>
             </>
-        )
-      ) : (
-        <Card>
-            <CardContent className="pt-6">
-                <p className="text-center text-muted-foreground">Esperando a que el moderador configure los equipos para la ronda actual...</p>
-            </CardContent>
-        </Card>
+        ) : null
       )}
 
 
@@ -470,4 +471,3 @@ export default function ScoringPage() {
         </JudgeAuth>
     )
 }
-

@@ -44,6 +44,7 @@ import { EditQuestionForm } from './edit-question-form';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Checkbox } from './ui/checkbox';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -171,7 +172,7 @@ function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData
 function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
     const { toast } = useToast();
     const [currentRound, setCurrentRound] = useState('');
-    const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
+    const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '', isBye: false }, { id: nanoid(), name: '', isBye: false }]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
@@ -196,14 +197,16 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     const availableTeams = useMemo(() => {
         const selectedRoundData = debateRounds.find(r => r.name === currentRound);
         
-        if (selectedRoundData && selectedRoundData.phase === "Fase de Finales") {
+        if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de octavos")) {
             const phaseDependencies: Record<string, { from: string, limit?: number }> = {
-                "Cuartos de Final": { from: "Fase de Grupos", limit: 8 },
+                "Fase de octavos": { from: "Fase de Grupos", limit: 16 },
+                "Cuartos de Final": { from: "Fase de octavos", limit: 8 },
                 "Semifinal": { from: "Cuartos de Final" },
                 "Final": { from: "Semifinal" }
             };
 
-            const dependency = Object.entries(phaseDependencies).find(([phase]) => currentRound.includes(phase))?.[1];
+            const dependencyKey = Object.keys(phaseDependencies).find(key => currentRound.includes(key));
+            const dependency = dependencyKey ? phaseDependencies[dependencyKey] : null;
 
             if (dependency) {
                 const previousRounds = debateRounds.filter(r => r.phase === dependency.from);
@@ -220,15 +223,15 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
 
     const handleRoundChange = useCallback((roundName: string) => {
         setCurrentRound(roundName);
-        setTeams([{ id: nanoid(), name: '' }, { id: nanoid(), name: '' }]);
+        setTeams([{ id: nanoid(), name: '', isBye: false }, { id: nanoid(), name: '', isBye: false }]);
     }, []);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
-        const validTeams = teams.filter(t => t.name.trim() !== '');
+        const validTeams = teams.filter(t => t.name.trim() !== '' && !t.isBye);
 
-        if (!currentRound || validTeams.length < 1) { // Can be 1 in case of a bye
-            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y asegúrese de que haya al menos un equipo." });
+        if (!currentRound || validTeams.length === 0) {
+            toast({ variant: "destructive", title: "Error", description: "Por favor, seleccione una ronda y al menos un equipo." });
             return;
         }
         setIsSubmitting(true);
@@ -248,7 +251,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     }
     
     const handleConfirmBye = async (team: Team) => {
-        if (!team.isBye || !currentRound) return;
+        if (!team.isBye || !currentRound || !team.name) return;
         
         setIsSubmitting(true);
         const byeMatchId = `${currentRound}-bye-${team.name}`;
@@ -291,9 +294,28 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     const handleTeamNameChange = (id: string, name: string) => {
         setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
     };
+    
+    const handleByeChange = (id: string, isBye: boolean) => {
+        const newTeams = teams.map(t => t.id === id ? { ...t, isBye } : t);
+        if (isBye) {
+            const otherTeamId = newTeams.find(t => t.id !== id)?.id;
+            if (otherTeamId) {
+                // Set only one team if it's a bye
+                setTeams(newTeams.filter(t => t.id === id));
+            }
+        } else {
+            // If unchecking bye, add a second team selector back
+            if (newTeams.length === 1) {
+                setTeams([...newTeams, { id: nanoid(), name: '', isBye: false }]);
+            } else {
+                 setTeams(newTeams);
+            }
+        }
+    }
+
 
     const addTeam = () => {
-        setTeams([...teams, { id: nanoid(), name: '' }]);
+        setTeams([...teams, { id: nanoid(), name: '', isBye: false }]);
     };
 
     const removeTeam = (id: string) => {
@@ -331,6 +353,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
 
     }, [debateRounds]);
 
+    const isByeRound = teams.some(t => t.isBye);
+
     return (
         <Card>
             <CardHeader>
@@ -360,39 +384,61 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                     <div className="space-y-3">
                         <Label>Equipos Participantes</Label>
                         {teams.map((team, index) => (
-                            <div key={team.id} className="flex items-center gap-2">
-                                <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={`Equipo ${index + 1}`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableTeams.map(school => (
-                                            <SelectItem key={school.id} value={school.teamName}>
-                                                {school.teamName} ({school.schoolName})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {team.isBye ? (
-                                    <Button type="button" variant="secondary" size="sm" onClick={() => handleConfirmBye(team)} disabled={isSubmitting}>
-                                        <Crown className="mr-2 h-4 w-4 text-amber-500" />
-                                        Confirmar Avance
-                                    </Button>
-                                ) : (
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 2 || isSubmitting}>
-                                        <Trash2 className="h-4 w-4 text-destructive"/>
-                                    </Button>
+                            <div key={team.id} className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Select onValueChange={(value) => handleTeamNameChange(team.id, value)} value={team.name} disabled={isSubmitting}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={`Equipo ${index + 1}`} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {availableTeams.map(school => (
+                                                <SelectItem key={school.id} value={school.teamName}>
+                                                    {school.teamName} ({school.schoolName})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {!isByeRound && (
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeTeam(team.id)} disabled={teams.length <= 1 || isSubmitting}>
+                                            <Trash2 className="h-4 w-4 text-destructive"/>
+                                        </Button>
+                                    )}
+                                </div>
+                                 {index === 0 && (
+                                     <div className="flex items-center space-x-2 pt-1">
+                                        <Checkbox 
+                                            id={`bye-${team.id}`} 
+                                            checked={team.isBye} 
+                                            onCheckedChange={(checked) => handleByeChange(team.id, !!checked)} 
+                                        />
+                                        <label
+                                            htmlFor={`bye-${team.id}`}
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                        >
+                                            Avance Automático (Bye)
+                                        </label>
+                                    </div>
                                 )}
                             </div>
                         ))}
-                        <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting}>
-                            <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
-                        </Button>
+                         {!isByeRound && (
+                            <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting}>
+                                <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
+                            </Button>
+                         )}
                     </div>
-                    <Button type="submit" disabled={isSubmitting || !currentRound}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Actualizar Ronda
-                    </Button>
+                    
+                    {isByeRound ? (
+                         <Button type="button" variant="secondary" onClick={() => handleConfirmBye(teams[0])} disabled={isSubmitting || !teams[0].name}>
+                            <Crown className="mr-2 h-4 w-4 text-amber-500" />
+                            Confirmar Avance
+                        </Button>
+                    ) : (
+                        <Button type="submit" disabled={isSubmitting || !currentRound}>
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            Actualizar Ronda
+                        </Button>
+                    )}
                 </form>
             </CardContent>
         </Card>
