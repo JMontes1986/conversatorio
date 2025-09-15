@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -81,16 +82,18 @@ interface RoundData {
     name: string;
     phase: string;
 }
-type DrawTeam = {
-  id: string;
-  name: string;
-  round: string | null;
-};
-type DrawState = {
-    teams: DrawTeam[];
-    rounds: RoundData[];
-    activeTab?: string;
-};
+type Matchup = {
+    roundName: string;
+    teams: string[];
+}
+type Phase = {
+    name: string;
+    matchups: Matchup[];
+}
+type LiveDrawState = {
+    phases: Phase[];
+}
+
 interface StudentQuestion {
     id: string;
     text: string;
@@ -103,17 +106,7 @@ interface StudentQuestionOverlay {
     text: string;
     target: string;
 }
-type Matchup = {
-    roundName: string;
-    teams: string[];
-}
-type Phase = {
-    name: string;
-    matchups: Matchup[];
-}
-type LiveDrawState = {
-    phases: Phase[];
-}
+
 
 
 
@@ -240,9 +233,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
    const unresolvedTieInfo = useMemo(() => {
         const roundTotals: Record<string, Record<string, number>> = {};
 
-        // 1. Calculate total scores for all teams in each round/match
         allScores.forEach(score => {
-            // A match is defined by its ID, excluding system-generated tiebreakers
             if (score.judgeId === 'system') return;
             
             const roundName = score.matchId.split('-bye-')[0];
@@ -259,12 +250,10 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         
         const sortedRoundNames = Object.keys(roundTotals).sort();
 
-        // 2. Find the first round with a tie that hasn't been resolved
         for (const roundName of sortedRoundNames) {
             const totals = roundTotals[roundName];
             const scores = Object.values(totals);
             
-            // Check for a tie (at least two teams with the same score)
             const scoreCounts = scores.reduce((acc, score) => {
                 acc[score] = (acc[score] || 0) + 1;
                 return acc;
@@ -276,7 +265,6 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                 const tiedValue = parseInt(tiedScore);
                 const teamsInTie = Object.keys(totals).filter(team => totals[team] === tiedValue);
                 
-                // Check if a tie-breaker score has already been submitted for this specific round
                 const tieBreakerExists = allScores.some(s => s.matchId === roundName && s.judgeId === 'system');
 
                 if (!tieBreakerExists && teamsInTie.length > 1) {

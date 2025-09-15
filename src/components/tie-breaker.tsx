@@ -1,14 +1,14 @@
 
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
 import { Dices, Loader2, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 interface TieBreakerProps {
   roundName: string;
@@ -16,30 +16,8 @@ interface TieBreakerProps {
   team2: string;
 }
 
-const Dice = ({ value }: { value: number }) => {
-  const dots = [];
-  const dotPositions: { [key: number]: number[][] } = {
-    1: [[4]],
-    2: [[0, 8], [2, 6]],
-    3: [[0, 4, 8], [2, 4, 6]],
-    4: [[0, 2, 6, 8]],
-    5: [[0, 2, 4, 6, 8]],
-    6: [[0, 3, 6, 2, 5, 8]],
-  };
-  const positions = dotPositions[value][Math.floor(Math.random() * dotPositions[value].length)];
-  for (let i = 0; i < 9; i++) {
-    dots.push(
-      <div
-        key={i}
-        className={cn(
-          'w-2 h-2 rounded-full',
-          positions.includes(i) ? 'bg-foreground' : 'bg-transparent'
-        )}
-      />
-    );
-  }
-  return <div className="w-10 h-10 border-2 rounded-md p-1 grid grid-cols-3 gap-0.5">{dots}</div>;
-};
+const TIEBREAK_DOC_ID = "current";
+const tiebreakRef = doc(db, "tiebreak", TIEBREAK_DOC_ID);
 
 export const TieBreaker: React.FC<TieBreakerProps> = ({ roundName, team1, team2 }) => {
   const { toast } = useToast();
@@ -49,28 +27,53 @@ export const TieBreaker: React.FC<TieBreakerProps> = ({ roundName, team1, team2 
   const [winner, setWinner] = useState<string | null>(null);
 
   useEffect(() => {
+    // Set initial state for public view
+    setDoc(tiebreakRef, {
+        isActive: true,
+        roundName,
+        team1,
+        team2,
+        results: null,
+        winner: null,
+        isRolling: false,
+    });
+    // Cleanup on component unmount
+    return () => {
+        deleteDoc(tiebreakRef);
+    }
+  }, [roundName, team1, team2]);
+
+
+  useEffect(() => {
     if (results) {
       if (results.team1 > results.team2) {
         setWinner(team1);
+        setDoc(tiebreakRef, { winner: team1 }, { merge: true });
       } else if (results.team2 > results.team1) {
         setWinner(team2);
+        setDoc(tiebreakRef, { winner: team2 }, { merge: true });
       } else {
-        setWinner(null); // Tie
+        setWinner(null); // Tie, prompt for re-roll
+        setDoc(tiebreakRef, { winner: null }, { merge: true });
       }
     }
   }, [results, team1, team2]);
 
-  const rollDice = () => {
+  const rollDice = async () => {
     setIsRolling(true);
     setResults(null);
     setWinner(null);
-    setTimeout(() => {
-      setResults({
-        team1: Math.floor(Math.random() * 6) + 1,
-        team2: Math.floor(Math.random() * 6) + 1,
-      });
+    await setDoc(tiebreakRef, { isRolling: true, results: null, winner: null }, { merge: true });
+
+    setTimeout(async () => {
+        const newResults = {
+            team1: Math.floor(Math.random() * 6) + 1,
+            team2: Math.floor(Math.random() * 6) + 1,
+        };
+      setResults(newResults);
+      await setDoc(tiebreakRef, { isRolling: false, results: newResults }, { merge: true });
       setIsRolling(false);
-    }, 1500);
+    }, 2000);
   };
 
   const confirmWinner = async () => {
@@ -96,6 +99,10 @@ export const TieBreaker: React.FC<TieBreakerProps> = ({ roundName, team1, team2 
         createdAt: new Date(),
       };
       await addDoc(collection(db, 'scores'), tieBreakerScore);
+      
+      // Clean up tiebreak state
+      await deleteDoc(tiebreakRef);
+
       toast({
         title: '¡Ganador Confirmado!',
         description: `${winner} avanza a la siguiente ronda.`,
@@ -118,12 +125,12 @@ export const TieBreaker: React.FC<TieBreakerProps> = ({ roundName, team1, team2 
         <div className={cn("p-3 rounded-lg", winner === team1 && 'bg-green-200 dark:bg-green-800')}>
           <p className="font-bold">{team1}</p>
           {isRolling && <Dices className="h-10 w-10 mx-auto my-2 animate-spin" />}
-          {results && <div className="flex justify-center my-2"><Dice value={results.team1} /></div>}
+          {results && <p className="text-4xl font-bold my-2">{results.team1}</p>}
         </div>
         <div className={cn("p-3 rounded-lg", winner === team2 && 'bg-green-200 dark:bg-green-800')}>
           <p className="font-bold">{team2}</p>
           {isRolling && <Dices className="h-10 w-10 mx-auto my-2 animate-spin" />}
-          {results && <div className="flex justify-center my-2"><Dice value={results.team2} /></div>}
+          {results && <p className="text-4xl font-bold my-2">{results.team2}</p>}
         </div>
       </div>
       
