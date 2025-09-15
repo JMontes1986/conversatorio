@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs } from 'firebase/firestore';
@@ -45,6 +45,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
+import { TieBreaker } from './tie-breaker';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -200,7 +201,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de octavos")) {
             const phaseDependencies: Record<string, { from: string, limit?: number }> = {
                 "Fase de octavos": { from: "Fase de Grupos", limit: 16 },
-                "Cuartos de Final": { from: "Fase de octavos", limit: 8 },
+                "Cuartos de Final": { from: "Fase de octavos" },
                 "Semifinal": { from: "Cuartos de Final" },
                 "Final": { from: "Semifinal" }
             };
@@ -220,6 +221,39 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
         
         return registeredSchools;
     }, [currentRound, debateRounds, allScores, registeredSchools]);
+    
+    const tieInfo = useMemo(() => {
+        if (!currentRound || teams.length !== 2) return null;
+
+        const roundScores = allScores.filter(s => s.matchId === currentRound);
+        if (roundScores.length === 0) return null;
+
+        const teamTotals: Record<string, number> = {};
+        roundScores.forEach(score => {
+            score.teams.forEach(team => {
+                if (!teamTotals[team.name]) teamTotals[team.name] = 0;
+                teamTotals[team.name] += team.total;
+            });
+        });
+
+        const team1Name = teams[0].name;
+        const team2Name = teams[1].name;
+
+        if (team1Name && team2Name && teamTotals[team1Name] === teamTotals[team2Name]) {
+             // Ensure both teams are in the totals (i.e., scores have been submitted)
+             if (teamTotals[team1Name] !== undefined) {
+                 return {
+                    team1: team1Name,
+                    team2: team2Name,
+                    score: teamTotals[team1Name],
+                 };
+             }
+        }
+
+        return null;
+
+    }, [currentRound, teams, allScores]);
+
 
     const handleRoundChange = useCallback((roundName: string) => {
         setCurrentRound(roundName);
@@ -272,9 +306,11 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
 
             const byeScoreData = {
                 matchId: byeMatchId,
-                judgeName: "Sistema",
+                judgeId: 'system',
+                judgeName: "Sistema (Bye)",
+                judgeCedula: 'N/A',
                 teams: [{ name: team.name, total: 1 }], // Give 1 point to signify a win
-                fullScores: [{ name: team.name, total: 1, scores: { bye: 1 } }],
+                fullScores: [{ name: team.name, total: 1, scores: { bye: 1 }, checksum: 'BYE' }],
                 createdAt: new Date(),
             };
             await addDoc(collection(db, "scores"), byeScoreData);
@@ -340,10 +376,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
             return acc;
         }, {} as Record<string, RoundData[]>);
         
-        const sortedPhases = Object.keys(grouped).sort((a,b) => {
-            const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
-            return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
-        });
+        const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
+        const sortedPhases = Object.keys(grouped).sort((a,b) => phaseOrder.indexOf(a) - phaseOrder.indexOf(b));
         
         const result: Record<string, RoundData[]> = {};
         sortedPhases.forEach(phase => {
@@ -440,6 +474,26 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                         </Button>
                     )}
                 </form>
+                 {tieInfo && (
+                    <Card className="mt-6 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                                <AlertTriangle className="h-5 w-5" />
+                                ¡Empate Detectado!
+                            </CardTitle>
+                             <CardDescription className="text-amber-600 dark:text-amber-500">
+                                Se ha detectado un empate en la ronda actual. Utilice la herramienta de desempate.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <TieBreaker
+                                roundName={currentRound}
+                                team1={tieInfo.team1}
+                                team2={tieInfo.team2}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
             </CardContent>
         </Card>
     );
@@ -463,10 +517,10 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             return acc;
         }, {} as Record<string, RoundData[]>);
 
+        const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
             if (a === 'General') return -1;
             if (b === 'General') return 1;
-            const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
             return phaseOrder.indexOf(a) - phaseOrder.indexOf(b);
         });
         
