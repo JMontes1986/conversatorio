@@ -34,8 +34,8 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const baseNavLinks = [
-  { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/programacion", label: "Programación", icon: Calendar },
+  { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/draw", label: "Sorteo", icon: Shuffle },
   { href: "/debate", label: "Debate", icon: MessageSquare },
 ];
