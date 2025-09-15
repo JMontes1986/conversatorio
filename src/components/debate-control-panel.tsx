@@ -198,11 +198,11 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
     const availableTeams = useMemo(() => {
         const selectedRoundData = debateRounds.find(r => r.name === currentRound);
         
-        if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de octavos")) {
+        if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de semifinales")) {
             const phaseDependencies: Record<string, { from: string, limit?: number }> = {
-                "Fase de octavos": { from: "Fase de Grupos", limit: 16 },
-                "Cuartos de Final": { from: "Fase de octavos" },
-                "Semifinal": { from: "Cuartos de Final" },
+                "Fase de semifinales": { from: "Fase de Grupos", limit: 16 },
+                "Cuartos de Final": { from: "Fase de semifinales" },
+                "Semifinal": { from: "Fase de Finales" },
                 "Final": { from: "Semifinal" }
             };
 
@@ -376,7 +376,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
             return acc;
         }, {} as Record<string, RoundData[]>);
         
-        const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
+        const phaseOrder = ["Fase de Grupos", "Fase de semifinales", "Fase de Finales", "FINAL"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => phaseOrder.indexOf(a) - phaseOrder.indexOf(b));
         
         const result: Record<string, RoundData[]> = {};
@@ -517,7 +517,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             return acc;
         }, {} as Record<string, RoundData[]>);
 
-        const phaseOrder = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
+        const phaseOrder = ["Fase de Grupos", "Fase de semifinales", "Fase de Finales", "FINAL"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
             if (a === 'General') return -1;
             if (b === 'General') return 1;

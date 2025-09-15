@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -84,7 +85,7 @@ export function KnockoutStageResults() {
     const finalStageResults = useMemo(() => {
         if (loading) return [];
         
-        const excludedPhases = ["Fase de Grupos", "Fase de octavos"];
+        const excludedPhases = ["Fase de Grupos", "Fase de semifinales"];
         const knockoutRoundNames = allRounds
             .filter(r => !excludedPhases.includes(r.phase))
             .map(r => r.name);

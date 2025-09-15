@@ -28,7 +28,7 @@ interface RoundData {
     phase: string;
 }
 
-const competitionPhases = ["Fase de Grupos", "Fase de octavos", "Fase de Finales", "FINAL"];
+const competitionPhases = ["Fase de Grupos", "Fase de semifinales", "Fase de Finales", "FINAL"];
 
 export function RoundManagement() {
     const { toast } = useToast();
@@ -131,7 +131,7 @@ export function RoundManagement() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Fase de Grupos">Fase de Grupos</SelectItem>
-                                        <SelectItem value="Fase de octavos">Fase de octavos</SelectItem>
+                                        <SelectItem value="Fase de semifinales">Fase de semifinales</SelectItem>
                                         <SelectItem value="Fase de Finales">Fase de Finales</SelectItem>
                                         <SelectItem value="FINAL">FINAL</SelectItem>
                                     </SelectContent>

@@ -38,7 +38,7 @@ type MatchResult = {
 }
 
 
-export function OctavosStageResults() {
+export function SemifinalsStageResults() {
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
     const [allRounds, setAllRounds] = useState<RoundData[]>([]);
     const [debateState, setDebateState] = useState<DebateState | null>(null);
@@ -81,19 +81,19 @@ export function OctavosStageResults() {
         };
     }, []);
 
-    const octavosResults = useMemo(() => {
+    const semifinalsResults = useMemo(() => {
         if (loading) return [];
         
-        const octavosRoundNames = allRounds
-            .filter(r => r.phase === "Fase de octavos")
+        const semifinalsRoundNames = allRounds
+            .filter(r => r.phase === "Fase de semifinales")
             .map(r => r.name);
 
-        const octavosScores = allScores.filter(score => {
-            return octavosRoundNames.some(roundName => score.matchId.startsWith(roundName));
+        const semifinalsScores = allScores.filter(score => {
+            return semifinalsRoundNames.some(roundName => score.matchId.startsWith(roundName));
         });
 
         const matches: Record<string, ScoreData[]> = {};
-        octavosScores.forEach(score => {
+        semifinalsScores.forEach(score => {
             if (!matches[score.matchId]) {
                 matches[score.matchId] = [];
             }
@@ -140,7 +140,7 @@ export function OctavosStageResults() {
 
         if (debateState?.currentRound && debateState.teams.length > 0) {
              const currentRoundData = allRounds.find(r => r.name === debateState.currentRound);
-             if (currentRoundData && currentRoundData.phase === "Fase de octavos") {
+             if (currentRoundData && currentRoundData.phase === "Fase de semifinales") {
                 const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
                 if (!isAlreadyScored) {
                     processedMatches.push({
@@ -170,7 +170,7 @@ export function OctavosStageResults() {
         return (
             <div className="flex justify-center items-center min-h-[200px]">
                 <Loader2 className="h-8 w-8 animate-spin" />
-                <p className="ml-4">Cargando resultados de octavos...</p>
+                <p className="ml-4">Cargando resultados de semifinales...</p>
             </div>
         );
     }
@@ -183,24 +183,24 @@ export function OctavosStageResults() {
                         <CardTitle className="flex items-center justify-center gap-2"><EyeOff /> Resultados Ocultos</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p>Los resultados de octavos de final se publicarán pronto. ¡Estén atentos!</p>
+                        <p>Los resultados de las semifinales se publicarán pronto. ¡Estén atentos!</p>
                     </CardContent>
                 </Card>
             </div>
         );
     }
 
-    if (octavosResults.length === 0) {
+    if (semifinalsResults.length === 0) {
         return (
             <div className="text-center text-muted-foreground p-8">
-                Aún no hay resultados para la fase de octavos de final.
+                Aún no hay resultados para la fase de semifinales.
             </div>
         );
     }
 
     return (
        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {octavosResults.map((match) => (
+           {semifinalsResults.map((match) => (
                 <Card key={match.id}>
                     <CardHeader>
                         <CardTitle className="text-lg capitalize">{match.id.replace(/-/g, ' ')}</CardTitle>
