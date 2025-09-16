@@ -42,7 +42,7 @@ function PublicPageLayout({ children }: { children: React.ReactNode }) {
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
                 <div className="container mx-auto flex h-16 items-center justify-center px-4 md:px-6">
                      <Link href="/" className="flex items-center gap-2">
-                        <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={60} height={60} />
+                        <Image src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Logo%20Slogan%20Nuevo%20FINAL-05.png" alt="Logo Colgemelli" width={60} height={60} style={{ height: 'auto' }}/>
                         <span className="font-headline text-lg font-bold">Conversatorio Colgemelli</span>
                     </Link>
                 </div>
