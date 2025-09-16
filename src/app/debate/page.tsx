@@ -124,7 +124,7 @@ export default function DebatePage() {
 
 
   return (
-    <div className="relative flex flex-col h-screen bg-secondary text-foreground p-4 md:p-8 overflow-hidden">
+    <div className="relative flex flex-col min-h-screen bg-secondary text-foreground p-4 md:p-8">
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
@@ -146,7 +146,7 @@ export default function DebatePage() {
             </div>
         )}
 
-        <div className={cn("flex-grow grid grid-cols-1 gap-6 h-full", !isFullScreen && "lg:grid-cols-4")}>
+        <div className={cn("flex-grow grid grid-cols-1 gap-6", !isFullScreen && "lg:grid-cols-4")}>
             
             {/* Main Content: Question or Video */}
             <div 
@@ -175,7 +175,7 @@ export default function DebatePage() {
                         <VideoEmbed url={videoUrl} />
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
+                    <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
                         <h1 className={cn("font-headline font-bold whitespace-pre-wrap", sizeClasses[questionSize || 'normal'])}>
                             {question}
                         </h1>
@@ -186,7 +186,7 @@ export default function DebatePage() {
             {/* Sidebar: QR Code and Timer */}
             {!isFullScreen && (
               <div className="flex flex-col gap-6">
-                 <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center">
+                 <div className="bg-background rounded-lg shadow-2xl p-6 flex flex-col items-center justify-center flex-grow text-center min-h-[300px]">
                     {showQr ? (
                         <>
                             <QrCode className="h-8 w-8 text-primary mb-2"/>
