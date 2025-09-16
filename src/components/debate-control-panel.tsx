@@ -105,6 +105,7 @@ interface StudentQuestion {
 interface StudentQuestionOverlay {
     text: string;
     target: string;
+    name?: string;
 }
 
 
@@ -195,7 +196,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
 
-        if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de semifinal")) {
+        if (selectedRoundData && selectedRoundData.phase === "Fase de Finales") {
             const phaseDependencies: Record<string, { from: string | string[], limit?: number }> = {
                 "Fase de semifinal": { from: "Fase de Grupos", limit: 4 },
                 "Fase de Finales": { from: "Fase de semifinal" }
@@ -1184,7 +1185,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const handleProjectStudentQuestion = async (question: StudentQuestion) => {
         const overlay: StudentQuestionOverlay = {
             text: question.text,
-            target: question.targetTeam || 'Ambos'
+            target: question.targetTeam || 'Ambos',
+            name: question.name
         };
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -1373,6 +1375,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                                             <h2 className="font-headline text-lg font-bold mb-1">Pregunta del Público</h2>
                                             <p className="text-2xl font-semibold whitespace-pre-wrap">
                                                 "{projectedStudentQuestion.text}"
+                                            </p>
+                                             <p className="mt-2 text-sm text-muted-foreground">
+                                                De: <span className="font-semibold">{projectedStudentQuestion.name}</span>
                                             </p>
                                             <p className="mt-2 text-base text-muted-foreground">
                                                 Para: <span className="font-semibold text-primary">{projectedStudentQuestion.target}</span>

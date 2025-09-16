@@ -18,6 +18,7 @@ const DEBATE_STATE_DOC_ID = "current";
 interface StudentQuestionOverlay {
     text: string;
     target: string;
+    name?: string;
 }
 
 interface DebateState {
@@ -137,7 +138,8 @@ export default function DebatePage() {
                     <p className="text-3xl lg:text-4xl font-semibold whitespace-pre-wrap">
                         "{studentQuestionOverlay.text}"
                     </p>
-                    <p className="mt-4 text-lg text-muted-foreground font-medium">
+                    <p className="mt-4 text-muted-foreground">De: <span className="font-medium text-foreground">{studentQuestionOverlay.name}</span></p>
+                    <p className="mt-2 text-lg text-muted-foreground font-medium">
                         Para: <span className="font-bold text-primary">{studentQuestionOverlay.target}</span>
                     </p>
                 </div>
