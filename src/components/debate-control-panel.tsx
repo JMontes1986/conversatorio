@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Timer } from "@/components/timer";
@@ -800,7 +800,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                                                     
                                                     <Button size="sm" variant="outline" onClick={() => onSendVideo(q)} disabled={!videoInputs[q.id]}>
                                                         <Video className="mr-2 h-4 w-4" /> Enviar Video
-                                                    </Button>
+                                                     </Button>
                                                      <Button size="sm" onClick={() => onSendQuestion(q)}>
                                                         <MessageSquare className="mr-2 h-4 w-4" /> Enviar Pregunta
                                                      </Button>
