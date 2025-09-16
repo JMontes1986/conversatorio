@@ -49,7 +49,7 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
     const finalStageResults = useMemo(() => {
         if (loading) return [];
         
-        const excludedPhases = ["Fase de Grupos", "Fase eliminatoria", "Fase de semifinal"];
+        const excludedPhases = ["Fase de Grupos"];
         const knockoutRoundNames = allRounds
             .filter(r => !excludedPhases.includes(r.phase))
             .map(r => r.name);

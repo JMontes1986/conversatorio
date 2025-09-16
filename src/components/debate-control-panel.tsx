@@ -194,12 +194,10 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
 
-        if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de semifinal" || selectedRoundData.phase === "Fase eliminatoria")) {
+        if (selectedRoundData && (selectedRoundData.phase === "Fase de Finales" || selectedRoundData.phase === "Fase de semifinal")) {
             const phaseDependencies: Record<string, { from: string | string[], limit?: number }> = {
-                "Fase eliminatoria": { from: "Fase de Grupos", limit: 8 },
-                "Fase de semifinal": { from: "Fase eliminatoria" },
-                "Semifinal": { from: ["Ronda 6", "Ronda 7"] },
-                "Final": { from: "Semifinal" }
+                "Fase de semifinal": { from: "Fase de Grupos", limit: 4 },
+                "Fase de Finales": { from: "Fase de semifinal" }
             };
 
             let qualifiedTeamNames: string[] = [];
@@ -323,7 +321,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                     phase.matchups.push(newMatchup);
                 }
                 
-                const phaseOrder = ["Fase de Grupos", "Fase eliminatoria", "Fase de semifinal", "Fase de Finales", "FINAL"];
+                const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
                 currentDrawState.phases.sort((a,b) => phaseOrder.indexOf(a.name) - phaseOrder.indexOf(b.name));
 
 
@@ -431,7 +429,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
             return acc;
         }, {} as Record<string, RoundData[]>);
         
-        const phaseOrder = ["Fase de Grupos", "Fase eliminatoria", "Fase de semifinal", "Fase de Finales", "FINAL"];
+        const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => phaseOrder.indexOf(a) - phaseOrder.indexOf(b));
         
         const result: Record<string, RoundData[]> = {};
@@ -572,7 +570,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             return acc;
         }, {} as Record<string, RoundData[]>);
 
-        const phaseOrder = ["Fase de Grupos", "Fase eliminatoria", "Fase de semifinal", "Fase de Finales", "FINAL"];
+        const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
             if (a === 'General') return -1;
             if (b === 'General') return 1;

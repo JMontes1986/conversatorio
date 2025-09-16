@@ -67,7 +67,7 @@ export function EditQuestionForm({ question, allRounds, onFinished }: EditQuesti
         return acc;
     }, {} as Record<string, RoundData[]>);
     
-    const phaseOrder = ["Fase de Grupos", "Fase eliminatoria", "Fase de semifinal", "Fase de Finales", "FINAL"];
+    const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
     const sortedPhases = Object.keys(grouped).sort((a,b) => phaseOrder.indexOf(a) - phaseOrder.indexOf(b));
     
     const result: Record<string, RoundData[]> = {};
