@@ -98,7 +98,7 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
          return (
             <Card>
                  <CardHeader>
-                    <CardTitle className="font-headline">Resultado FINAL</CardTitle>
+                    <CardTitle className="font-headline">Resultado de la Gran Final</CardTitle>
                     <CardDescription>El enfrentamiento culminante del torneo.</CardDescription>
                 </CardHeader>
                 <CardContent className="text-center text-muted-foreground p-8">
@@ -112,7 +112,7 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
     return (
         <Card className="border-primary border-2 shadow-lg">
             <CardHeader className="text-center">
-                <CardTitle className="font-headline text-2xl md:text-3xl">Resultado FINAL</CardTitle>
+                <CardTitle className="font-headline text-2xl md:text-3xl">Resultado de la Gran Final</CardTitle>
                 <CardDescription>El enfrentamiento culminante del torneo.</CardDescription>
             </CardHeader>
             <CardContent>

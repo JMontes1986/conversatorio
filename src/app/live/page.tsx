@@ -11,8 +11,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Send, CheckCircle, Lightbulb } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Loader2, Send, CheckCircle, Lightbulb, ArrowLeft } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, onSnapshot, getDoc, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -162,6 +162,14 @@ function QuestionLiveComponent() {
                     <CardContent>
                         <p className="text-muted-foreground">Tu pregunta ha sido enviada. Solo puedes enviar una pregunta por tema de debate.</p>
                     </CardContent>
+                    <CardFooter className="flex justify-center pt-4">
+                        <Button asChild>
+                            <Link href="/debate">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Volver al Debate
+                            </Link>
+                        </Button>
+                    </CardFooter>
                 </Card>
             </div>
       )
