@@ -147,12 +147,23 @@ export default function DebatePage() {
         <div className={cn("flex-grow grid grid-cols-1 gap-6 h-full", !isFullScreen && "lg:grid-cols-4")}>
             
             {/* Main Content: Question or Video */}
-            <div className={cn(
-                "relative bg-background rounded-lg shadow-2xl flex flex-col items-center justify-center p-6 md:p-12 text-center",
-                !isFullScreen && "lg:col-span-3",
-                isFullScreen && "fixed inset-0 z-10 p-12 md:p-20"
-            )}>
-                 <Button variant="ghost" size="icon" className="absolute top-4 left-4 h-10 w-10 text-muted-foreground z-20" onClick={() => setIsFullScreen(!isFullScreen)}>
+            <div 
+                className={cn(
+                    "relative bg-background rounded-lg shadow-2xl flex flex-col items-center justify-center p-6 md:p-12 text-center",
+                    !isFullScreen && "lg:col-span-3",
+                    isFullScreen && "fixed inset-0 z-10 p-12 md:p-20"
+                )}
+                onDoubleClick={() => isFullScreen && setIsFullScreen(false)}
+            >
+                 <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className={cn(
+                        "absolute h-10 w-10 text-muted-foreground z-20",
+                        isFullScreen ? "bottom-4 left-4" : "top-4 left-4"
+                    )} 
+                    onClick={() => setIsFullScreen(!isFullScreen)}
+                >
                     {isFullScreen ? <Minimize className="h-6 w-6" /> : <Expand className="h-6 w-6" />}
                     <span className="sr-only">{isFullScreen ? "Minimizar" : "Expandir"}</span>
                 </Button>
