@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2, Users } from "lucide-react";
-import { collection, onSnapshot, query, where, doc, setDoc, getDocs, orderBy, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, setDoc, getDocs, orderBy, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,16 +60,15 @@ export function DrawAnimation() {
 
 
  useEffect(() => {
+    setLoading(true);
     const unsubTeams = onSnapshot(query(collection(db, "schools"), where("status", "==", "Verificado")), (snapshot) => {
         const fetchedTeams = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().teamName,
         }));
         setAllTeams(fetchedTeams);
-        setLoading(false);
     }, (error) => {
         console.error("Error fetching teams: ", error);
-        setLoading(false);
     });
 
     const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
@@ -77,10 +76,24 @@ export function DrawAnimation() {
         const filteredRounds = roundsData.filter(r => r.phase === "Fase de Grupos");
         setGroupRounds(filteredRounds);
     });
+
+    const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+    const unsubDrawState = onSnapshot(drawStateRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data() as LiveDrawState;
+            const groupPhase = data.phases?.find(p => p.name === "Fase de Grupos");
+            if (groupPhase && groupPhase.matchups.length > 0) {
+                setAssignedTeams(groupPhase.matchups);
+                setIsFinished(true); // Mark as finished if there's a saved state
+            }
+        }
+        setLoading(false);
+    });
     
     return () => {
       unsubTeams();
       unsubRounds();
+      unsubDrawState();
     };
   }, []);
 
@@ -179,9 +192,9 @@ export function DrawAnimation() {
                 </p>
             </div>
             <div className="flex gap-2">
-                <Button onClick={startDraw} disabled={isDrawing || isFinished || loading || allTeams.length === 0 || groupRounds.length === 0}>
+                <Button onClick={startDraw} disabled={isDrawing || loading || allTeams.length === 0 || groupRounds.length === 0}>
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
-                    {loading ? "Cargando..." : "Iniciar Sorteo"}
+                    {loading ? "Cargando..." : isFinished ? "Volver a Sortear" : "Iniciar Sorteo"}
                 </Button>
             </div>
         </div>
