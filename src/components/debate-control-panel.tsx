@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2 } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Timer } from "@/components/timer";
@@ -95,6 +95,7 @@ type LiveDrawState = {
 
 interface StudentQuestion {
     id: string;
+    name: string;
     text: string;
     relatedDebateQuestionId: string;
     targetTeam: string;
@@ -321,7 +322,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                     phase.matchups.push(newMatchup);
                 }
                 
-                const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
+                const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales", "FINAL"];
                 currentDrawState.phases.sort((a,b) => phaseOrder.indexOf(a.name) - phaseOrder.indexOf(b.name));
 
 
@@ -429,7 +430,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
             return acc;
         }, {} as Record<string, RoundData[]>);
         
-        const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
+        const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales", "FINAL"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => phaseOrder.indexOf(a) - phaseOrder.indexOf(b));
         
         const result: Record<string, RoundData[]> = {};
@@ -570,7 +571,7 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
             return acc;
         }, {} as Record<string, RoundData[]>);
 
-        const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales"];
+        const phaseOrder = ["Fase de Grupos", "Fase de semifinal", "Fase de Finales", "FINAL"];
         const sortedPhases = Object.keys(grouped).sort((a,b) => {
             if (a === 'General') return -1;
             if (b === 'General') return 1;
@@ -907,6 +908,9 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                     <div key={q.id} className="p-3 border rounded-lg bg-secondary/50">
                                         <p className="text-sm font-medium">{q.text}</p>
                                         <p className="text-xs text-muted-foreground mt-1">
+                                            De: <span className="font-semibold">{q.name}</span>
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-1">
                                             Para: <span className="font-semibold">{q.targetTeam || 'Ambos'}</span>
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-1">
@@ -929,6 +933,9 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                         projectedQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
                                     )}>
                                         <p className="text-sm font-medium">{q.text}</p>
+                                         <p className="text-xs text-muted-foreground mt-1">
+                                            De: <span className="font-semibold">{q.name}</span>
+                                        </p>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             Para: <span className="font-semibold">{q.targetTeam || 'Ambos'}</span>
                                         </p>

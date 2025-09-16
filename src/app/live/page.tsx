@@ -12,7 +12,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Send, CheckCircle, Lightbulb, ArrowLeft } from "lucide-react";
+import { Loader2, Send, CheckCircle, Lightbulb, ArrowLeft, User } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, onSnapshot, getDoc, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 
 interface Team {
@@ -57,6 +58,7 @@ function QuestionLiveComponent() {
     const [questionId, setQuestionId] = useState<string | null>(null);
     const [debateQuestion, setDebateQuestion] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [studentName, setStudentName] = useState('');
     const [studentQuestion, setStudentQuestion] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -96,6 +98,10 @@ function QuestionLiveComponent() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!studentName.trim()) {
+             toast({ variant: 'destructive', title: 'Error', description: 'Su nombre es requerido.'});
+            return;
+        }
         if (!studentQuestion.trim() || !questionId) {
             toast({ variant: 'destructive', title: 'Error', description: 'Su pregunta no puede estar vacía.'});
             return;
@@ -108,6 +114,7 @@ function QuestionLiveComponent() {
         setIsSubmitting(true);
         try {
             await addDoc(collection(db, 'studentQuestions'), {
+                name: studentName,
                 text: studentQuestion,
                 relatedDebateQuestionId: questionId,
                 targetTeam: targetTeam,
@@ -187,6 +194,18 @@ function QuestionLiveComponent() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="space-y-2">
+                             <Label htmlFor="student-name" className="text-sm font-medium text-muted-foreground">
+                                Su Nombre
+                            </Label>
+                             <Input
+                                id="student-name"
+                                value={studentName}
+                                onChange={(e) => setStudentName(e.target.value)}
+                                placeholder="Escriba su nombre aquí..."
+                                disabled={isSubmitting}
+                            />
+                        </div>
                         <div>
                             <label htmlFor="student-question" className="block text-sm font-medium text-muted-foreground mb-2">
                                 Basado en el tema, ¿qué pregunta tienes para los participantes?
@@ -196,7 +215,7 @@ function QuestionLiveComponent() {
                                 value={studentQuestion}
                                 onChange={(e) => setStudentQuestion(e.target.value)}
                                 placeholder="Escriba su pregunta aquí..."
-                                rows={4}
+                                rows={3}
                                 disabled={isSubmitting}
                             />
                         </div>
