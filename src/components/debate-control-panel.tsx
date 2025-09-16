@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2 } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -159,7 +159,7 @@ function getTopScoringTeamsFromPhase(scores: ScoreData[], phaseRounds: RoundData
 }
 
 
-function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
+function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState }: { registeredSchools?: SchoolData[], allScores?: ScoreData[], drawState: LiveDrawState | null }) {
     const { toast } = useToast();
     const [currentRound, setCurrentRound] = useState('');
     const [teams, setTeams] = useState<Team[]>([{ id: nanoid(), name: '', isBye: false }, { id: nanoid(), name: '', isBye: false }]);
@@ -548,6 +548,26 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [] }: { regist
                         </Button>
                     )}
                 </form>
+                {drawState && drawState.phases.length > 0 && (
+                     <div className="mt-8 pt-6 border-t">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4"><History className="h-5 w-5"/> Historial de Configuración</h3>
+                        <div className="space-y-4">
+                            {drawState.phases.map(phase => (
+                                <div key={phase.name}>
+                                    <h4 className="font-medium text-muted-foreground">{phase.name}</h4>
+                                    <ul className="mt-2 space-y-1 text-sm list-disc pl-5">
+                                        {phase.matchups.map(matchup => (
+                                            <li key={matchup.roundName}>
+                                                <span className="font-semibold">{matchup.roundName}:</span>
+                                                <span className="ml-2">{matchup.teams.join(' vs ')}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -1023,6 +1043,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
     const [currentRound, setCurrentRound] = useState('');
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
+    const [drawState, setDrawState] = useState<LiveDrawState | null>(null);
 
     useEffect(() => {
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -1069,12 +1090,20 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }, (error) => {
             console.error("Error fetching rounds:", error);
         });
+        
+        const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+        const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setDrawState(docSnap.data() as LiveDrawState);
+            }
+        });
 
 
         return () => {
             unsubscribeDebateState();
             unsubscribeQuestions();
             unsubscribeRounds();
+            unsubscribeDrawState();
         };
     }, []);
     
@@ -1367,7 +1396,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                         <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
                     <TabsContent value="round-config">
-                        <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} />
+                        <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} drawState={drawState} />
                     </TabsContent>
                     <TabsContent value="questions">
                          <QuestionManagement 
