@@ -50,7 +50,7 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
         if (loading) return [];
         
         const semifinalsRoundNames = allRounds
-            .filter(r => r.phase === "Fase de semifinales")
+            .filter(r => r.phase === "Fase de semifinal")
             .map(r => r.name);
 
         const semifinalsScores = allScores.filter(score => {
@@ -107,7 +107,7 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
 
         if (debateState?.currentRound && debateState.teams.length > 0) {
              const currentRoundData = allRounds.find(r => r.name === debateState.currentRound);
-             if (currentRoundData && currentRoundData.phase === "Fase de semifinales") {
+             if (currentRoundData && currentRoundData.phase === "Fase de semifinal") {
                 const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
                 if (!isAlreadyScored) {
                     processedMatches.push({
