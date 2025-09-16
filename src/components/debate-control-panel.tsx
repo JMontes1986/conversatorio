@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from 'firebase/firestore';
@@ -550,19 +550,25 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                     )}
                 </form>
                 {drawState && drawState.phases.length > 0 && (
-                     <div className="mt-8 pt-6 border-t">
-                        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4"><History className="h-5 w-5"/> Historial de Configuración</h3>
+                    <div className="mt-8 pt-6 border-t">
+                        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
+                            <History className="h-5 w-5" /> Historial de Configuración
+                        </h3>
                         <div className="space-y-4">
                             {drawState.phases.map(phase => (
                                 <div key={phase.name}>
                                     <h4 className="font-medium text-muted-foreground">{phase.name}</h4>
                                     <ul className="mt-2 space-y-1 text-sm list-disc pl-5">
-                                        {phase.matchups.map(matchup => (
-                                            <li key={matchup.roundName}>
-                                                <span className="font-semibold">{matchup.roundName}:</span>
-                                                <span className="ml-2">{matchup.teams.join(' vs ')}</span>
-                                            </li>
-                                        ))}
+                                        {phase.matchups.map(matchup => {
+                                            const isScored = allScores.some(score => score.matchId.startsWith(matchup.roundName));
+                                            return (
+                                                <li key={matchup.roundName} className="flex items-center gap-2">
+                                                    {isScored && <CheckCircle className="h-4 w-4 text-green-500" />}
+                                                    <span className="font-semibold">{matchup.roundName}:</span>
+                                                    <span className="ml-2">{matchup.teams.join(' vs ')}</span>
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
                                 </div>
                             ))}
@@ -927,7 +933,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                                 {pendingQuestions.length > 0 ? pendingQuestions.map(q => (
                                     <div key={q.id} className="p-3 border rounded-lg bg-secondary/50">
-                                        <p className="text-sm font-medium">{q.text}</p>
+                                        <p className="text-sm font-medium">"{q.text}"</p>
                                         <p className="text-xs text-muted-foreground mt-1">
                                             De: <span className="font-semibold">{q.name}</span>
                                         </p>
@@ -953,7 +959,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                         "p-3 border rounded-lg transition-colors",
                                         projectedQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
                                     )}>
-                                        <p className="text-sm font-medium">{q.text}</p>
+                                        <p className="text-sm font-medium">"{q.text}"</p>
                                          <p className="text-xs text-muted-foreground mt-1">
                                             De: <span className="font-semibold">{q.name}</span>
                                         </p>
