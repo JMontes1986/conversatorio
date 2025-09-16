@@ -129,8 +129,14 @@ function getWinnerOfRound(scores: ScoreData[], roundName: string): string | null
     const entries = Object.entries(teamTotals);
     if (entries.length === 0) return null;
     
-    const winner = entries.reduce((a, b) => a[1] > b[1] ? a : b)[0];
-    return winner;
+    const maxScore = Math.max(...entries.map(([, score]) => score));
+    const winners = entries.filter(([, score]) => score === maxScore);
+
+    if (winners.length === 1) {
+        return winners[0][0]; // Return the name of the single winner
+    }
+    
+    return null; // Return null if there's a tie or no clear winner
 }
 
 
@@ -187,15 +193,31 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     
     const availableTeams = useMemo(() => {
         const selectedRoundData = debateRounds.find(r => r.name === currentRound);
-        
-        if (currentRound === 'Ronda 7') {
-            const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
+
+        // Logic for Semifinal 1 (Ronda 6)
+        if (currentRound === 'Ronda 6') {
+            const winnerR1 = getWinnerOfRound(allScores, "Ronda 1");
             const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
-            const winnerR5 = getWinnerOfRound(allScores, "Ronda 5");
-            const qualifiedTeamNames = [winnerR3, winnerR4, winnerR5].filter(Boolean) as string[];
+            const qualifiedTeamNames = [winnerR1, winnerR4].filter(Boolean) as string[];
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
 
+        // Logic for Semifinal 2 (Ronda 7)
+        if (currentRound === 'Ronda 7') {
+            const winnerR2 = getWinnerOfRound(allScores, "Ronda 2");
+            const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
+            const qualifiedTeamNames = [winnerR2, winnerR3].filter(Boolean) as string[];
+            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
+        }
+
+        // Logic for FINAL (Ronda 8)
+        if (currentRound === 'Ronda 8') {
+            const winnerR6 = getWinnerOfRound(allScores, "Ronda 6");
+            const winnerR7 = getWinnerOfRound(allScores, "Ronda 7");
+            const qualifiedTeamNames = [winnerR6, winnerR7].filter(Boolean) as string[];
+            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
+        }
+        
         if (selectedRoundData && selectedRoundData.phase === "Fase de Finales") {
             const phaseDependencies: Record<string, { from: string | string[], limit?: number }> = {
                 "Fase de semifinal": { from: "Fase de Grupos", limit: 4 },
