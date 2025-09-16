@@ -1,8 +1,7 @@
 
-
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Dices, Loader2, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,37 +43,45 @@ export const TieBreaker: React.FC<TieBreakerProps> = ({ roundName, team1, team2 
   }, [roundName, team1, team2]);
 
 
-  useEffect(() => {
-    if (results) {
-      if (results.team1 > results.team2) {
+  const determineWinner = useCallback((rollResults: { team1: number; team2: number }) => {
+      if (rollResults.team1 > rollResults.team2) {
         setWinner(team1);
         setDoc(tiebreakRef, { winner: team1 }, { merge: true });
-      } else if (results.team2 > results.team1) {
+      } else if (rollResults.team2 > rollResults.team1) {
         setWinner(team2);
         setDoc(tiebreakRef, { winner: team2 }, { merge: true });
       } else {
         setWinner(null); // Tie, prompt for re-roll
         setDoc(tiebreakRef, { winner: null }, { merge: true });
       }
-    }
-  }, [results, team1, team2]);
+  }, [team1, team2]);
 
-  const rollDice = async () => {
+
+  const rollDice = useCallback(() => {
+    if (isRolling) return;
+
     setIsRolling(true);
     setResults(null);
     setWinner(null);
-    await setDoc(tiebreakRef, { isRolling: true, results: null, winner: null }, { merge: true });
+    
+    // Update public state to show rolling animation
+    setDoc(tiebreakRef, { isRolling: true, results: null, winner: null }, { merge: true });
 
-    setTimeout(async () => {
-        const newResults = {
-            team1: Math.floor(Math.random() * 6) + 1,
-            team2: Math.floor(Math.random() * 6) + 1,
-        };
+    setTimeout(() => {
+      // This logic now runs only on the client, ensuring true randomness
+      const newResults = {
+          team1: Math.floor(Math.random() * 6) + 1,
+          team2: Math.floor(Math.random() * 6) + 1,
+      };
+      
       setResults(newResults);
-      await setDoc(tiebreakRef, { isRolling: false, results: newResults }, { merge: true });
+      determineWinner(newResults);
+      
+      // Update public state with results
+      setDoc(tiebreakRef, { isRolling: false, results: newResults }, { merge: true });
       setIsRolling(false);
     }, 2000);
-  };
+  }, [isRolling, determineWinner]);
 
   const confirmWinner = async () => {
     if (!winner) return;
