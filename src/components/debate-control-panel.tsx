@@ -204,9 +204,10 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
 
         // Logic for Semifinal 2 (Ronda 7)
         if (currentRound === 'Ronda 7') {
-            const winnerR2 = getWinnerOfRound(allScores, "Ronda 2");
-            const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
-            const qualifiedTeamNames = [winnerR2, winnerR3].filter(Boolean) as string[];
+             const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
+            const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
+            const winnerR5 = getWinnerOfRound(allScores, "Ronda 5");
+            const qualifiedTeamNames = [winnerR3, winnerR4, winnerR5].filter(Boolean) as string[];
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
 
@@ -218,7 +219,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
         
-        if (selectedRoundData && selectedRoundData.phase === "Fase de Finales") {
+        if (selectedRoundData && (selectedRoundData.phase === "Fase de semifinal" || selectedRoundData.phase === "Fase de Finales")) {
             const phaseDependencies: Record<string, { from: string | string[], limit?: number }> = {
                 "Fase de semifinal": { from: "Fase de Grupos", limit: 4 },
                 "Fase de Finales": { from: "Fase de semifinal" }
