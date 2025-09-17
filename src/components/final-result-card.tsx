@@ -28,7 +28,6 @@ const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null
     const teams = Object.entries(teamTotals);
     if (teams.length === 0) return null;
     
-    // Handle ties by returning null if there isn't a single winner
     const maxScore = Math.max(...teams.map(([, score]) => score));
     const winners = teams.filter(([, score]) => score === maxScore);
     
@@ -46,30 +45,8 @@ interface FinalResultCardProps {
 }
 
 export function FinalResultCard({ scores, resultsPublished, loading }: FinalResultCardProps) {
-    const finalMatch = useMemo(() => {
-        const winnerRonda6 = getWinnerOfRound(scores, "Ronda 6");
-        const winnerRonda7 = getWinnerOfRound(scores, "Ronda 7");
-
-        // "Ronda 8" is the final match
-        const finalRoundScores = scores.filter(s => s.matchId.startsWith("Ronda 8"));
-
-        if (finalRoundScores.length > 0) {
-            const finalWinner = getWinnerOfRound(scores, "Ronda 8");
-            return {
-                finalists: [winnerRonda6, winnerRonda7].filter(Boolean) as string[],
-                winner: finalWinner,
-            }
-        }
-        
-        if (winnerRonda6 && winnerRonda7) {
-            return {
-                finalists: [winnerRonda6, winnerRonda7],
-                winner: null,
-            }
-        }
-
-        return null;
-
+    const finalWinner = useMemo(() => {
+        return getWinnerOfRound(scores, "Ronda 8");
     }, [scores]);
 
 
@@ -108,26 +85,15 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
                 <CardDescription>El enfrentamiento culminante del torneo.</CardDescription>
             </CardHeader>
             <CardContent>
-                {finalMatch ? (
-                     finalMatch.winner ? (
-                         <div className="flex flex-col items-center justify-center text-center p-6 space-y-4">
-                             <Trophy className="h-20 w-20 text-amber-500" />
-                             <p className="text-muted-foreground">Campeón del Conversatorio Colgemelli</p>
-                             <h3 className="text-4xl font-bold font-headline">{finalMatch.winner}</h3>
-                         </div>
-                     ) : (
-                         <div className="text-center space-y-3 py-4">
-                            <div className="flex items-center justify-center gap-4 text-xl md:text-2xl font-bold">
-                                <span>{finalMatch.finalists[0] || 'Finalista 1'}</span>
-                                <Swords className="h-8 w-8 text-primary"/>
-                                <span>{finalMatch.finalists[1] || 'Finalista 2'}</span>
-                            </div>
-                            <Badge variant="outline">Final Pendiente</Badge>
-                         </div>
-                     )
+                {finalWinner ? (
+                    <div className="flex flex-col items-center justify-center text-center p-6 space-y-4">
+                        <Trophy className="h-20 w-20 text-amber-500" />
+                        <p className="text-muted-foreground">Campeón del Conversatorio Colgemelli</p>
+                        <h3 className="text-4xl font-bold font-headline">{finalWinner}</h3>
+                    </div>
                 ) : (
                     <div className="text-center text-muted-foreground p-8">
-                        Esperando a los ganadores de las semifinales para definir la final...
+                        Esperando el resultado de la Ronda 8 para coronar al campeón...
                     </div>
                 )}
             </CardContent>
