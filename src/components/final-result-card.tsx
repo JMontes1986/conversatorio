@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useMemo } from "react";
@@ -29,9 +28,16 @@ const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null
 
     const teams = Object.entries(teamTotals);
     if (teams.length === 0) return null;
+    
+    // Handle ties by returning null if there isn't a single winner
+    const maxScore = Math.max(...teams.map(([, score]) => score));
+    const winners = teams.filter(([, score]) => score === maxScore);
+    
+    if (winners.length === 1) {
+        return winners[0][0];
+    }
 
-    const winner = teams.reduce((a, b) => a[1] > b[1] ? a : b)[0];
-    return winner;
+    return null; // Tie or no winner
 };
 
 interface FinalResultCardProps {
@@ -42,10 +48,10 @@ interface FinalResultCardProps {
 
 export function FinalResultCard({ scores, resultsPublished, loading }: FinalResultCardProps) {
     const finalMatch = useMemo(() => {
-        const winnerSemifinal1 = getWinnerOfRound(scores, "Semifinal 1");
-        const winnerSemifinal2 = getWinnerOfRound(scores, "Semifinal 2");
+        const winnerRonda6 = getWinnerOfRound(scores, "Ronda 6");
+        const winnerRonda7 = getWinnerOfRound(scores, "Ronda 7");
 
-        const finalRoundScores = scores.filter(s => s.matchId.startsWith("FINAL"));
+        const finalRoundScores = scores.filter(s => s.matchId.startsWith("FINAL") || s.matchId.startsWith("Ronda 8"));
 
         if (finalRoundScores.length > 0) {
              const teamTotals: Record<string, number> = {};
@@ -65,11 +71,11 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
             }
         }
         
-        if (winnerSemifinal1 && winnerSemifinal2) {
+        if (winnerRonda6 && winnerRonda7) {
             return {
                 teams: [
-                    { name: winnerSemifinal1, total: 0 },
-                    { name: winnerSemifinal2, total: 0 }
+                    { name: winnerRonda6, total: 0 },
+                    { name: winnerRonda7, total: 0 }
                 ],
                 winner: null,
                 isTie: false,
