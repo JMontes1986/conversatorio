@@ -959,7 +959,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                 {approvedQuestions.length > 0 ? approvedQuestions.map(q => (
                                     <div key={q.id} className={cn(
                                         "p-3 border rounded-lg transition-colors",
-                                        projectedQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
+                                        projectedStudentQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
                                     )}>
                                         <p className="text-sm font-medium">"{q.text}"</p>
                                          <p className="text-xs text-muted-foreground mt-1">
@@ -1129,10 +1129,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const updateTimer = async (newDuration: number) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const currentDoc = await getDoc(docRef);
+            const currentTimerState = currentDoc.data()?.timer || {};
+
             await setDoc(docRef, { 
                 timer: { 
+                    ...currentTimerState,
                     duration: newDuration,
-                    isActive: mainTimer.isActive, // Keep current active state
                     lastUpdated: Date.now() 
                 } 
             }, { merge: true });
@@ -1387,6 +1390,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             const newDuration = (minutes * 60) + seconds;
             updateTimer(newDuration);
         };
+        
+        const setQuickTime = (durationInSeconds: number) => {
+            updateTimer(durationInSeconds);
+             setMinutes(Math.floor(durationInSeconds / 60));
+            setSeconds(durationInSeconds % 60);
+        }
 
         return (
             <Popover>
@@ -1585,8 +1594,15 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 <CardContent className="space-y-4">
                                 <div>
                                         <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
-                                        <div className="mt-2">
-                                            <TimerSettings />
+                                        <div className="mt-2 grid grid-cols-2 gap-2">
+                                            <div className='col-span-2 grid grid-cols-3 gap-2'>
+                                                <Button variant="outline" size="sm" onClick={() => updateTimer(120)}>2 min</Button>
+                                                <Button variant="outline" size="sm" onClick={() => updateTimer(60)}>1 min</Button>
+                                                <Button variant="outline" size="sm" onClick={() => updateTimer(30)}>30 seg</Button>
+                                            </div>
+                                            <div className="col-span-2">
+                                                 <TimerSettings />
+                                            </div>
                                         </div>
                                 </div>
                                     <div className="space-y-2 rounded-lg border p-3">
