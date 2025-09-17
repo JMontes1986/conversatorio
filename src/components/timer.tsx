@@ -12,6 +12,12 @@ import { cn } from "@/lib/utils";
 
 const DEBATE_STATE_DOC_ID = "current";
 
+interface TimerState {
+  duration: number;
+  lastUpdated: number;
+  isActive: boolean;
+}
+
 interface TimerProps {
   initialTime: number; // in seconds
   title: string;
@@ -21,11 +27,10 @@ interface TimerProps {
 
 export function Timer({ initialTime, title, showControls = true, size = 'default' }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
-  const [isActive, setIsActive] = useState(false);
+  const [serverState, setServerState] = useState<TimerState | null>(null);
   const synth = useRef<Tone.Synth | null>(null);
 
   useEffect(() => {
-    // Initialize Tone.js Synth on client
     synth.current = new Tone.Synth().toDestination();
   }, []);
   
@@ -35,43 +40,39 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       if (doc.exists()) {
         const data = doc.data();
         if (data.timer) {
-            if (typeof data.timer.isActive === 'boolean') {
-              setIsActive(data.timer.isActive);
-            }
-            if (data.timer.lastUpdated) {
-                const serverTime = data.timer.duration;
-                if(data.timer.isActive) {
-                    const elapsed = Math.floor((Date.now() - data.timer.lastUpdated) / 1000);
-                    setTimeRemaining(Math.max(0, serverTime - elapsed));
-                } else {
-                    setTimeRemaining(serverTime);
-                }
-            }
+            setServerState(data.timer as TimerState);
         }
       }
     });
     return () => unsubscribe();
   }, []);
 
-
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isActive && timeRemaining > 0) {
-      interval = setInterval(() => {
-        setTimeRemaining((time) => Math.max(0, time - 1));
-      }, 1000);
-    } else if (timeRemaining <= 0 && isActive) {
-      if (showControls) {
-          toggleTimer(); 
-          playSound();
-      }
-    }
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
+    const tick = () => {
+        if (serverState && serverState.isActive) {
+            const elapsed = Math.floor((Date.now() - serverState.lastUpdated) / 1000);
+            const newTime = Math.max(0, serverState.duration - elapsed);
+            setTimeRemaining(newTime);
+
+            if (newTime <= 0) {
+                 if (showControls) {
+                    toggleTimer(false); // Stop the timer on server
+                    playSound();
+                 }
+            }
+        } else if (serverState) {
+            setTimeRemaining(serverState.duration);
+        }
     };
-  }, [isActive, timeRemaining, showControls]);
+    
+    // Initial tick to sync immediately
+    tick();
+
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+
+  }, [serverState, showControls]);
+  
 
   const playSound = async () => {
      if (Tone.context.state !== 'running') {
@@ -83,28 +84,25 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     }
   };
   
-  const toggleTimer = async () => {
+  const toggleTimer = async (forceState?: boolean) => {
+     if (!showControls) return;
+
      if (Tone.context.state !== 'running') {
       await Tone.start();
     }
-    const newIsActive = !isActive;
+    const newIsActive = forceState !== undefined ? forceState : !(serverState?.isActive);
 
-    if (showControls) {
-        try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            const docSnap = await getDoc(docRef);
-            const currentTimerState = docSnap.exists() ? docSnap.data().timer : { duration: initialTime };
-
-            await setDoc(docRef, { 
-                timer: { 
-                    isActive: newIsActive,
-                    duration: timeRemaining > 0 ? timeRemaining : 0,
-                    lastUpdated: Date.now()
-                } 
-            }, { merge: true });
-        } catch (error) {
-            console.error("Error updating timer state in Firestore:", error);
-        }
+    try {
+        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+        await setDoc(docRef, { 
+            timer: { 
+                isActive: newIsActive,
+                duration: timeRemaining > 0 ? timeRemaining : initialTime,
+                lastUpdated: Date.now()
+            } 
+        }, { merge: true });
+    } catch (error) {
+        console.error("Error updating timer state in Firestore:", error);
     }
   };
 
@@ -119,6 +117,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     lastUpdated: Date.now()
                 } 
             }, { merge: true });
+            setTimeRemaining(initialTime);
         } catch (error) {
             console.error("Error resetting timer state in Firestore:", error);
         }
@@ -135,6 +134,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   };
 
   const progress = initialTime > 0 ? (timeRemaining / initialTime) * 100 : 0;
+  const isActive = serverState?.isActive ?? false;
 
   if (size === 'small') {
       return (
@@ -149,7 +149,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     </span>
                      {showControls && (
                         <div className="flex items-center gap-1">
-                            <Button onClick={toggleTimer} size="icon" className="h-8 w-8">
+                            <Button onClick={() => toggleTimer()} size="icon" className="h-8 w-8">
                                 {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                             </Button>
                             <Button onClick={resetTimer} variant="outline" size="icon" className="h-8 w-8">
@@ -203,7 +203,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         <div className="flex items-center gap-2">
             {showControls && (
                 <>
-                    <Button onClick={toggleTimer} size="icon" className="w-12 h-12 rounded-full">
+                    <Button onClick={() => toggleTimer()} size="icon" className="w-12 h-12 rounded-full">
                         {isActive ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                     </Button>
                     <Button onClick={resetTimer} variant="outline" size="icon" className="w-10 h-10">
