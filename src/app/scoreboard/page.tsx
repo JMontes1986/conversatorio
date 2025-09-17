@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { GroupStageResults } from "@/components/group-stage-results";
 import { FinalResultCard } from "@/components/final-result-card";
 import { SemifinalsStageResults } from "@/components/semifinals-stage-results";
+import { KnockoutStageResults } from '@/components/knockout-stage-results';
 import { Loader2 } from 'lucide-react';
 
 type ScoreData = {
@@ -104,6 +105,22 @@ export default function ScoreboardPage() {
                     </CardHeader>
                     <CardContent>
                         <SemifinalsStageResults 
+                             allScores={allScores}
+                             allRounds={allRounds}
+                             debateState={debateState}
+                             resultsPublished={resultsPublished}
+                             loading={loading}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
+                        <CardDescription>Puntuaciones de Cuartos, Semifinales y Final.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                       <KnockoutStageResults 
                              allScores={allScores}
                              allRounds={allRounds}
                              debateState={debateState}
