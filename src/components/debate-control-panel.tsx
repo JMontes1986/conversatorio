@@ -192,40 +192,27 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     }, []);
     
     const availableTeams = useMemo(() => {
-        const selectedRoundData = debateRounds.find(r => r.name === currentRound);
-
+        // Logic for Ronda 6
+        if (currentRound === 'Ronda 6') {
+            const winnerR1 = getWinnerOfRound(allScores, "Ronda 1");
+            const winnerR2 = getWinnerOfRound(allScores, "Ronda 2");
+            const qualifiedTeamNames = [winnerR1, winnerR2].filter(Boolean) as string[];
+            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
+        }
+        // Logic for Ronda 7
+        else if (currentRound === 'Ronda 7') {
+            const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
+            const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
+            const winnerR5 = getWinnerOfRound(allScores, "Ronda 5");
+            const qualifiedTeamNames = [winnerR3, winnerR4, winnerR5].filter(Boolean) as string[];
+            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
+        }
         // Logic for FINAL (Ronda 8)
-        if (currentRound === 'Ronda 8') {
+        else if (currentRound === 'Ronda 8') {
             const winnerR6 = getWinnerOfRound(allScores, "Ronda 6");
             const winnerR7 = getWinnerOfRound(allScores, "Ronda 7");
             const qualifiedTeamNames = [winnerR6, winnerR7].filter(Boolean) as string[];
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-        }
-        
-        if (selectedRoundData && (selectedRoundData.phase === "Fase de semifinal" || selectedRoundData.phase === "Fase de Finales")) {
-            const phaseDependencies: Record<string, { from: string | string[], limit?: number }> = {
-                "Fase de semifinal": { from: "Fase de Grupos", limit: 4 },
-                "Fase de Finales": { from: "Fase de semifinal" }
-            };
-
-            let qualifiedTeamNames: string[] = [];
-            const dependencyKey = Object.keys(phaseDependencies).find(key => selectedRoundData.name.includes(key) || selectedRoundData.phase.includes(key));
-            const dependency = dependencyKey ? phaseDependencies[dependencyKey] : null;
-
-            if (dependency) {
-                if (typeof dependency.from === 'string') {
-                    const previousRounds = debateRounds.filter(r => r.phase === dependency.from);
-                     if (dependency.limit) {
-                        qualifiedTeamNames = getTopScoringTeamsFromPhase(allScores, previousRounds, dependency.limit);
-                     } else {
-                        qualifiedTeamNames = previousRounds.flatMap(r => getWinnerOfRound(allScores, r.name) || []);
-                     }
-                } else { // It's an array of round names
-                    qualifiedTeamNames = dependency.from.flatMap(roundName => getWinnerOfRound(allScores, roundName) || []);
-                }
-
-                return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-            }
         }
         
         return registeredSchools;
