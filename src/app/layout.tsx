@@ -62,16 +62,16 @@ export default function RootLayout({
           position: 'fixed',
           top: 0,
           right: 0,
-          width: '80px',
-          height: '80px',
+          width: '60px',
+          height: '60px',
           zIndex: 9999,
           pointerEvents: 'none'
         }}>
            <Image 
                 src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Cinta%20negra.svg"
                 alt="Cinta de luto"
-                width={80}
-                height={80}
+                width={60}
+                height={60}
            />
         </div>
         <AuthProvider>
