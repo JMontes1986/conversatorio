@@ -1,0 +1,31 @@
+
+# Configuración para el Rate Limiting en Netlify.
+# Esto ayuda a proteger los endpoints sensibles de la aplicación contra abusos.
+
+[[headers]]
+  for = "/register"
+  [headers.values]
+    Rate-Limit-By = "ip"
+    Rate-Limit-Window = "60" # 60 segundos (1 minuto)
+    Rate-Limit-Limit = "10"  # 10 solicitudes por minuto por IP
+
+[[headers]]
+  for = "/scoring"
+  [headers.values]
+    Rate-Limit-By = "ip"
+    Rate-Limit-Window = "60"
+    Rate-Limit-Limit = "20"  # Un poco más alto para jurados
+
+[[headers]]
+  for = "/live"
+  [headers.values]
+    Rate-Limit-By = "ip"
+    Rate-Limit-Window = "60"
+    Rate-Limit-Limit = "5" # Más bajo para preguntas del público
+
+[[headers]]
+  for = "/survey"
+  [headers.values]
+    Rate-Limit-By = "ip"
+    Rate-Limit-Window = "60"
+    Rate-Limit-Limit = "5"
