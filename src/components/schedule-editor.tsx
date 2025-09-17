@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, CheckCircle } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +16,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { nanoid } from "nanoid";
 import { Switch } from "./ui/switch";
 import { Badge } from "./ui/badge";
+import { cn } from "@/lib/utils";
 
 const scheduleItemSchema = z.object({
   id: z.string(),
@@ -30,6 +31,8 @@ const formSchema = z.object({
   day2Date: z.string().optional(),
   day1: z.array(scheduleItemSchema),
   day2: z.array(scheduleItemSchema),
+  day1Published: z.boolean().optional(),
+  day2Published: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -37,6 +40,8 @@ type FormData = z.infer<typeof formSchema>;
 const defaultSchedule: FormData = {
   day1Date: "Sábado, 17 de Agosto",
   day2Date: "Domingo, 18 de Agosto",
+  day1Published: true,
+  day2Published: false,
   day1: [
     { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
     { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
@@ -79,6 +84,8 @@ export function ScheduleEditor() {
         const sanitizedData: FormData = {
             ...defaultSchedule,
             ...data,
+            day1Published: data.day1Published ?? true,
+            day2Published: data.day2Published ?? false,
             day1: data.day1 && data.day1.length > 0 ? data.day1.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
             day2: data.day2 && data.day2.length > 0 ? data.day2.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
         };
@@ -125,38 +132,17 @@ export function ScheduleEditor() {
       <CardHeader>
         <CardTitle>Editor de Programación del Evento</CardTitle>
         <CardDescription>
-        Modifique el cronograma para los días del evento.
+        Modifique el cronograma y controle la visibilidad pública de cada día.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <FormField
-                control={form.control}
-                name="day1Date"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Fecha Día 1</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-                 <FormField
-                control={form.control}
-                name="day2Date"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Fecha Día 2</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
+            
+            <div className="space-y-6">
+                <ScheduleDayEditor day="day1" title="Actividades Día 1" control={form.control} />
+                <ScheduleDayEditor day="day2" title="Actividades Día 2" control={form.control} />
             </div>
-            <ScheduleDayEditor day="day1" title="Actividades Día 1" control={form.control} />
-            <ScheduleDayEditor day="day2" title="Actividades Día 2" control={form.control} />
             
             <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -178,20 +164,62 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
   const handleAppend = () => {
     append({ id: nanoid(), time: "", endTime: "", activity: "", completed: false })
   }
+  
+  const dateFieldName = `${day}Date` as "day1Date" | "day2Date";
+  const publishedFieldName = `${day}Published` as "day1Published" | "day2Published";
 
   return (
     <div className="space-y-4 rounded-md border p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">{title}</h3>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAppend}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" /> Añadir Actividad
-        </Button>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+         <FormField
+            control={control}
+            name={dateFieldName}
+            render={({ field }) => (
+                <FormItem className="flex-grow w-full md:w-auto">
+                <FormLabel>{title}</FormLabel>
+                <FormControl><Input {...field} /></FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+        />
+        <FormField
+            control={control}
+            name={publishedFieldName}
+            render={({ field }) => (
+                 <FormItem className={cn(
+                    "flex flex-row items-center justify-between rounded-lg border p-3 w-full md:w-auto",
+                     field.value ? "bg-green-50 border-green-200" : "bg-secondary"
+                 )}>
+                    <div className="space-y-0.5 mr-4">
+                        <FormLabel className={cn("font-bold", field.value ? "text-green-800" : "text-foreground")}>
+                           {field.value ? 'Público' : 'Oculto'}
+                        </FormLabel>
+                        <p className="text-xs text-muted-foreground">
+                            {field.value ? <Eye className="h-4 w-4 inline-block mr-1"/> : <EyeOff className="h-4 w-4 inline-block mr-1"/>}
+                            {field.value ? 'Visible al público' : 'No visible'}
+                        </p>
+                    </div>
+                    <FormControl>
+                        <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className={cn(field.value && "data-[state=checked]:bg-green-600")}
+                        />
+                    </FormControl>
+                </FormItem>
+            )}
+            />
       </div>
+       <div className="flex items-center justify-end">
+            <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAppend}
+            >
+            <PlusCircle className="mr-2 h-4 w-4" /> Añadir Actividad
+            </Button>
+       </div>
       <div className="space-y-4">
         {fields.map((field, index) => (
           <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-4 items-center bg-secondary/30 p-3 rounded-md relative">

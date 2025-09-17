@@ -7,7 +7,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle, CalendarOff } from "lucide-react";
 import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -25,11 +25,15 @@ interface ScheduleData {
   day2Date: string;
   day1: ScheduleItem[];
   day2: ScheduleItem[];
+  day1Published?: boolean;
+  day2Published?: boolean;
 }
 
 const defaultSchedule: ScheduleData = {
   day1Date: "Sábado, 17 de Agosto",
   day2Date: "Domingo, 18 de Agosto",
+  day1Published: true,
+  day2Published: false,
   day1: [
     { id: 'd1-1', time: "08:00", endTime: "08:30", activity: "Registro y Bienvenida", completed: false },
     { id: 'd1-2', time: "08:30", endTime: "09:00", activity: "Ceremonia de Apertura", completed: false },
@@ -109,6 +113,16 @@ export default function ProgramacionPage() {
     );
   }
 
+  const isDay1Published = schedule.day1Published ?? false;
+  const isDay2Published = schedule.day2Published ?? false;
+  const anyDayPublished = isDay1Published || isDay2Published;
+
+  const getDefaultTab = () => {
+    if(isDay1Published) return "day1";
+    if(isDay2Published) return "day2";
+    return "";
+  }
+
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
       <div className="mb-8 text-center">
@@ -122,18 +136,29 @@ export default function ProgramacionPage() {
 
       <Card>
         <CardContent className="p-4 md:p-6">
-          <Tabs defaultValue="day1" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="day1">{schedule.day1Date}</TabsTrigger>
-              <TabsTrigger value="day2">{schedule.day2Date}</TabsTrigger>
+         {anyDayPublished ? (
+          <Tabs defaultValue={getDefaultTab()} className="w-full">
+            <TabsList className={cn("grid w-full", isDay1Published && isDay2Published ? "grid-cols-2" : "grid-cols-1")}>
+              {isDay1Published && <TabsTrigger value="day1">{schedule.day1Date}</TabsTrigger>}
+              {isDay2Published && <TabsTrigger value="day2">{schedule.day2Date}</TabsTrigger>}
             </TabsList>
-            <TabsContent value="day1" className="mt-6">
-                <ScheduleTable schedule={schedule.day1} />
-            </TabsContent>
-            <TabsContent value="day2" className="mt-6">
-                <ScheduleTable schedule={schedule.day2} />
-            </TabsContent>
+            {isDay1Published && (
+                 <TabsContent value="day1" className="mt-6">
+                    <ScheduleTable schedule={schedule.day1} />
+                </TabsContent>
+            )}
+            {isDay2Published && (
+                 <TabsContent value="day2" className="mt-6">
+                    <ScheduleTable schedule={schedule.day2} />
+                </TabsContent>
+            )}
           </Tabs>
+         ) : (
+            <div className="text-center py-16 text-muted-foreground">
+                <CalendarOff className="h-12 w-12 mx-auto mb-4"/>
+                <p>La programación del evento se publicará pronto.</p>
+            </div>
+         )}
         </CardContent>
       </Card>
     </div>
