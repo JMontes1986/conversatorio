@@ -58,6 +58,9 @@ const formatTimeForDisplay = (timeString: string) => {
     if (!timeString || !timeString.includes(':')) {
         return timeString;
     }
+     if (timeString === '12:00') {
+        return '12:00 m.';
+    }
     try {
         const date = parse(timeString, 'HH:mm', new Date());
         return format(date, 'h:mm a');
