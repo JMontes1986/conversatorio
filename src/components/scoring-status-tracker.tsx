@@ -1,12 +1,21 @@
 
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { CheckCircle, XCircle, UserCheck, UserX, ClipboardCheck } from 'lucide-react';
+import { CheckCircle, XCircle, UserCheck, UserX, ClipboardCheck, History, Loader2 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { Button } from './ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
+
+
+const DEBATE_STATE_DOC_ID = "current";
+const DRAW_STATE_DOC_ID = "liveDraw";
 
 interface ScoreData {
     id: string;
@@ -34,7 +43,8 @@ interface ScoringStatusTrackerProps {
 }
 
 export function ScoringStatusTracker({ allRounds = [], allJudges = [], allScores = [] }: ScoringStatusTrackerProps) {
-
+    const { toast } = useToast();
+    const [isReactivating, setIsReactivating] = useState<string | null>(null);
     const activeJudges = useMemo(() => allJudges.filter(j => j.status === 'active'), [allJudges]);
 
     const scoringStatusByRound = useMemo(() => {
@@ -63,13 +73,56 @@ export function ScoringStatusTracker({ allRounds = [], allJudges = [], allScores
     }, [allRounds, activeJudges, allScores]);
 
     const sortedRounds = useMemo(() => [...allRounds].sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })), [allRounds]);
+    
+    const handleReactivateRound = async (roundName: string) => {
+        setIsReactivating(roundName);
+        try {
+            const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
+            const drawStateSnap = await getDoc(drawStateRef);
+            
+            if (!drawStateSnap.exists()) {
+                toast({ variant: 'destructive', title: 'Error', description: 'No se encontró el estado del sorteo para obtener los equipos.' });
+                return;
+            }
+
+            const drawData = drawStateSnap.data();
+            let teams: string[] = [];
+            
+            for (const phase of drawData.phases) {
+                const matchup = phase.matchups.find((m: any) => m.roundName === roundName);
+                if (matchup) {
+                    teams = matchup.teams;
+                    break;
+                }
+            }
+
+            if (teams.length === 0) {
+                 toast({ variant: 'destructive', title: 'Error', description: `No se encontraron los equipos para la ronda "${roundName}". Configure la ronda manualmente.` });
+                 return;
+            }
+
+            const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(debateStateRef, { 
+                currentRound: roundName,
+                teams: teams.map(name => ({ name }))
+            }, { merge: true });
+
+            toast({ title: 'Ronda Reactivada', description: `La ronda "${roundName}" ahora está activa para todos los jurados.` });
+
+        } catch (error) {
+            console.error("Error reactivating round:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo reactivar la ronda.' });
+        } finally {
+            setIsReactivating(null);
+        }
+    }
 
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><ClipboardCheck className="h-6 w-6" />Monitor de Puntuación de Jurados</CardTitle>
-                <CardDescription>Verifique en tiempo real qué jurados activos han enviado sus calificaciones para cada ronda.</CardDescription>
+                <CardDescription>Verifique en tiempo real qué jurados activos han enviado sus calificaciones para cada ronda y reactive rondas si es necesario.</CardDescription>
             </CardHeader>
             <CardContent>
                 {sortedRounds.length > 0 ? (
@@ -79,21 +132,48 @@ export function ScoringStatusTracker({ allRounds = [], allJudges = [], allScores
                             if (!status) return null;
 
                             const totalJudges = status.scored.length + status.pending.length;
+                            const isComplete = totalJudges > 0 && status.scored.length === totalJudges;
 
                             return (
                                 <AccordionItem value={round.id} key={round.id}>
                                     <AccordionTrigger>
                                         <div className="flex justify-between items-center w-full pr-4">
                                             <span className="font-semibold">{round.name}</span>
-                                            <Badge variant={status.scored.length === totalJudges ? 'default' : 'secondary'} className={status.scored.length === totalJudges ? 'bg-green-600 text-white' : ''}>
-                                                {status.scored.length} / {totalJudges} Calificaciones
-                                            </Badge>
+                                            <div className="flex items-center gap-4">
+                                                <Badge variant={isComplete ? 'default' : 'secondary'} className={isComplete ? 'bg-green-600 text-white' : ''}>
+                                                    {status.scored.length} / {totalJudges || 'N/A'} Calificaciones
+                                                </Badge>
+                                            </div>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="p-4">
+                                        <div className="flex items-start justify-between mb-4">
+                                             <h4 className="font-medium">Estado de Calificación</h4>
+                                             <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="outline" size="sm" disabled={isReactivating === round.name}>
+                                                        {isReactivating === round.name ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <History className="mr-2 h-4 w-4"/>}
+                                                        Reactivar Ronda
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Reactivar la {round.name}?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta acción establecerá la "{round.name}" como la ronda activa para TODOS los jurados. Podrán calificarla (si no lo han hecho ya) hasta que usted cambie manualmente a otra ronda desde el panel de "Configurar Ronda".
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleReactivateRound(round.name)}>Sí, reactivar</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div>
-                                                <h4 className="font-medium mb-2 flex items-center gap-2 text-green-600"><UserCheck className="h-5 w-5" />Jurados que Calificaron ({status.scored.length})</h4>
+                                                <h5 className="font-medium mb-2 flex items-center gap-2 text-green-600"><UserCheck className="h-5 w-5" />Jurados que Calificaron ({status.scored.length})</h5>
                                                 {status.scored.length > 0 ? (
                                                     <ul className="space-y-1 text-sm list-inside">
                                                         {status.scored.map(judge => (
@@ -104,7 +184,7 @@ export function ScoringStatusTracker({ allRounds = [], allJudges = [], allScores
                                             </div>
                                             <Separator orientation="vertical" className="hidden md:block"/>
                                              <div>
-                                                <h4 className="font-medium mb-2 flex items-center gap-2 text-red-600"><UserX className="h-5 w-5" />Jurados Pendientes ({status.pending.length})</h4>
+                                                <h5 className="font-medium mb-2 flex items-center gap-2 text-red-600"><UserX className="h-5 w-5" />Jurados Pendientes ({status.pending.length})</h5>
                                                 {status.pending.length > 0 ? (
                                                     <ul className="space-y-1 text-sm list-inside">
                                                         {status.pending.map(judge => (
@@ -126,3 +206,4 @@ export function ScoringStatusTracker({ allRounds = [], allJudges = [], allScores
         </Card>
     );
 }
+
