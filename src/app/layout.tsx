@@ -57,17 +57,30 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <div style={{
+         <div style={{
           position: 'fixed',
-          top: 0,
-          right: 0,
-          width: 0,
-          height: 0,
-          borderStyle: 'solid',
-          borderWidth: '0 60px 60px 0',
-          borderColor: 'transparent #000 transparent transparent',
+          top: '0',
+          right: '0',
+          width: '80px', 
+          height: '80px',
           zIndex: 9999,
-        }}></div>
+          overflow: 'hidden'
+        }}>
+           <div style={{
+            position: 'absolute',
+            top: '-20px',
+            right: '-20px',
+            width: '100px',
+            height: '100px',
+            transform: 'rotate(45deg)',
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#000000">
+                <path d="M 50,0 A 30,30 0 0 0 20,30 L 20,70 L 30,70 L 30,35 A 20,20 0 0 1 50,15 A 20,20 0 0 1 70,35 L 70,70 L 80,70 L 80,30 A 30,30 0 0 0 50,0 z M 20,75 L 80,75 L 50,100 z" />
+                 <path d="M25,70 L75,20 L80,25 L30,75z" fill="rgba(255,255,255,0.1)" />
+                 <path d="M20,30 L20,70 L30,70 L30,35 A 20,20 0 0 1 50,15 L50,15 A 20,20 0 0 1 70,35 L70,70 L80,70 L80,30 A 30,30 0 0 0 50,0 A 30,30 0 0 0 20,30 M50,100 L20,75 L80,75z" stroke="#333" strokeWidth="1" fill="none" />
+            </svg>
+          </div>
+        </div>
         <AuthProvider>
           <JudgeProvider>
             <ModeratorProvider>
