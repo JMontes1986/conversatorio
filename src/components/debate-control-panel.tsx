@@ -194,23 +194,6 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     const availableTeams = useMemo(() => {
         const selectedRoundData = debateRounds.find(r => r.name === currentRound);
 
-        // Logic for Semifinal 1 (Ronda 6)
-        if (currentRound === 'Ronda 6') {
-            const winnerR1 = getWinnerOfRound(allScores, "Ronda 1");
-            const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
-            const qualifiedTeamNames = [winnerR1, winnerR4].filter(Boolean) as string[];
-            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-        }
-
-        // Logic for Semifinal 2 (Ronda 7)
-        if (currentRound === 'Ronda 7') {
-             const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
-            const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
-            const winnerR5 = getWinnerOfRound(allScores, "Ronda 5");
-            const qualifiedTeamNames = [winnerR3, winnerR4, winnerR5].filter(Boolean) as string[];
-            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-        }
-
         // Logic for FINAL (Ronda 8)
         if (currentRound === 'Ronda 8') {
             const winnerR6 = getWinnerOfRound(allScores, "Ronda 6");
