@@ -49,10 +49,13 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
     const finalStageResults = useMemo(() => {
         if (loading) return [];
         
-        const excludedPhases = ["Fase de Grupos"];
-        const knockoutRoundNames = allRounds
-            .filter(r => !excludedPhases.includes(r.phase))
-            .map(r => r.name);
+        // Filter specifically for "Ronda 8"
+        const finalRoundName = "Ronda 8";
+        const finalRound = allRounds.find(r => r.name === finalRoundName);
+
+        if (!finalRound) return [];
+
+        const knockoutRoundNames = [finalRoundName];
 
         const finalScores = allScores.filter(score => {
             return knockoutRoundNames.some(knockoutName => score.matchId.startsWith(knockoutName));
@@ -106,28 +109,20 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
             return { id: matchId, teams, winner, isTie };
         });
 
-        if (debateState?.currentRound && debateState.teams.length > 0) {
-             const currentRoundData = allRounds.find(r => r.name === debateState.currentRound);
-             if (currentRoundData && !excludedPhases.includes(currentRoundData.phase)) {
-                const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
-                if (!isAlreadyScored) {
-                    processedMatches.push({
-                        id: debateState.currentRound,
-                        teams: debateState.teams.map(t => ({ name: t.name, total: 0 })),
-                        winner: null,
-                        isTie: false,
-                        isPending: true,
-                    });
-                }
+        // Check if the current round is the final and add it if pending
+        if (debateState?.currentRound === finalRoundName && debateState.teams.length > 0) {
+            const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
+            if (!isAlreadyScored) {
+                processedMatches.push({
+                    id: debateState.currentRound,
+                    teams: debateState.teams.map(t => ({ name: t.name, total: 0 })),
+                    winner: null,
+                    isTie: false,
+                    isPending: true,
+                });
             }
         }
         
-        const roundOrder = allRounds.map(r => r.name);
-        processedMatches.sort((a, b) => {
-             return roundOrder.indexOf(a.id) - roundOrder.indexOf(b.id);
-        });
-
-
         return processedMatches;
 
     }, [allScores, debateState, allRounds, loading]);
@@ -160,15 +155,15 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
     if (finalStageResults.length === 0) {
         return (
             <div className="text-center text-muted-foreground p-8">
-                Aún no hay resultados para las fases finales.
+                Aún no hay resultados para la fase final.
             </div>
         );
     }
 
     return (
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            {finalStageResults.map((match) => (
-                <Card key={match.id}>
+                <Card key={match.id} className="md:col-span-2">
                     <CardHeader>
                         <CardTitle className="text-lg capitalize">{match.id.replace(/-/g, ' ')}</CardTitle>
                     </CardHeader>
