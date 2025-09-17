@@ -57,6 +57,17 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          width: 0,
+          height: 0,
+          borderStyle: 'solid',
+          borderWidth: '0 60px 60px 0',
+          borderColor: 'transparent #000 transparent transparent',
+          zIndex: 9999,
+        }}></div>
         <AuthProvider>
           <JudgeProvider>
             <ModeratorProvider>
