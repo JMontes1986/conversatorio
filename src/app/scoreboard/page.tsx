@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -31,11 +32,21 @@ type DebateState = {
     teams: { name: string }[];
 }
 
+type PublishedResults = {
+    groupStage: boolean;
+    semifinals: boolean;
+    finals: boolean;
+}
+
 export default function ScoreboardPage() {
     const [allScores, setAllScores] = useState<ScoreData[]>([]);
     const [allRounds, setAllRounds] = useState<RoundData[]>([]);
     const [debateState, setDebateState] = useState<DebateState | null>(null);
-    const [resultsPublished, setResultsPublished] = useState(false);
+    const [publishedResults, setPublishedResults] = useState<PublishedResults>({
+        groupStage: false,
+        semifinals: false,
+        finals: false,
+    });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -56,7 +67,14 @@ export default function ScoreboardPage() {
         
         const settingsRef = doc(db, "settings", "competition");
         const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
-            setResultsPublished(docSnap.exists() ? docSnap.data().resultsPublished || false : false);
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                 setPublishedResults({
+                    groupStage: data.groupStageResultsPublished || false,
+                    semifinals: data.semifinalsResultsPublished || false,
+                    finals: data.finalsResultsPublished || false,
+                });
+            }
             setLoading(false);
         });
 
@@ -94,7 +112,7 @@ export default function ScoreboardPage() {
                         <CardDescription>Puntuaciones de las rondas iniciales.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <GroupStageResults resultsPublished={resultsPublished} />
+                        <GroupStageResults resultsPublished={publishedResults.groupStage} />
                     </CardContent>
                 </Card>
 
@@ -108,7 +126,7 @@ export default function ScoreboardPage() {
                              allScores={allScores}
                              allRounds={allRounds}
                              debateState={debateState}
-                             resultsPublished={resultsPublished}
+                             resultsPublished={publishedResults.semifinals}
                              loading={loading}
                         />
                     </CardContent>
@@ -124,13 +142,13 @@ export default function ScoreboardPage() {
                              allScores={allScores}
                              allRounds={allRounds}
                              debateState={debateState}
-                             resultsPublished={resultsPublished}
+                             resultsPublished={publishedResults.finals}
                              loading={loading}
                         />
                     </CardContent>
                 </Card>
 
-                <FinalResultCard scores={allScores} resultsPublished={resultsPublished} loading={loading} />
+                <FinalResultCard scores={allScores} resultsPublished={publishedResults.finals} loading={loading} />
                 
                 <TournamentBracket />
 

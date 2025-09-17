@@ -49,7 +49,6 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
     const finalStageResults = useMemo(() => {
         if (loading) return [];
         
-        // Filter specifically for "Ronda 8"
         const finalRoundName = "Ronda 8";
         const finalRound = allRounds.find(r => r.name === finalRoundName);
 
@@ -109,7 +108,6 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
             return { id: matchId, teams, winner, isTie };
         });
 
-        // Check if the current round is the final and add it if pending
         if (debateState?.currentRound === finalRoundName && debateState.teams.length > 0) {
             const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
             if (!isAlreadyScored) {

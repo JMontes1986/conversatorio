@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -39,11 +40,21 @@ interface SurveyResponse {
     id: string;
 }
 
+type PublishedResults = {
+    groupStage: boolean;
+    semifinals: boolean;
+    finals: boolean;
+}
+
 
 export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[] }) {
     const { toast } = useToast();
     const [registrationsClosed, setRegistrationsClosed] = useState(false);
-    const [resultsPublished, setResultsPublished] = useState(false);
+    const [publishedResults, setPublishedResults] = useState<PublishedResults>({
+        groupStage: false,
+        semifinals: false,
+        finals: false
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loading, setLoading] = useState(true);
     const [verifiedSchools, setVerifiedSchools] = useState<SchoolData[]>([]);
@@ -56,7 +67,11 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setRegistrationsClosed(data.registrationsClosed || false);
-                setResultsPublished(data.resultsPublished || false);
+                setPublishedResults({
+                    groupStage: data.groupStageResultsPublished || false,
+                    semifinals: data.semifinalsResultsPublished || false,
+                    finals: data.finalsResultsPublished || false,
+                })
             }
             setLoading(false);
         });
@@ -112,15 +127,24 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
         }
     }
     
-     const handleToggleResultsPublication = async (published: boolean) => {
+    const handleToggleResultsPublication = async (phase: keyof PublishedResults, published: boolean) => {
         setIsSubmitting(true);
+        const fieldMap = {
+            groupStage: 'groupStageResultsPublished',
+            semifinals: 'semifinalsResultsPublished',
+            finals: 'finalsResultsPublished',
+        };
+        const fieldToUpdate = fieldMap[phase];
+
         try {
             const settingsRef = doc(db, "settings", SETTINGS_DOC_ID);
-            await setDoc(settingsRef, { resultsPublished: published }, { merge: true });
-            setResultsPublished(published);
+            await setDoc(settingsRef, { [fieldToUpdate]: published }, { merge: true });
+            
+            setPublishedResults(prev => ({...prev, [phase]: published}));
+            
             toast({
                 title: "Ajustes de Visibilidad Actualizados",
-                description: `Los resultados ahora están ${published ? 'públicos' : 'ocultos'}.`
+                description: `Los resultados de ${phase} ahora están ${published ? 'públicos' : 'ocultos'}.`
             });
         } catch (error) {
             console.error("Error updating settings:", error);
@@ -210,7 +234,7 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className={cn(
+                     <div className={cn(
                         "flex items-center justify-between rounded-lg border p-4 transition-colors",
                         registrationsClosed 
                             ? "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
@@ -274,55 +298,6 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                         </AlertDialog>
 
                     </div>
-                    <div className={cn(
-                        "flex items-center justify-between rounded-lg border p-4 transition-colors",
-                        resultsPublished 
-                            ? "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800"
-                            : "bg-secondary"
-                    )}>
-                        <div>
-                            <Label htmlFor="results-switch" className={cn("font-bold text-lg", resultsPublished ? "text-blue-800 dark:text-blue-300" : "text-foreground")}>
-                                {resultsPublished ? "Resultados Públicos" : "Resultados Ocultos"}
-                            </Label>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {resultsPublished 
-                                    ? "Los marcadores y brackets son visibles para todos."
-                                    : "Los resultados no son visibles para el público general."
-                                }
-                            </p>
-                        </div>
-
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Switch
-                                    id="results-switch"
-                                    checked={resultsPublished}
-                                    disabled={isSubmitting}
-                                    onCheckedChange={() => {}} 
-                                />
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>¿Desea {resultsPublished ? 'ocultar' : 'publicar'} los resultados?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        {resultsPublished 
-                                            ? "Esta acción ocultará los puntajes y ganadores en el marcador público. Ideal para preparar la siguiente fase."
-                                            : "Esta acción hará que todos los puntajes y ganadores sean visibles en el marcador público."
-                                        }
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                        onClick={() => handleToggleResultsPublication(!resultsPublished)}
-                                    >
-                                        {resultsPublished ? 'Sí, ocultar' : 'Sí, publicar'}
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-
-                    </div>
                 </CardContent>
                 <CardFooter>
                     <p className="text-xs text-muted-foreground flex items-center gap-2">
@@ -331,6 +306,46 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                     </p>
                 </CardFooter>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Publicación de Resultados</CardTitle>
+                    <CardDescription>Controle la visibilidad de los resultados para cada fase del torneo.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {([
+                        { key: 'groupStage', label: 'Fase de Grupos' },
+                        { key: 'semifinals', label: 'Fase de Semifinales' },
+                        { key: 'finals', label: 'Fase de Finales' }
+                    ] as { key: keyof PublishedResults, label: string }[]).map(phase => (
+                        <div key={phase.key} className={cn(
+                            "flex items-center justify-between rounded-lg border p-4 transition-colors",
+                            publishedResults[phase.key] 
+                                ? "bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800"
+                                : "bg-secondary"
+                        )}>
+                            <div>
+                                <Label htmlFor={`results-${phase.key}`} className={cn("font-medium", publishedResults[phase.key] ? "text-blue-800 dark:text-blue-300" : "text-foreground")}>
+                                    Publicar Resultados de {phase.label}
+                                </Label>
+                            </div>
+                            <Switch
+                                id={`results-${phase.key}`}
+                                checked={publishedResults[phase.key]}
+                                onCheckedChange={(checked) => handleToggleResultsPublication(phase.key, checked)}
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                    ))}
+                </CardContent>
+                 <CardFooter>
+                    <p className="text-xs text-muted-foreground flex items-center gap-2">
+                        <Eye className="h-3 w-3" />
+                        Active cada interruptor para que los resultados de esa fase sean visibles públicamente.
+                    </p>
+                </CardFooter>
+            </Card>
+
 
             <Card className="border-destructive">
                 <CardHeader>

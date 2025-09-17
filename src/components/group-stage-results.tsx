@@ -69,7 +69,16 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
         const drawStateRef = doc(db, "drawState", "liveDraw");
         const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
              if (docSnap.exists()) {
-                setDrawnTeams(docSnap.data().teams || []);
+                const data = docSnap.data();
+                if (data.phases) {
+                    const groupPhase = data.phases.find((p: any) => p.name === 'Fase de Grupos');
+                    if (groupPhase && groupPhase.matchups) {
+                         const teamsFromMatchups = groupPhase.matchups.flatMap((m: any) => 
+                            m.teams.map((teamName: string) => ({ id: teamName, name: teamName, round: m.roundName }))
+                         );
+                        setDrawnTeams(teamsFromMatchups);
+                    }
+                }
             }
             setLoading(false);
         });
