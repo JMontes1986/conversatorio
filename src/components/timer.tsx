@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Pause, RotateCcw, Bell, TimerIcon } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -35,14 +35,11 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       if (doc.exists()) {
         const data = doc.data();
         if (data.timer) {
-            // Always listen for isActive state from Firestore
             if (typeof data.timer.isActive === 'boolean') {
               setIsActive(data.timer.isActive);
             }
-            // Sync time when lastUpdated changes (on reset or pause/play)
             if (data.timer.lastUpdated) {
                 const serverTime = data.timer.duration;
-                // If the timer is active, calculate the elapsed time since last update
                 if(data.timer.isActive) {
                     const elapsed = Math.floor((Date.now() - data.timer.lastUpdated) / 1000);
                     setTimeRemaining(Math.max(0, serverTime - elapsed));
@@ -65,7 +62,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       }, 1000);
     } else if (timeRemaining <= 0 && isActive) {
       if (showControls) {
-          // When time runs out, automatically stop the timer
           toggleTimer(); 
           playSound();
       }
@@ -96,14 +92,13 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            // When pausing, send the current remaining time.
-            // When starting, it will use the time that was set on pause/reset.
-            const newDuration = newIsActive ? timeRemaining : (timeRemaining > 0 ? timeRemaining : 0);
+            const docSnap = await getDoc(docRef);
+            const currentTimerState = docSnap.exists() ? docSnap.data().timer : { duration: initialTime };
 
             await setDoc(docRef, { 
                 timer: { 
                     isActive: newIsActive,
-                    duration: newDuration,
+                    duration: timeRemaining > 0 ? timeRemaining : 0,
                     lastUpdated: Date.now()
                 } 
             }, { merge: true });
@@ -120,8 +115,8 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
-                    duration: initialTime, // Reset to the original time passed in props
-                    lastUpdated: Date.now() // Force a refresh on all clients
+                    duration: initialTime,
+                    lastUpdated: Date.now()
                 } 
             }, { merge: true });
         } catch (error) {
