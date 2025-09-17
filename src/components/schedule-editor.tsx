@@ -61,35 +61,15 @@ const defaultSchedule: FormData = {
   ]
 };
 
-type SaveStatus = "idle" | "saving" | "saved";
-
 export function ScheduleEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const isInitialLoad = useRef(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: defaultSchedule,
   });
-
-  const saveSchedule = useCallback(async (values: FormData) => {
-    setSaveStatus("saving");
-    try {
-      await setDoc(doc(db, 'siteContent', 'schedule'), values);
-      setSaveStatus("saved");
-      setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch (error) {
-      console.error("Error auto-saving schedule: ", error);
-      toast({
-        variant: "destructive",
-        title: "Error de Guardado Automático",
-        description: "No se pudieron guardar los cambios.",
-      });
-      setSaveStatus("idle");
-    }
-  }, [toast]);
 
   useEffect(() => {
     const docRef = doc(db, 'siteContent', 'schedule');
@@ -107,24 +87,30 @@ export function ScheduleEditor() {
         form.reset(defaultSchedule);
       }
       setLoading(false);
-      // Set a flag to indicate the initial data load is complete.
-      setTimeout(() => {
-        isInitialLoad.current = false;
-      }, 50);
     });
 
     return () => unsubscribe();
   }, [form]);
-  
-  useEffect(() => {
-    const subscription = form.watch((value, { name, type }) => {
-      if (!isInitialLoad.current && type === 'change') {
-         saveSchedule(value as FormData);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, saveSchedule]);
 
+  const onSubmit = async (values: FormData) => {
+    setIsSubmitting(true);
+    try {
+      await setDoc(doc(db, 'siteContent', 'schedule'), values);
+      toast({
+        title: "¡Programación Guardada!",
+        description: "Los cambios en el cronograma han sido guardados exitosamente.",
+      });
+    } catch (error) {
+      console.error("Error saving schedule: ", error);
+      toast({
+        variant: "destructive",
+        title: "Error al Guardar",
+        description: "No se pudieron guardar los cambios.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -137,22 +123,14 @@ export function ScheduleEditor() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-start">
-            <div>
-                 <CardTitle>Editor de Programación del Evento</CardTitle>
-                <CardDescription>
-                Modifique el cronograma para los días del evento. Los cambios se guardan automáticamente.
-                </CardDescription>
-            </div>
-            <div>
-                 {saveStatus === 'saving' && <Badge variant="outline"><Loader2 className="mr-2 h-3 w-3 animate-spin"/>Guardando...</Badge>}
-                {saveStatus === 'saved' && <Badge variant="secondary" className="bg-green-100 text-green-800"><CheckCircle className="mr-2 h-3 w-3"/>Guardado</Badge>}
-            </div>
-        </div>
+        <CardTitle>Editor de Programación del Evento</CardTitle>
+        <CardDescription>
+        Modifique el cronograma para los días del evento.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form className="space-y-8">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <FormField
                 control={form.control}
@@ -179,6 +157,11 @@ export function ScheduleEditor() {
             </div>
             <ScheduleDayEditor day="day1" title="Actividades Día 1" control={form.control} />
             <ScheduleDayEditor day="day2" title="Actividades Día 2" control={form.control} />
+            
+            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Guardar Cambios en la Programación
+            </Button>
           </form>
         </Form>
       </CardContent>
