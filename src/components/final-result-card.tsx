@@ -1,10 +1,12 @@
 
 "use client";
 
-import React, { useMemo } from "react";
-import { Loader2, Trophy, Swords, EyeOff } from "lucide-react";
+import React, { useMemo, useState, useEffect } from "react";
+import { Loader2, Trophy, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
-import { Badge } from "./ui/badge";
+import Confetti from 'react-confetti';
+import { useWindowSize } from "@/hooks/use-window-size";
+
 
 type ScoreData = {
   id: string;
@@ -45,9 +47,22 @@ interface FinalResultCardProps {
 }
 
 export function FinalResultCard({ scores, resultsPublished, loading }: FinalResultCardProps) {
+    const { width, height } = useWindowSize();
+    const [showConfetti, setShowConfetti] = useState(false);
+
     const finalWinner = useMemo(() => {
         return getWinnerOfRound(scores, "Ronda 8");
     }, [scores]);
+    
+    useEffect(() => {
+        if (finalWinner && resultsPublished) {
+            setShowConfetti(true);
+            const timer = setTimeout(() => {
+                setShowConfetti(false);
+            }, 8000); // Show confetti for 8 seconds
+            return () => clearTimeout(timer);
+        }
+    }, [finalWinner, resultsPublished]);
 
 
     if (loading) {
@@ -79,7 +94,8 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
     }
 
     return (
-        <Card className="border-primary border-2 shadow-lg">
+        <Card className="border-primary border-2 shadow-lg overflow-hidden">
+            {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={500} />}
             <CardHeader className="text-center">
                 <CardTitle className="font-headline text-2xl md:text-3xl">Gran Final</CardTitle>
                 <CardDescription>El enfrentamiento culminante del torneo.</CardDescription>
@@ -87,7 +103,7 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
             <CardContent>
                 {finalWinner ? (
                     <div className="flex flex-col items-center justify-center text-center p-6 space-y-4">
-                        <Trophy className="h-20 w-20 text-amber-500" />
+                        <Trophy className="h-20 w-20 text-amber-500 animate-pulse" />
                         <p className="text-muted-foreground">Campeón del Conversatorio Colgemelli</p>
                         <h3 className="text-4xl font-bold font-headline">{finalWinner}</h3>
                     </div>
@@ -100,3 +116,4 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
         </Card>
     );
 }
+
