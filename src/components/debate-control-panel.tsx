@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle, ClipboardCheck } from "lucide-react";
 import { db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from 'firebase/firestore';
@@ -48,6 +48,9 @@ import { TieBreaker } from './tie-breaker';
 import { logActivity } from '@/lib/audit-log';
 import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
+import dynamic from 'next/dynamic';
+
+const ScoringStatusTracker = dynamic(() => import('@/components/scoring-status-tracker').then(mod => mod.ScoringStatusTracker), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -77,6 +80,12 @@ interface ScoreData {
     judgeId?: string;
     judgeName?: string;
     teams: { name: string; total: number }[];
+}
+interface JudgeData {
+    id: string;
+    name: string;
+    cedula: string;
+    status: 'active' | 'inactive';
 }
 
 interface RoundData {
@@ -1031,7 +1040,7 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
     );
 }
 
-export function DebateControlPanel({ registeredSchools = [], allScores = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[] }) {
+export function DebateControlPanel({ registeredSchools = [], allScores = [], allJudges = [] }: { registeredSchools?: SchoolData[], allScores?: ScoreData[], allJudges?: JudgeData[] }) {
     const { toast } = useToast();
     const { user: adminUser } = useAuth();
     const { moderator } = useModeratorAuth();
@@ -1120,12 +1129,10 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const updateTimer = async (newDuration: number) => {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            // Always save the new duration, whether active or not.
-            // The active state is toggled separately.
             await setDoc(docRef, { 
                 timer: { 
                     duration: newDuration,
-                    isActive: mainTimer.isActive,
+                    isActive: mainTimer.isActive, // Keep current active state
                     lastUpdated: Date.now() 
                 } 
             }, { merge: true });
@@ -1465,10 +1472,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     </CardContent>
                 </Card>
                 <Tabs defaultValue="round-config" className="w-full">
-                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-5 h-auto sm:h-10">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-6 h-auto sm:h-10">
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
+                        <TabsTrigger value="scoring-status"><ClipboardCheck className="mr-2 h-4 w-4"/>Puntuaciones</TabsTrigger>
                         <TabsTrigger value="messages"><Send className="mr-2 h-4 w-4"/>Mensajes</TabsTrigger>
                         <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
@@ -1498,6 +1506,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                             onProjectQuestion={handleProjectStudentQuestion} 
                             projectedQuestion={projectedStudentQuestion}
                         />
+                    </TabsContent>
+                     <TabsContent value="scoring-status">
+                        <ScoringStatusTracker allRounds={debateRounds} allJudges={allJudges} allScores={allScores} />
                     </TabsContent>
                     <TabsContent value="messages">
                         <Card>

@@ -672,7 +672,7 @@ function AdminDashboard() {
                 </div>
             </div>
         );
-        case "debate-control": return <DebateControlPanel registeredSchools={schools} allScores={scores} />;
+        case "debate-control": return <DebateControlPanel registeredSchools={schools} allScores={scores} allJudges={judges} />;
         case "results": return (
             <div className="space-y-8">
                  <Card>
