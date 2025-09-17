@@ -7,7 +7,6 @@ import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore'
 import { TournamentBracket } from "@/components/tournament-bracket";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GroupStageResults } from "@/components/group-stage-results";
-import { KnockoutStageResults } from "@/components/knockout-stage-results";
 import { FinalResultCard } from "@/components/final-result-card";
 import { SemifinalsStageResults } from "@/components/semifinals-stage-results";
 import { Loader2 } from 'lucide-react';
@@ -101,26 +100,10 @@ export default function ScoreboardPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Resultados de Semifinales</CardTitle>
-                        <CardDescription>Puntuaciones de las primeras rondas eliminatorias.</CardDescription>
+                        <CardDescription>Puntuaciones de las rondas que definen a los finalistas.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <SemifinalsStageResults 
-                             allScores={allScores}
-                             allRounds={allRounds}
-                             debateState={debateState}
-                             resultsPublished={resultsPublished}
-                             loading={loading}
-                        />
-                    </CardContent>
-                </Card>
-
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
-                        <CardDescription>Puntuaciones de Cuartos, Semifinales y Final.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                       <KnockoutStageResults 
                              allScores={allScores}
                              allRounds={allRounds}
                              debateState={debateState}
