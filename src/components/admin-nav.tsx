@@ -20,7 +20,8 @@ import {
     Trophy,
     PanelLeftClose,
     PanelRightClose,
-    Menu
+    Menu,
+    ShieldAlert
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { Separator } from "./ui/separator";
@@ -43,6 +44,7 @@ const navItems = [
 const settingsNavItems = [
     { id: "judges", label: "Jurados", icon: User },
     { id: "moderators", label: "Moderadores", icon: KeyRound },
+    { id: "logs", label: "Logs", icon: ShieldAlert },
     { id: "settings", label: "Ajustes Generales", icon: Settings },
 ];
 

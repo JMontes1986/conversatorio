@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
 import { TieBreaker } from './tie-breaker';
+import { logActivity } from '@/lib/audit-log';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -987,6 +988,7 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { sidebarImageUrl: imageUrl }, { merge: true });
+            await logActivity(`Se actualizó la imagen de la barra lateral.`);
             toast({ title: "Imagen Guardada" });
         } catch (error) {
             console.error("Error saving image URL:", error);
@@ -1112,6 +1114,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { timer: { duration: newDuration, isActive: mainTimer.isActive } }, { merge: true });
+            await logActivity(`Temporizador actualizado a ${Math.floor(newDuration/60)}m ${newDuration%60}s.`);
              toast({
                 title: "Temporizador Actualizado",
                 description: `El tiempo se ha establecido en ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,
@@ -1135,6 +1138,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 videoUrl: "", 
                 questionSize: 'normal',
             }, { merge: true });
+            await logActivity(`Pregunta enviada a pantalla: "${question.text.substring(0, 50)}..."`);
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
         } catch (error) {
              console.error("Error setting question: ", error);
@@ -1156,6 +1160,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 question: "",
                 questionId: "",
             }, { merge: true });
+            await logActivity(`Video enviado a pantalla (asociado a pregunta: "${question.text.substring(0, 30)}...")`);
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
         } catch (error) {
              console.error("Error setting video: ", error);
@@ -1172,6 +1177,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                 videoUrl: "",
                 questionSize: 'normal',
             }, { merge: true });
+            await logActivity("Pantalla principal limpiada.");
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
         } catch (error) {
              console.error("Error clearing screen: ", error);
@@ -1190,6 +1196,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { 
                 studentQuestionOverlay: overlay
             }, { merge: true });
+            await logActivity(`Pregunta del público proyectada: "${question.text.substring(0, 50)}..."`);
             toast({ title: "Pregunta del Público Proyectada" });
         } catch (error) {
             console.error("Error projecting student question:", error);
@@ -1203,6 +1210,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             await setDoc(docRef, { 
                 studentQuestionOverlay: null
             }, { merge: true });
+            await logActivity(`Pregunta del público ocultada.`);
             toast({ title: "Pregunta del Público Ocultada" });
         } catch (error) {
             console.error("Error clearing student question:", error);
@@ -1210,7 +1218,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     };
 
-    const handleSendTemporaryMessage = () => {
+    const handleSendTemporaryMessage = async () => {
         if (!tempMessageInput.trim()) {
             toast({ variant: "destructive", title: "Error", description: "El mensaje no puede estar vacío." });
             return;
@@ -1218,12 +1226,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         setIsSendingTempMessage(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-             setDoc(docRef, { 
+            await setDoc(docRef, { 
                 question: tempMessageInput,
                 questionId: "",
                 videoUrl: "",
                 questionSize: tempMessageSize,
             }, { merge: true });
+            await logActivity(`Mensaje temporal enviado: "${tempMessageInput.substring(0, 50)}..."`);
             toast({ title: "Mensaje Temporal Enviado" });
         } catch (error) {
              console.error("Error sending temporary message:", error);
@@ -1233,7 +1242,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         }
     }
 
-    const handleSendTemporaryVideo = () => {
+    const handleSendTemporaryVideo = async () => {
         if (!tempVideoInput.trim()) {
             toast({ variant: "destructive", title: "Error", description: "La URL o el código de inserción del video no pueden estar vacíos." });
             return;
@@ -1241,11 +1250,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         setIsSendingTempMessage(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            setDoc(docRef, { 
+            await setDoc(docRef, { 
                 videoUrl: tempVideoInput,
                 question: "",
                 questionId: "",
             }, { merge: true });
+            await logActivity(`Video temporal enviado.`);
             toast({ title: "Video Temporal Enviado" });
         } catch (error) {
             console.error("Error sending temporary video:", error);
@@ -1260,6 +1270,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { isQrEnabled: enabled }, { merge: true });
+            await logActivity(`Código QR para preguntas ${enabled ? 'habilitado' : 'deshabilitado'}.`);
             toast({ title: "Ajuste de QR Guardado" });
         } catch (error) {
              console.error("Error toggling QR: ", error);

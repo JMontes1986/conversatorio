@@ -51,6 +51,7 @@ const GroupStageResults = dynamic(() => import('@/components/group-stage-results
 const SemifinalsStageResults = dynamic(() => import('@/components/semifinals-stage-results').then(mod => mod.SemifinalsStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const KnockoutStageResults = dynamic(() => import('@/components/knockout-stage-results').then(mod => mod.KnockoutStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const FinalResultCard = dynamic(() => import('@/components/final-result-card').then(mod => mod.FinalResultCard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const AuditLogViewer = dynamic(() => import('@/components/audit-log-viewer').then(mod => mod.AuditLogViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 interface SchoolData {
@@ -462,6 +463,7 @@ function AdminDashboard() {
         case "rubric": return <RubricManagement />;
         case "draw": return <DrawAnimation />;
         case "survey": return <SurveyManagement />;
+        case "logs": return <AuditLogViewer />;
         case "settings": return <CompetitionSettings allScores={scores} />;
         case "judges": return (
             <div className="grid md:grid-cols-3 gap-6">
