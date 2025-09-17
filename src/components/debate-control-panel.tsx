@@ -192,14 +192,12 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     }, []);
     
     const availableTeams = useMemo(() => {
-        // Logic for Ronda 6
         if (currentRound === 'Ronda 6') {
             const winnerR1 = getWinnerOfRound(allScores, "Ronda 1");
             const winnerR2 = getWinnerOfRound(allScores, "Ronda 2");
             const qualifiedTeamNames = [winnerR1, winnerR2].filter(Boolean) as string[];
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
-        // Logic for Ronda 7
         else if (currentRound === 'Ronda 7') {
             const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
             const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
@@ -207,7 +205,6 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             const qualifiedTeamNames = [winnerR3, winnerR4, winnerR5].filter(Boolean) as string[];
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
-        // Logic for FINAL (Ronda 8)
         else if (currentRound === 'Ronda 8') {
             const winnerR6 = getWinnerOfRound(allScores, "Ronda 6");
             const winnerR7 = getWinnerOfRound(allScores, "Ronda 7");
@@ -1034,6 +1031,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
     const [sidebarImageUrl, setSidebarImageUrl] = useState("");
     const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<StudentQuestionOverlay | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
+    const [tempVideoInput, setTempVideoInput] = useState("");
     const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
     
@@ -1234,6 +1232,28 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
             setIsSendingTempMessage(false);
         }
     }
+
+    const handleSendTemporaryVideo = () => {
+        if (!tempVideoInput.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "La URL o el código de inserción del video no pueden estar vacíos." });
+            return;
+        }
+        setIsSendingTempMessage(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            setDoc(docRef, { 
+                videoUrl: tempVideoInput,
+                question: "",
+                questionId: "",
+            }, { merge: true });
+            toast({ title: "Video Temporal Enviado" });
+        } catch (error) {
+            console.error("Error sending temporary video:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
+        } finally {
+            setIsSendingTempMessage(false);
+        }
+    }
     
     const handleToggleQr = async (enabled: boolean) => {
         setIsQrEnabled(enabled);
@@ -1429,42 +1449,64 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [] }: {
                     <TabsContent value="messages">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Mensaje Temporal en Pantalla</CardTitle>
-                                <CardDescription>Muestre un mensaje de texto en la pantalla pública. Esto reemplazará la pregunta o el video.</CardDescription>
+                                <CardTitle>Mensaje o Video Temporal en Pantalla</CardTitle>
+                                <CardDescription>Muestre un mensaje de texto o un video en la pantalla pública. Esto reemplazará la pregunta o el video principal.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="temp-message-input">Texto del Mensaje</Label>
-                                    <Textarea 
-                                        id="temp-message-input"
-                                        placeholder="Ej: ¡Sigan nuestras redes sociales!"
-                                        value={tempMessageInput}
-                                        onChange={(e) => setTempMessageInput(e.target.value)}
-                                        rows={2}
-                                    />
+                            <CardContent className="space-y-6">
+                                <div className="space-y-4 p-4 border rounded-lg">
+                                    <h3 className="font-medium">Mensaje de Texto</h3>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="temp-message-input">Texto del Mensaje</Label>
+                                        <Textarea 
+                                            id="temp-message-input"
+                                            placeholder="Ej: ¡Sigan nuestras redes sociales!"
+                                            value={tempMessageInput}
+                                            onChange={(e) => setTempMessageInput(e.target.value)}
+                                            rows={2}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="temp-message-size">Tamaño de la Letra</Label>
+                                        <Select onValueChange={(value) => setTempMessageSize(value as any)} defaultValue={tempMessageSize}>
+                                            <SelectTrigger id="temp-message-size">
+                                                <SelectValue placeholder="Seleccione un tamaño" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="xs">Muy Pequeña</SelectItem>
+                                                <SelectItem value="sm">Pequeña</SelectItem>
+                                                <SelectItem value="normal">Normal</SelectItem>
+                                                <SelectItem value="large">Grande</SelectItem>
+                                                <SelectItem value="xl">Muy Grande</SelectItem>
+                                                <SelectItem value="xxl">Gigante</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage}>
+                                            {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                            Enviar Mensaje
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                     <Label htmlFor="temp-message-size">Tamaño de la Letra</Label>
-                                      <Select onValueChange={(value) => setTempMessageSize(value as any)} defaultValue={tempMessageSize}>
-                                        <SelectTrigger id="temp-message-size">
-                                            <SelectValue placeholder="Seleccione un tamaño" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="xs">Muy Pequeña</SelectItem>
-                                            <SelectItem value="sm">Pequeña</SelectItem>
-                                            <SelectItem value="normal">Normal</SelectItem>
-                                            <SelectItem value="large">Grande</SelectItem>
-                                            <SelectItem value="xl">Muy Grande</SelectItem>
-                                            <SelectItem value="xxl">Gigante</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2 justify-end pt-2">
-                                    <Button onClick={handleSendTemporaryMessage} disabled={isSendingTempMessage}>
-                                        {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                        Enviar Mensaje
-                                    </Button>
+                                
+                                <div className="space-y-4 p-4 border rounded-lg">
+                                    <h3 className="font-medium">Video Temporal</h3>
+                                     <div className="space-y-2">
+                                        <Label htmlFor="temp-video-input">URL de Video o Código de Inserción</Label>
+                                        <Textarea 
+                                            id="temp-video-input"
+                                            placeholder="Pegue aquí la URL de YouTube o el código <iframe> completo"
+                                            value={tempVideoInput}
+                                            onChange={(e) => setTempVideoInput(e.target.value)}
+                                            rows={3}
+                                        />
+                                    </div>
+                                    <div className="flex justify-end">
+                                         <Button onClick={handleSendTemporaryVideo} disabled={isSendingTempMessage}>
+                                            {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Video className="mr-2 h-4 w-4"/>}
+                                            Enviar Video
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
