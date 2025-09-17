@@ -1,17 +1,19 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore';
-import { TournamentBracket } from "@/components/tournament-bracket";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GroupStageResults } from "@/components/group-stage-results";
-import { FinalResultCard } from "@/components/final-result-card";
-import { SemifinalsStageResults } from "@/components/semifinals-stage-results";
-import { KnockoutStageResults } from '@/components/knockout-stage-results';
 import { Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const TournamentBracket = dynamic(() => import('@/components/tournament-bracket').then(mod => mod.TournamentBracket), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const GroupStageResults = dynamic(() => import('@/components/group-stage-results').then(mod => mod.GroupStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const FinalResultCard = dynamic(() => import('@/components/final-result-card').then(mod => mod.FinalResultCard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const SemifinalsStageResults = dynamic(() => import('@/components/semifinals-stage-results').then(mod => mod.SemifinalsStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const KnockoutStageResults = dynamic(() => import('@/components/knockout-stage-results').then(mod => mod.KnockoutStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+
 
 type ScoreData = {
   id: string;
@@ -131,11 +133,11 @@ export default function ScoreboardPage() {
                         />
                     </CardContent>
                 </Card>
-
-                <Card>
+                
+                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
-                        <CardDescription>Puntuaciones de Cuartos, Semifinales y Final.</CardDescription>
+                        <CardDescription>Resultado de la Ronda 8.</CardDescription>
                     </CardHeader>
                     <CardContent>
                        <KnockoutStageResults 
