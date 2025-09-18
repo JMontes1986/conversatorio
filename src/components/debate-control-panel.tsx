@@ -214,13 +214,6 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             const qualifiedTeamNames = [winnerR1, winnerR2].filter(Boolean) as string[];
             return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
         }
-        else if (currentRound === 'Ronda 7') {
-            const winnerR3 = getWinnerOfRound(allScores, "Ronda 3");
-            const winnerR4 = getWinnerOfRound(allScores, "Ronda 4");
-            const winnerR5 = getWinnerOfRound(allScores, "Ronda 5");
-            const qualifiedTeamNames = [winnerR3, winnerR4, winnerR5].filter(Boolean) as string[];
-            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-        }
         else if (currentRound === 'Ronda 8') {
             const winnerR6 = getWinnerOfRound(allScores, "Ronda 6");
             const winnerR7 = getWinnerOfRound(allScores, "Ronda 7");
@@ -1645,4 +1638,5 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     
 
     
+
 
