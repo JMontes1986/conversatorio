@@ -57,16 +57,19 @@ const AuditLogViewer = dynamic(() => import('@/components/audit-log-viewer').the
 const RealTimeDashboard = dynamic(() => import('@/components/real-time-dashboard').then(mod => mod.RealTimeDashboard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
+interface Student {
+  name: string;
+  attendedDay2?: boolean;
+}
 interface SchoolData {
-    id: string;
-    schoolName: string;
-    teamName: string;
-    participants: { name: string }[];
-    attendees: { name: string }[];
-    status: 'Verificado' | 'Pendiente';
-    contactName: string;
-    contactEmail: string;
-    attendedDay2?: boolean;
+  id: string;
+  schoolName: string;
+  teamName: string;
+  participants: Student[];
+  attendees: Student[];
+  status: 'Verificado' | 'Pendiente';
+  contactName: string;
+  contactEmail: string;
 }
 interface JudgeData {
     id: string;
@@ -302,23 +305,32 @@ function AdminDashboard() {
     }
   }
 
-  const handleToggleAttendedDay2 = async (schoolId: string, attended: boolean) => {
+  const handleToggleStudentAttendance = async (schoolId: string, studentName: string, studentType: 'participants' | 'attendees', attended: boolean) => {
     try {
-      const schoolRef = doc(db, "schools", schoolId);
-      await updateDoc(schoolRef, { attendedDay2: attended });
-      toast({
-        title: "Asistencia Actualizada",
-        description: `La asistencia para el día 2 ha sido actualizada.`,
-      });
+        const schoolRef = doc(db, "schools", schoolId);
+        const school = schools.find(s => s.id === schoolId);
+        if (!school) return;
+
+        const updatedStudents = school[studentType].map(s => 
+            s.name === studentName ? { ...s, attendedDay2: attended } : s
+        );
+
+        await updateDoc(schoolRef, { [studentType]: updatedStudents });
+        
+        toast({
+            title: "Asistencia Actualizada",
+            description: `Se actualizó la asistencia de ${studentName}.`,
+        });
+
     } catch (error) {
-      console.error("Error updating attendance:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo actualizar la asistencia.",
-      });
+        console.error("Error updating student attendance:", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo actualizar la asistencia del estudiante.",
+        });
     }
-  };
+};
 
   const copyToken = (token: string, id: string) => {
     navigator.clipboard.writeText(token);
@@ -360,7 +372,6 @@ function AdminDashboard() {
                         <TableHead>Colegio (Equipo)</TableHead>
                         <TableHead className="text-center">Participantes</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead className="text-center">Asistencia Día 2</TableHead>
                         <TableHead>
                         <span className="sr-only">Acciones</span>
                         </TableHead>
@@ -370,7 +381,7 @@ function AdminDashboard() {
                     {loading ? (
                         <TableBody>
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center">Cargando colegios...</TableCell>
+                                <TableCell colSpan={5} className="text-center">Cargando colegios...</TableCell>
                             </TableRow>
                         </TableBody>
                     ) : (
@@ -393,13 +404,6 @@ function AdminDashboard() {
                                         <TableCell className="text-center">{school.participants.length}</TableCell>
                                         <TableCell>
                                             <Badge variant={school.status === 'Verificado' ? 'default' : 'secondary'}>{school.status}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Checkbox
-                                                checked={school.attendedDay2 || false}
-                                                onCheckedChange={(checked) => handleToggleAttendedDay2(school.id, !!checked)}
-                                                aria-label="Asistencia Día 2"
-                                            />
                                         </TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -450,21 +454,45 @@ function AdminDashboard() {
                                     </TableRow>
                                     <CollapsibleContent asChild>
                                         <TableRow>
-                                            <TableCell colSpan={6} className="p-0">
+                                            <TableCell colSpan={5} className="p-0">
                                                 <div className="bg-secondary/50 p-4">
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         <div>
                                                             <h4 className="font-semibold flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary"/> Participantes del Debate</h4>
-                                                            <ul className="list-disc pl-5 text-sm">
-                                                                {school.participants.map((p, i) => <li key={i}>{p.name}</li>)}
-                                                            </ul>
+                                                            <div className="space-y-2">
+                                                                {school.participants.map((p, i) => (
+                                                                    <div key={i} className="flex items-center justify-between">
+                                                                        <span className="text-sm">{p.name}</span>
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <Label htmlFor={`p-${school.id}-${i}`} className="text-xs text-muted-foreground">Asistió Día 2</Label>
+                                                                            <Checkbox
+                                                                                id={`p-${school.id}-${i}`}
+                                                                                checked={p.attendedDay2 || false}
+                                                                                onCheckedChange={(checked) => handleToggleStudentAttendance(school.id, p.name, 'participants', !!checked)}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                         <div>
                                                             <h4 className="font-semibold flex items-center gap-2 mb-2"><Users className="h-4 w-4 text-primary"/> Asistentes</h4>
                                                             {school.attendees && school.attendees.length > 0 ? (
-                                                                <ul className="list-disc pl-5 text-sm">
-                                                                    {school.attendees.map((a, i) => <li key={i}>{a.name}</li>)}
-                                                                </ul>
+                                                                <div className="space-y-2">
+                                                                    {school.attendees.map((a, i) => (
+                                                                        <div key={i} className="flex items-center justify-between">
+                                                                            <span className="text-sm">{a.name}</span>
+                                                                            <div className="flex items-center space-x-2">
+                                                                                <Label htmlFor={`a-${school.id}-${i}`} className="text-xs text-muted-foreground">Asistió Día 2</Label>
+                                                                                <Checkbox
+                                                                                    id={`a-${school.id}-${i}`}
+                                                                                    checked={a.attendedDay2 || false}
+                                                                                    onCheckedChange={(checked) => handleToggleStudentAttendance(school.id, a.name, 'attendees', !!checked)}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             ) : (
                                                                 <p className="text-sm text-muted-foreground">No hay asistentes registrados.</p>
                                                             )}
@@ -785,6 +813,8 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
+
+    
 
     
 
