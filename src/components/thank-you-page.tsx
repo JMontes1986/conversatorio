@@ -48,7 +48,7 @@ export function ThankYouPage() {
                     </CardHeader>
                     <CardContent>
                         <CardDescription className="text-base md:text-lg">
-                            El Colegio Bilingüe Padre Francesco Coll agradece a todos los colegios participantes, jurados, moderadores, y al público por hacer de este Conversatorio Colgemelli una experiencia inolvidable.
+                            El Colegio Franciscano Agustín Gemelli agradece a todos los colegios participantes, jurados, moderadores, y al público por hacer de este Conversatorio Colgemelli una experiencia inolvidable.
                         </CardDescription>
                         <p className="mt-4 font-semibold text-foreground">¡Nos vemos en la próxima edición!</p>
                     </CardContent>
