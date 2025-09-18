@@ -1047,8 +1047,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const [tempImageInput, setTempImageInput] = useState("");
     const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [isUploading, setIsUploading] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
@@ -1315,39 +1313,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
     }
 
-    const handleTempImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        setUploadProgress(0);
-
-        const storageRef = ref(storage, `temporary/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-            },
-            (error) => {
-                console.error("Upload failed:", error);
-                toast({ variant: "destructive", title: "Error de Subida", description: "La subida de la imagen falló." });
-                setIsUploading(false);
-            },
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                setTempImageInput(downloadURL);
-                await setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), { temporaryUploadedImageUrl: downloadURL }, { merge: true });
-                setIsUploading(false);
-                toast({ title: "Imagen Subida", description: "La imagen está lista para ser enviada." });
-            }
-        );
-    };
-
     const handleSendTemporaryImage = async () => {
         if (!tempImageInput.trim()) {
-            toast({ variant: "destructive", title: "Error", description: "No hay imagen para enviar. Sube una primero." });
+            toast({ variant: "destructive", title: "Error", description: "La URL de la imagen no puede estar vacía." });
             return;
         }
         setIsSendingTempMessage(true);
@@ -1647,24 +1615,23 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 <div className="space-y-4 p-4 border rounded-lg">
                                      <h3 className="font-medium">Imagen Temporal</h3>
                                      <div className="space-y-2">
-                                        <Label htmlFor="temp-image-input">Subir Imagen</Label>
-                                        <Input 
+                                        <Label htmlFor="temp-image-input">URL de la Imagen</Label>
+                                        <Textarea
                                             id="temp-image-input"
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleTempImageUpload}
-                                            disabled={isUploading}
+                                            placeholder="https://ejemplo.com/imagen.png"
+                                            value={tempImageInput}
+                                            onChange={(e) => setTempImageInput(e.target.value)}
+                                            rows={3}
+                                            disabled={isSendingTempMessage}
                                         />
-                                        {isUploading && <Progress value={uploadProgress} className="mt-2" />}
-                                        {tempImageInput && !isUploading && (
-                                            <div className="mt-2 text-center">
-                                                <Image src={tempImageInput} alt="Vista previa de imagen temporal" width={150} height={100} className="object-contain rounded-md mx-auto border" />
-                                                <p className="text-xs text-muted-foreground mt-1">Imagen lista para enviar</p>
-                                            </div>
-                                        )}
                                      </div>
+                                     {tempImageInput && (
+                                        <div className="mt-2 text-center">
+                                            <Image src={tempImageInput} alt="Vista previa de imagen temporal" width={150} height={100} className="object-contain rounded-md mx-auto border" />
+                                        </div>
+                                     )}
                                      <div className="flex justify-end">
-                                        <Button onClick={handleSendTemporaryImage} disabled={isSendingTempMessage || !tempImageInput || isUploading}>
+                                        <Button onClick={handleSendTemporaryImage} disabled={isSendingTempMessage || !tempImageInput}>
                                             {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ImageIcon className="mr-2 h-4 w-4"/>}
                                             Enviar Imagen
                                         </Button>
@@ -1720,11 +1687,3 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         </div>
     );
 }
-
-    
-
-    
-
-
-
-
