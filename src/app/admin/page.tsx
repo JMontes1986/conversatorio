@@ -36,6 +36,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AdminNav } from '@/components/admin-nav';
 import dynamic from 'next/dynamic';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 const HomePageEditor = dynamic(() => import('@/components/home-page-editor').then(mod => mod.HomePageEditor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const ScheduleEditor = dynamic(() => import('@/components/schedule-editor').then(mod => mod.ScheduleEditor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
@@ -64,6 +66,7 @@ interface SchoolData {
     status: 'Verificado' | 'Pendiente';
     contactName: string;
     contactEmail: string;
+    attendedDay2?: boolean;
 }
 interface JudgeData {
     id: string;
@@ -299,6 +302,24 @@ function AdminDashboard() {
     }
   }
 
+  const handleToggleAttendedDay2 = async (schoolId: string, attended: boolean) => {
+    try {
+      const schoolRef = doc(db, "schools", schoolId);
+      await updateDoc(schoolRef, { attendedDay2: attended });
+      toast({
+        title: "Asistencia Actualizada",
+        description: `La asistencia para el día 2 ha sido actualizada.`,
+      });
+    } catch (error) {
+      console.error("Error updating attendance:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo actualizar la asistencia.",
+      });
+    }
+  };
+
   const copyToken = (token: string, id: string) => {
     navigator.clipboard.writeText(token);
     setCopiedTokenId(id);
@@ -338,8 +359,8 @@ function AdminDashboard() {
                         <TableHead className="w-[50px]"></TableHead>
                         <TableHead>Colegio (Equipo)</TableHead>
                         <TableHead className="text-center">Participantes</TableHead>
-                        <TableHead className="text-center hidden md:table-cell">Asistentes</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead className="text-center">Asistencia Día 2</TableHead>
                         <TableHead>
                         <span className="sr-only">Acciones</span>
                         </TableHead>
@@ -370,9 +391,15 @@ function AdminDashboard() {
                                             <div className="text-xs text-muted-foreground">{school.teamName}</div>
                                         </TableCell>
                                         <TableCell className="text-center">{school.participants.length}</TableCell>
-                                        <TableCell className="text-center hidden md:table-cell">{school.attendees?.length || 0}</TableCell>
                                         <TableCell>
                                             <Badge variant={school.status === 'Verificado' ? 'default' : 'secondary'}>{school.status}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Checkbox
+                                                checked={school.attendedDay2 || false}
+                                                onCheckedChange={(checked) => handleToggleAttendedDay2(school.id, !!checked)}
+                                                aria-label="Asistencia Día 2"
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             <DropdownMenu>
