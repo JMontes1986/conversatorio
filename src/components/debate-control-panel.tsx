@@ -962,7 +962,7 @@ function StudentQuestionsTab({ allPreparedQuestions, onProjectQuestion, projecte
                                 {approvedQuestions.length > 0 ? approvedQuestions.map(q => (
                                     <div key={q.id} className={cn(
                                         "p-3 border rounded-lg transition-colors",
-                                        projectedStudentQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
+                                        projectedQuestion?.text === q.text ? "bg-amber-100 border-amber-300 dark:bg-amber-950/50 dark:border-amber-700" : "bg-background"
                                     )}>
                                         <p className="text-sm font-medium">"{q.text}"</p>
                                          <p className="text-xs text-muted-foreground mt-1">
@@ -1638,5 +1638,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     
 
     
+
 
 
