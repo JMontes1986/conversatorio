@@ -7,12 +7,12 @@ import { ModeratorProvider } from '@/context/moderator-auth-context';
 import './globals.css';
 import { inter, spaceGrotesk } from './fonts';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
-import { ThankYouPage } from '@/components/thank-you-page';
+import { Header } from '@/components/layout/header';
+import { Footer } from '@/components/layout/footer';
 
 export const metadata: Metadata = {
-  title: 'Conversatorio Colgemelli - ¡Gracias por Participar!',
-  description: 'El Conversatorio Colgemelli ha concluido. Agradecemos a todos los participantes, jurados y moderadores.',
+  title: 'Conversatorio Colgemelli - Plataforma de Debate',
+  description: 'Plataforma integral para la gestión de la competencia de debate intercolegial "Conversatorio Colgemelli".',
   icons: {
     icon: '/favicon.ico',
   },
@@ -26,11 +26,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={cn("scroll-smooth", inter.variable, spaceGrotesk.variable)}>
-      <body className="font-body antialiased">
+      <body className="font-body antialiased flex flex-col min-h-screen">
         <AuthProvider>
           <JudgeProvider>
             <ModeratorProvider>
-                <ThankYouPage />
+              <Header />
+              <main className="flex-grow">
+                {children}
+              </main>
+              <Footer />
               <Toaster />
             </ModeratorProvider>
           </JudgeProvider>
