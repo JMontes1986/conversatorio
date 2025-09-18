@@ -312,7 +312,7 @@ function AdminDashboard() {
 
   const renderContent = () => {
     switch (activeView) {
-        case "dashboard": return <RealTimeDashboard />;
+        case "dashboard": return <RealTimeDashboard schools={schools} allScores={scores} allRounds={allRounds} />;
         case "home": return <HomePageEditor />;
         case "schedule": return <ScheduleEditor />;
         case "schools": return (
@@ -724,7 +724,7 @@ function AdminDashboard() {
                 <TournamentBracket />
             </div>
         );
-        default: return <RealTimeDashboard />;
+        default: return <RealTimeDashboard schools={schools} allScores={scores} allRounds={allRounds} />;
     }
   }
 
