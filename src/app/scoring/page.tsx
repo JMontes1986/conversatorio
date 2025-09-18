@@ -70,19 +70,27 @@ function ScoringPanel() {
     const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            const newRound = data.currentRound || 'N/A';
             const currentTeams = data.teams || [];
-            setDebateState({
-                currentRound: data.currentRound || 'N/A',
-                teams: currentTeams,
-            });
-            // Initialize scores state for the new teams
-            const initialScores: Record<string, Record<string, number>> = {};
-            if (currentTeams) {
-                currentTeams.forEach((team: Team) => {
-                    initialScores[team.name] = {};
+
+            // Only reset scores if the round has actually changed.
+            if (newRound !== debateState.currentRound) {
+                setDebateState({
+                    currentRound: newRound,
+                    teams: currentTeams,
                 });
+                
+                const initialScores: Record<string, Record<string, number>> = {};
+                if (currentTeams) {
+                    currentTeams.forEach((team: Team) => {
+                        initialScores[team.name] = {};
+                    });
+                }
+                setScores(initialScores);
+            } else {
+                 // If round is the same, just update teams in case they changed without a round change
+                 setDebateState(prevState => ({ ...prevState, teams: currentTeams }));
             }
-            setScores(initialScores);
         }
         setLoadingDebateState(false);
     });
@@ -99,7 +107,7 @@ function ScoringPanel() {
         unsubscribeDebateState();
         unsubscribeRubric();
     };
-  }, []);
+  }, [debateState.currentRound]); // Depend on currentRound to detect changes
 
   useEffect(() => {
       if (!judge?.id) return;
