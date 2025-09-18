@@ -52,6 +52,7 @@ const SemifinalsStageResults = dynamic(() => import('@/components/semifinals-sta
 const KnockoutStageResults = dynamic(() => import('@/components/knockout-stage-results').then(mod => mod.KnockoutStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const FinalResultCard = dynamic(() => import('@/components/final-result-card').then(mod => mod.FinalResultCard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const AuditLogViewer = dynamic(() => import('@/components/audit-log-viewer').then(mod => mod.AuditLogViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const RealTimeDashboard = dynamic(() => import('@/components/real-time-dashboard').then(mod => mod.RealTimeDashboard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 interface SchoolData {
@@ -96,7 +97,7 @@ interface DebateState {
 
 function AdminDashboard() {
   const { toast } = useToast();
-  const [activeView, setActiveView] = useState("home");
+  const [activeView, setActiveView] = useState("dashboard");
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const [schools, setSchools] = useState<SchoolData[]>([]);
@@ -311,6 +312,7 @@ function AdminDashboard() {
 
   const renderContent = () => {
     switch (activeView) {
+        case "dashboard": return <RealTimeDashboard />;
         case "home": return <HomePageEditor />;
         case "schedule": return <ScheduleEditor />;
         case "schools": return (
@@ -722,7 +724,7 @@ function AdminDashboard() {
                 <TournamentBracket />
             </div>
         );
-        default: return <HomePageEditor />;
+        default: return <RealTimeDashboard />;
     }
   }
 

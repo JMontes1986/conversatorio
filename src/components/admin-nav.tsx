@@ -21,7 +21,8 @@ import {
     PanelLeftClose,
     PanelRightClose,
     Menu,
-    ShieldAlert
+    ShieldAlert,
+    LayoutDashboard
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { Separator } from "./ui/separator";
@@ -29,6 +30,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetClose } from "./ui/sheet";
 import React from "react";
 
 const navItems = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "home", label: "Home", icon: Home },
     { id: "schedule", label: "Programación", icon: Calendar },
     { id: "schools", label: "Colegios", icon: School },
