@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -147,8 +146,8 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
       teamName: school.teamName || "",
       contactName: school.contactName || "",
       contactEmail: school.contactEmail || "",
-      participants: school.participants || [{ name: "", attendedDay2: false }],
-      attendees: school.attendees || [],
+      participants: (school.participants || []).map(p => ({...p, attendedDay2: p.attendedDay2 || false})),
+      attendees: (school.attendees || []).map(a => ({...a, attendedDay2: a.attendedDay2 || false})),
     },
   });
 
@@ -271,5 +270,3 @@ export function EditSchoolForm({ school, onFinished }: { school: SchoolData, onF
     </Form>
   );
 }
-
-    
