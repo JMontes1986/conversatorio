@@ -1,8 +1,6 @@
 
 import type { Metadata } from 'next';
 import { Toaster } from "@/components/ui/toaster";
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
 import { AuthProvider } from '@/context/auth-context';
 import { JudgeProvider } from '@/context/judge-auth-context';
 import { ModeratorProvider } from '@/context/moderator-auth-context';
@@ -10,37 +8,14 @@ import './globals.css';
 import { inter, spaceGrotesk } from './fonts';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { ThankYouPage } from '@/components/thank-you-page';
 
 export const metadata: Metadata = {
-  title: 'Conversatorio Colgemelli',
-  description: 'Plataforma de debate y competencia para colegios.',
+  title: 'Conversatorio Colgemelli - ¡Gracias por Participar!',
+  description: 'El Conversatorio Colgemelli ha concluido. Agradecemos a todos los participantes, jurados y moderadores.',
   icons: {
     icon: '/favicon.ico',
   },
-};
-
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@type": "SportsEvent",
-  "name": "Conversatorio Colgemelli",
-  "description": "Plataforma de debate y competencia para colegios.",
-  "startDate": "2024-08-17T08:00-05:00",
-  "endDate": "2024-08-18T17:00-05:00",
-  "eventStatus": "https://schema.org/EventScheduled",
-  "location": {
-    "@type": "Place",
-    "name": "Colegio Bilingüe Padre Francesco Coll",
-    "address": {
-      "@type": "PostalAddress",
-      "addressLocality": "Panama City",
-      "addressCountry": "PA"
-    }
-  },
-  "organizer": {
-    "@type": "Organization",
-    "name": "Colgemelli",
-    "url": "https://conversatorio-colgemelli.web.app"
-  }
 };
 
 
@@ -51,39 +26,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={cn("scroll-smooth", inter.variable, spaceGrotesk.variable)}>
-      <head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      </head>
       <body className="font-body antialiased">
-         <div style={{
-          position: 'fixed',
-          top: 0,
-          right: 0,
-          width: '60px',
-          height: '60px',
-          zIndex: 9999,
-          pointerEvents: 'none'
-        }}>
-           <Image 
-                src="https://mbosvnmhnbrslfwlfcxu.supabase.co/storage/v1/object/public/Software/Cinta%20negra.svg"
-                alt="Cinta de luto"
-                width={60}
-                height={60}
-           />
-        </div>
         <AuthProvider>
           <JudgeProvider>
             <ModeratorProvider>
-              <div className="flex flex-col min-h-screen">
-                <Header />
-                <main className="flex-grow">
-                  {children}
-                </main>
-                <Footer />
-              </div>
+                <ThankYouPage />
               <Toaster />
             </ModeratorProvider>
           </JudgeProvider>
