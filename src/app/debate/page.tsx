@@ -31,6 +31,7 @@ interface DebateState {
   };
   isQrEnabled: boolean;
   sidebarImageUrl?: string;
+  temporaryImageUrl?: string;
   studentQuestionOverlay?: StudentQuestionOverlay | null;
   questionSize?: 'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl';
 }
@@ -55,6 +56,7 @@ export default function DebatePage() {
           timer: { duration: 5 * 60, lastUpdated: Date.now() },
           isQrEnabled: false,
           sidebarImageUrl: "",
+          temporaryImageUrl: "",
           studentQuestionOverlay: null,
           questionSize: 'normal',
         });
@@ -108,8 +110,9 @@ export default function DebatePage() {
     );
   }
 
-  const { question, questionId, videoUrl, timer, isQrEnabled, sidebarImageUrl, studentQuestionOverlay, questionSize } = debateState;
+  const { question, questionId, videoUrl, timer, isQrEnabled, sidebarImageUrl, temporaryImageUrl, studentQuestionOverlay, questionSize } = debateState;
   const showVideo = !!videoUrl;
+  const showImage = !!temporaryImageUrl;
   const showQr = isQrEnabled && !!questionId;
   const liveUrl = getLiveUrl();
   
@@ -170,7 +173,11 @@ export default function DebatePage() {
                     <span className="sr-only">{isFullScreen ? "Minimizar" : "Expandir"}</span>
                 </Button>
 
-                 {showVideo ? (
+                 {showImage ? (
+                     <div className="w-full h-full flex items-center justify-center">
+                        <Image src={temporaryImageUrl!} alt="Imagen temporal" layout="fill" objectFit="contain" className="rounded-lg" />
+                    </div>
+                ) : showVideo ? (
                     <div className="w-full h-full flex items-center justify-center">
                         <VideoEmbed url={videoUrl} />
                     </div>

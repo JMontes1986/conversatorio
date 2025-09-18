@@ -49,6 +49,7 @@ import { logActivity } from '@/lib/audit-log';
 import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 
 const ScoringStatusTracker = dynamic(() => import('@/components/scoring-status-tracker').then(mod => mod.ScoringStatusTracker), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
@@ -208,21 +209,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     }, []);
     
     const availableTeams = useMemo(() => {
-        if (currentRound === 'Ronda 6') {
-            const winnerR1 = getWinnerOfRound(allScores, "Ronda 1");
-            const winnerR2 = getWinnerOfRound(allScores, "Ronda 2");
-            const qualifiedTeamNames = [winnerR1, winnerR2].filter(Boolean) as string[];
-            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-        }
-        else if (currentRound === 'Ronda 8') {
-            const winnerR6 = getWinnerOfRound(allScores, "Ronda 6");
-            const winnerR7 = getWinnerOfRound(allScores, "Ronda 7");
-            const qualifiedTeamNames = [winnerR6, winnerR7].filter(Boolean) as string[];
-            return registeredSchools.filter(school => qualifiedTeamNames.includes(school.teamName));
-        }
-        
-        return registeredSchools;
-    }, [currentRound, debateRounds, allScores, registeredSchools]);
+         return registeredSchools;
+    }, [registeredSchools]);
     
    const unresolvedTieInfo = useMemo(() => {
         const roundTotals: Record<string, Record<string, number>> = {};
@@ -1050,13 +1038,17 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
+    const [previewImageUrl, setPreviewImageUrl] = useState("");
     const [isQrEnabled, setIsQrEnabled] = useState(false);
     const [sidebarImageUrl, setSidebarImageUrl] = useState("");
     const [projectedStudentQuestion, setProjectedStudentQuestion] = useState<StudentQuestionOverlay | null>(null);
     const [tempMessageInput, setTempMessageInput] = useState("");
     const [tempVideoInput, setTempVideoInput] = useState("");
+    const [tempImageInput, setTempImageInput] = useState("");
     const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isUploading, setIsUploading] = useState(false);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
@@ -1073,6 +1065,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 const data = docSnap.data();
                 setPreviewQuestion(data.question || "Esperando pregunta del moderador...");
                 setPreviewVideoUrl(data.videoUrl || "");
+                setPreviewImageUrl(data.temporaryImageUrl || "");
                 setIsQrEnabled(data.isQrEnabled || false);
                 setSidebarImageUrl(data.sidebarImageUrl || "");
                 setProjectedStudentQuestion(data.studentQuestionOverlay || null);
@@ -1167,6 +1160,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 question: question.text,
                 questionId: question.id,
                 videoUrl: "", 
+                temporaryImageUrl: "",
                 questionSize: 'normal',
             }, { merge: true });
             
@@ -1193,6 +1187,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 videoUrl: videoValue,
                 question: "",
                 questionId: "",
+                temporaryImageUrl: "",
             }, { merge: true });
 
             const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
@@ -1212,6 +1207,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 question: "Esperando pregunta del moderador...",
                 questionId: "",
                 videoUrl: "",
+                temporaryImageUrl: "",
                 questionSize: 'normal',
             }, { merge: true });
             
@@ -1276,6 +1272,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 question: tempMessageInput,
                 questionId: "",
                 videoUrl: "",
+                temporaryImageUrl: "",
                 questionSize: tempMessageSize,
             }, { merge: true });
             
@@ -1303,6 +1300,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 videoUrl: tempVideoInput,
                 question: "",
                 questionId: "",
+                temporaryImageUrl: "",
             }, { merge: true });
             
             const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
@@ -1316,6 +1314,63 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             setIsSendingTempMessage(false);
         }
     }
+
+    const handleTempImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        setUploadProgress(0);
+
+        const storageRef = ref(storage, `temporary/${Date.now()}_${file.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, file);
+
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(progress);
+            },
+            (error) => {
+                console.error("Upload failed:", error);
+                toast({ variant: "destructive", title: "Error de Subida", description: "La subida de la imagen falló." });
+                setIsUploading(false);
+            },
+            async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                setTempImageInput(downloadURL);
+                await setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), { temporaryUploadedImageUrl: downloadURL }, { merge: true });
+                setIsUploading(false);
+                toast({ title: "Imagen Subida", description: "La imagen está lista para ser enviada." });
+            }
+        );
+    };
+
+    const handleSendTemporaryImage = async () => {
+        if (!tempImageInput.trim()) {
+            toast({ variant: "destructive", title: "Error", description: "No hay imagen para enviar. Sube una primero." });
+            return;
+        }
+        setIsSendingTempMessage(true);
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, { 
+                temporaryImageUrl: tempImageInput,
+                question: "",
+                questionId: "",
+                videoUrl: "",
+            }, { merge: true });
+            
+            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            await logActivity(`Imagen temporal enviada.`, userContext);
+            
+            toast({ title: "Imagen Temporal Enviada" });
+        } catch (error) {
+            console.error("Error sending temporary image:", error);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar la imagen." });
+        } finally {
+            setIsSendingTempMessage(false);
+        }
+    };
     
     const handleToggleQr = async (enabled: boolean) => {
         setIsQrEnabled(enabled);
@@ -1476,9 +1531,14 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                         </div>
                                     </div>
                                 )}
-                                {previewVideoUrl && "Video en pantalla. Esperando pregunta."}
-                                {previewQuestion && previewQuestion}
-                                {!previewVideoUrl && !previewQuestion && "Pantalla Limpia"}
+                                {previewImageUrl ? (
+                                    <Image src={previewImageUrl} alt="Imagen temporal" width={400} height={300} className="object-contain rounded-md" />
+                                ) : previewVideoUrl ? (
+                                    "Video en pantalla. Esperando pregunta."
+                                ) : (
+                                    previewQuestion
+                                )}
+                                {!previewImageUrl && !previewVideoUrl && !previewQuestion && "Pantalla Limpia"}
                             </div>
                         </div>
                     </CardContent>
@@ -1525,10 +1585,10 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     <TabsContent value="messages">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Mensaje o Video Temporal en Pantalla</CardTitle>
-                                <CardDescription>Muestre un mensaje de texto o un video en la pantalla pública. Esto reemplazará la pregunta o el video principal.</CardDescription>
+                                <CardTitle>Contenido Temporal en Pantalla</CardTitle>
+                                <CardDescription>Muestre un mensaje, video o imagen en la pantalla pública. Esto reemplazará el contenido principal.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-6">
+                            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-4 p-4 border rounded-lg">
                                     <h3 className="font-medium">Mensaje de Texto</h3>
                                     <div className="space-y-2">
@@ -1581,6 +1641,32 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                          <Button onClick={handleSendTemporaryVideo} disabled={isSendingTempMessage}>
                                             {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Video className="mr-2 h-4 w-4"/>}
                                             Enviar Video
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-4 p-4 border rounded-lg">
+                                     <h3 className="font-medium">Imagen Temporal</h3>
+                                     <div className="space-y-2">
+                                        <Label htmlFor="temp-image-input">Subir Imagen</Label>
+                                        <Input 
+                                            id="temp-image-input"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleTempImageUpload}
+                                            disabled={isUploading}
+                                        />
+                                        {isUploading && <Progress value={uploadProgress} className="mt-2" />}
+                                        {tempImageInput && !isUploading && (
+                                            <div className="mt-2 text-center">
+                                                <Image src={tempImageInput} alt="Vista previa de imagen temporal" width={150} height={100} className="object-contain rounded-md mx-auto border" />
+                                                <p className="text-xs text-muted-foreground mt-1">Imagen lista para enviar</p>
+                                            </div>
+                                        )}
+                                     </div>
+                                     <div className="flex justify-end">
+                                        <Button onClick={handleSendTemporaryImage} disabled={isSendingTempMessage || !tempImageInput || isUploading}>
+                                            {isSendingTempMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ImageIcon className="mr-2 h-4 w-4"/>}
+                                            Enviar Imagen
                                         </Button>
                                     </div>
                                 </div>
@@ -1638,6 +1724,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     
 
     
+
 
 
 
