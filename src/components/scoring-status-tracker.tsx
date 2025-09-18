@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { CheckCircle, XCircle, UserCheck, UserX, ClipboardCheck, History, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, UserCheck, UserX, ClipboardCheck, History, Loader2, Star } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Button } from './ui/button';
@@ -22,6 +22,7 @@ interface ScoreData {
     matchId: string;
     judgeId?: string;
     judgeName?: string;
+    teams: { name: string; total: number }[];
 }
 
 interface JudgeData {
@@ -175,11 +176,28 @@ export function ScoringStatusTracker({ allRounds = [], allJudges = [], allScores
                                             <div>
                                                 <h5 className="font-medium mb-2 flex items-center gap-2 text-green-600"><UserCheck className="h-5 w-5" />Jurados que Calificaron ({status.scored.length})</h5>
                                                 {status.scored.length > 0 ? (
-                                                    <ul className="space-y-1 text-sm list-inside">
-                                                        {status.scored.map(judge => (
-                                                            <li key={judge.id} className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" />{judge.name}</li>
-                                                        ))}
-                                                    </ul>
+                                                    <div className="space-y-3">
+                                                        {status.scored.map(judge => {
+                                                            const scoreRecord = allScores.find(
+                                                                s => s.matchId.startsWith(round.name) && s.judgeId === judge.id
+                                                            );
+                                                            return (
+                                                                <div key={judge.id} className="text-sm p-2 bg-secondary/50 rounded-md">
+                                                                    <p className="flex items-center gap-2 font-semibold"><CheckCircle className="h-4 w-4 text-green-500" />{judge.name}</p>
+                                                                    {scoreRecord && (
+                                                                        <ul className="text-xs text-muted-foreground mt-1 pl-6">
+                                                                            {scoreRecord.teams.map(team => (
+                                                                                <li key={team.name} className="flex items-center gap-1">
+                                                                                    <Star className="h-3 w-3 text-amber-500"/>
+                                                                                    {team.name}: <span className="font-bold">{team.total} pts</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 ) : <p className="text-sm text-muted-foreground">Ningún jurado ha calificado aún.</p>}
                                             </div>
                                             <Separator orientation="vertical" className="hidden md:block"/>
