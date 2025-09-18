@@ -141,14 +141,18 @@ function getWinnerOfRound(scores: ScoreData[], roundName: string): string | null
     const entries = Object.entries(teamTotals);
     if (entries.length === 0) return null;
     
+    // Find the maximum score among all teams in the round
     const maxScore = Math.max(...entries.map(([, score]) => score));
+    
+    // Find all teams that have the maximum score
     const winners = entries.filter(([, score]) => score === maxScore);
 
+    // If there's at least one team with the max score (even in a tie), return the first one as a provisional winner.
     if (winners.length > 0) {
-        return winners[0][0]; // Return the first team in case of a tie
+        return winners[0][0]; 
     }
     
-    return null; // Should not happen if there are entries
+    return null; 
 }
 
 
@@ -1641,3 +1645,4 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     
 
     
+
