@@ -34,11 +34,11 @@ const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null
     const maxScore = Math.max(...teams.map(([, score]) => score));
     const winners = teams.filter(([, score]) => score === maxScore);
     
-    if (winners.length === 1) {
-        return winners[0][0];
+    if (winners.length > 0) {
+        return winners[0][0]; // Return the first team in case of a tie
     }
 
-    return null; // Tie or no winner
+    return null; // Should not happen if there are entries
 };
 
 interface FinalResultCardProps {

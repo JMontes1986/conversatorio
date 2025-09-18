@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -143,11 +144,11 @@ function getWinnerOfRound(scores: ScoreData[], roundName: string): string | null
     const maxScore = Math.max(...entries.map(([, score]) => score));
     const winners = entries.filter(([, score]) => score === maxScore);
 
-    if (winners.length === 1) {
-        return winners[0][0]; // Return the name of the single winner
+    if (winners.length > 0) {
+        return winners[0][0]; // Return the first team in case of a tie
     }
     
-    return null; // Return null if there's a tie or no clear winner
+    return null; // Should not happen if there are entries
 }
 
 
@@ -831,19 +832,19 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
                             )}
                     </div>
                     </CardContent>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Editar Pregunta</DialogTitle>
-                        </DialogHeader>
-                        {selectedQuestion && (
-                            <EditQuestionForm 
-                                question={selectedQuestion} 
-                                allRounds={debateRounds}
-                                onFinished={() => setIsEditDialogOpen(false)} 
-                            />
-                        )}
-                    </DialogContent>
                 </Card>
+                 <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar Pregunta</DialogTitle>
+                    </DialogHeader>
+                    {selectedQuestion && (
+                        <EditQuestionForm 
+                            question={selectedQuestion} 
+                            allRounds={debateRounds}
+                            onFinished={() => setIsEditDialogOpen(false)} 
+                        />
+                    )}
+                </DialogContent>
             </Dialog>
         </>
     );
