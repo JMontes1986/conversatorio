@@ -175,7 +175,7 @@ export default function DebatePage() {
 
                  {showImage ? (
                      <div className="w-full h-full flex items-center justify-center">
-                        <Image src={temporaryImageUrl!} alt="Imagen temporal" layout="fill" objectFit="contain" className="rounded-lg" />
+                        <Image src={temporaryImageUrl!} alt="Imagen temporal" width={600} height={400} className="object-contain rounded-lg max-w-full max-h-full" />
                     </div>
                 ) : showVideo ? (
                     <div className="w-full h-full flex items-center justify-center">
