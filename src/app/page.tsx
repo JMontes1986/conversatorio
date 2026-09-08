@@ -13,15 +13,15 @@ import {
   ClipboardCheck,
   Trophy,
   Loader2,
-  Icon as LucideIcon,
+  type LucideIcon,
   Home as HomeIcon,
   Monitor,
   Calendar,
   Shield,
   Star,
 } from "lucide-react";
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { doc, onSnapshot } from '@/lib/documents';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 
 interface Feature {

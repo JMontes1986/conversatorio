@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useForm, useFieldArray, Control } from "react-hook-form";
+import { useForm, useFieldArray, Control, type UseFormGetValues } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Loader2, Trash2, PlusCircle, Save, BarChart, Power, PowerOff, FolderPlus, Copy, Send, TrendingUp, TrendingDown, FileDown, Printer } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot, collection, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { doc, setDoc, onSnapshot, collection, query, orderBy } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useMemo } from "react";
 import { Separator } from "@/components/ui/separator";
@@ -31,8 +31,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import Image from "next/image";
 import Link from "next/link";
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 
 
 const questionSchema = z.object({
@@ -232,7 +232,7 @@ export function SurveyManagement() {
         });
 
         const highest = questionAverages.reduce((max, q) => q.average > max.average ? q : max, questionAverages[0]);
-        const lowest = questionAverages.filter(q => q.average > 0).reduce((min, q) => q.average < min.average ? q : min, questionAverages.find(q => q.average > 0) || { average: 5 });
+        const lowest = questionAverages.filter(q => q.average > 0).reduce((min, q) => q.average < min.average ? q : min, questionAverages.find(q => q.average > 0) || { id: '', text: 'Sin calificaciones', average: 0 });
 
 
         return { highest, lowest };
@@ -593,7 +593,7 @@ export function SurveyManagement() {
                                             </div>
                                             <AccordionContent className="p-4 pt-0">
                                                 <div className="space-y-4 pl-4 border-l-2 ml-2">
-                                                     <QuestionFields control={form.control} sectionIndex={sectionIndex} />
+                                                     <QuestionFields control={form.control} getValues={form.getValues} sectionIndex={sectionIndex} />
                                                 </div>
                                             </AccordionContent>
                                         </Card>
@@ -721,14 +721,14 @@ export function SurveyManagement() {
   );
 }
 
-function QuestionFields({ control, sectionIndex }: { control: Control<FormData>, sectionIndex: number }) {
+function QuestionFields({ control, getValues, sectionIndex }: { control: Control<FormData>, getValues: UseFormGetValues<FormData>, sectionIndex: number }) {
     const { fields, append, remove, insert } = useFieldArray({
         control,
         name: `sections.${sectionIndex}.questions`
     });
 
     const handleDuplicateQuestion = (index: number) => {
-        const questionToDuplicate = control.getValues(`sections.${sectionIndex}.questions.${index}`);
+        const questionToDuplicate = getValues(`sections.${sectionIndex}.questions.${index}`);
         insert(index + 1, { ...questionToDuplicate, id: nanoid() });
     }
 

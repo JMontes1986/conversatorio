@@ -66,7 +66,7 @@ const NavLink = ({ item, activeView, setActiveView, isCollapsed }: { item: typeo
     );
 
     const buttonProps = {
-        variant: activeView === item.id ? "secondary" : "ghost" as const,
+        variant: activeView === item.id ? "secondary" as const : "ghost" as const,
         className: cn("w-full", !isCollapsed && "justify-start", activeView === item.id && "font-bold"),
         onClick: () => setActiveView(item.id),
     };

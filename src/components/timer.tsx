@@ -6,8 +6,8 @@ import * as Tone from "tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Pause, RotateCcw, Bell, TimerIcon } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { doc, onSnapshot, setDoc, getDoc } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -102,7 +102,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             } 
         }, { merge: true });
     } catch (error) {
-        console.error("Error updating timer state in Firestore:", error);
+        console.error("Error updating timer state in Supabase:", error);
     }
   };
 
@@ -119,7 +119,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             }, { merge: true });
             setTimeRemaining(initialTime);
         } catch (error) {
-            console.error("Error resetting timer state in Firestore:", error);
+            console.error("Error resetting timer state in Supabase:", error);
         }
     }
   };

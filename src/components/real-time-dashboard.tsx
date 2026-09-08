@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { collection, onSnapshot, query } from '@/lib/documents';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Users, HelpCircle, ClipboardCheck, BarChart3, Trophy, TrendingUp } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';

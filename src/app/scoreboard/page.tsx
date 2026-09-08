@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { collection, onSnapshot, query, orderBy, doc } from '@/lib/documents';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';

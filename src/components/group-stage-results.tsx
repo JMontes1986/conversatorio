@@ -4,8 +4,8 @@
 
 import React from "react";
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, where, doc } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { collection, onSnapshot, query, orderBy, where, doc } from "@/lib/documents";
 import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";

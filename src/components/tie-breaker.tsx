@@ -6,8 +6,8 @@ import { Button } from './ui/button';
 import { Dices, Loader2, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { addDoc, collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { addDoc, collection, doc, setDoc, deleteDoc } from '@/lib/documents';
 
 interface TieBreakerProps {
   roundName: string;

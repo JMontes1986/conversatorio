@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Loader2, Swords, Users, Dices, Crown } from "lucide-react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "@/lib/documents";
+import { db } from "@/lib/supabase";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
 const TIEBREAK_DOC_ID = "current";

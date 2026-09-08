@@ -3,9 +3,6 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -23,27 +20,22 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-       {
-        protocol: "https",
-        hostname: "firebasestorage.googleapis.com",
-        port: "",
-        pathname: "/**",
-      },
       {
         protocol: "https",
-        hostname: "mbosvnmhnbrslfwlfcxu.supabase.co",
+        hostname: "**.supabase.co",
         port: "",
         pathname: "/**",
       }
     ],
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '4.5mb',
-      // Extend the timeout for server actions to 2 minutes for lengthy operations like video uploads.
-      executionTimeout: 120,
-    },
-  }
+  async headers() {
+    return [{ source: '/(.*)', headers: [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=()' },
+    ] }];
+  },
 };
 
 export default nextConfig;

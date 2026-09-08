@@ -30,8 +30,8 @@ import { useJudgeAuth } from "@/context/judge-auth-context";
 import { useModeratorAuth } from "@/context/moderator-auth-context";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "@/lib/documents";
+import { db } from "@/lib/supabase";
 
 const baseNavLinks = [
   { href: "/programacion", label: "Programación", icon: Calendar },
@@ -72,7 +72,7 @@ export function Header() {
     if (moderatorUser) moderatorLogout();
   };
 
-  const navLinks = [
+  const navLinks: { href: string; label: string; icon: typeof Calendar; admin?: boolean; judge?: boolean; moderator?: boolean }[] = [
     ...baseNavLinks,
     ...(isSurveyActive ? [{ href: "/survey", label: "Encuesta", icon: FileQuestion }] : []),
     ...authNavLinks,

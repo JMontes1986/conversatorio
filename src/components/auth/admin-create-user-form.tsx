@@ -18,12 +18,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { UserPlus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { manageAccount } from "@/lib/accounts";
 
 const formSchema = z.object({
   email: z.string().email("Por favor, introduzca un correo electrónico válido."),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -43,7 +42,7 @@ export function AdminCreateUserForm() {
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     try {
-      await createUserWithEmailAndPassword(auth, values.email, values.password);
+      await manageAccount({ role: "admin", ...values });
       toast({
         title: "¡Usuario Creado!",
         description: `El usuario con el correo ${values.email} ha sido creado exitosamente.`,
@@ -51,10 +50,7 @@ export function AdminCreateUserForm() {
       form.reset();
     } catch (error: any) {
       console.error("Error creating user: ", error);
-      let description = "Ocurrió un error inesperado. Por favor, inténtelo de nuevo.";
-      if (error.code === 'auth/email-already-in-use') {
-        description = "Este correo electrónico ya está en uso por otro usuario.";
-      }
+      const description = error instanceof Error ? error.message : "No se pudo crear el usuario.";
       toast({
         variant: "destructive",
         title: "Error al Crear Usuario",
@@ -97,7 +93,7 @@ export function AdminCreateUserForm() {
                 <FormItem>
                   <FormLabel>Contraseña</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Mínimo 6 caracteres" {...field} />
+                    <Input type="password" placeholder="Mínimo 8 caracteres" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -113,4 +109,4 @@ export function AdminCreateUserForm() {
   );
 }
 
-    
+

@@ -16,8 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trash2, PlusCircle, Save, Home, Users, Shuffle, Gavel, ClipboardCheck, Trophy, Monitor, Calendar, Shield, Star, Icon as LucideIcon } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { doc, setDoc, onSnapshot } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
 import { Separator } from "@/components/ui/separator";

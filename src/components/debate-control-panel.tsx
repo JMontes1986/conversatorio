@@ -13,9 +13,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle, ClipboardCheck } from "lucide-react";
-import { db, storage } from '@/lib/firebase';
-import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { uploadVideo } from "@/lib/uploads";
+import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Timer } from "@/components/timer";
@@ -628,26 +628,18 @@ function QuestionManagement({ preparedQuestions, loadingQuestions, currentDebate
         if (!uploadingFile) return;
 
         const { file, questionId } = uploadingFile;
-        const storageRef = ref(storage, `videos/${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(progress);
-            },
-            (error) => {
-                console.error("Upload failed:", error);
-                alert("La subida del video falló.");
-                setUploadingFile(null);
-            },
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                onUploadComplete(questionId, downloadURL);
-                setUploadingFile(null);
-                setUploadProgress(0);
-            }
-        );
+        const controller = new AbortController();
+        void uploadVideo(file, setUploadProgress, controller.signal).then(async downloadURL => {
+            await onUploadComplete(questionId, downloadURL);
+            setUploadingFile(null);
+            setUploadProgress(0);
+        }).catch(error => {
+            if (error.name === 'AbortError') return;
+            console.error('Upload failed:', error);
+            alert(error.message || 'No se pudo subir el video.');
+            setUploadingFile(null);
+        });
+        return () => controller.abort();
     }, [uploadingFile, onUploadComplete]);
 
     const openEditDialog = (question: Question) => {
@@ -992,7 +984,7 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { sidebarImageUrl: imageUrl }, { merge: true });
 
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Se actualizó la imagen de la barra lateral.`, userContext);
 
             toast({ title: "Imagen Guardada" });
@@ -1133,7 +1125,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 } 
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Temporizador actualizado a ${Math.floor(newDuration/60)}m ${newDuration%60}s.`, userContext);
 
              toast({
@@ -1161,7 +1153,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 questionSize: 'normal',
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Pregunta enviada a pantalla: "${question.text.substring(0, 50)}..."`, userContext);
             
             toast({ title: "Pregunta Enviada", description: "La pregunta es ahora visible." });
@@ -1187,7 +1179,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 temporaryImageUrl: "",
             }, { merge: true });
 
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Video enviado a pantalla (asociado a pregunta: "${question.text.substring(0, 30)}...")`, userContext);
 
             toast({ title: "Video Enviado", description: "El video es ahora visible." });
@@ -1208,7 +1200,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 questionSize: 'normal',
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity("Pantalla principal limpiada.", userContext);
 
             toast({ title: "Pantalla Limpiada", description: "La vista de los participantes ha sido reiniciada." });
@@ -1230,7 +1222,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 studentQuestionOverlay: overlay
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Pregunta del público proyectada: "${question.text.substring(0, 50)}..."`, userContext);
 
             toast({ title: "Pregunta del Público Proyectada" });
@@ -1247,7 +1239,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 studentQuestionOverlay: null
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Pregunta del público ocultada.`, userContext);
 
             toast({ title: "Pregunta del Público Ocultada" });
@@ -1273,7 +1265,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 questionSize: tempMessageSize,
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Mensaje temporal enviado: "${tempMessageInput.substring(0, 50)}..."`, userContext);
 
             toast({ title: "Mensaje Temporal Enviado" });
@@ -1300,7 +1292,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 temporaryImageUrl: "",
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Video temporal enviado.`, userContext);
             
             toast({ title: "Video Temporal Enviado" });
@@ -1327,7 +1319,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 videoUrl: "",
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Imagen temporal enviada.`, userContext);
             
             toast({ title: "Imagen Temporal Enviada" });
@@ -1345,7 +1337,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { isQrEnabled: enabled }, { merge: true });
 
-            const userContext = adminUser ? { userId: adminUser.uid, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
+            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Código QR para preguntas ${enabled ? 'habilitado' : 'deshabilitado'}.`, userContext);
 
             toast({ title: "Ajuste de QR Guardado" });
@@ -1401,11 +1393,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
     }
     
-    const handleUploadComplete = (questionId: string, url: string) => {
+    const handleUploadComplete = useCallback(async (questionId: string, url: string) => {
+        await updateDoc(doc(db, 'questions', questionId), { videoUrl: url });
         setVideoInputs(prev => ({ ...prev, [questionId]: url }));
-        handleSaveVideoLink(questionId);
         toast({ title: "Subida Completa", description: "El video se ha subido y enlazado correctamente." });
-    };
+    }, [toast]);
 
     const TimerSettings = () => {
         const [minutes, setMinutes] = useState(Math.floor(mainTimer.duration / 60));

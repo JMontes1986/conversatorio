@@ -9,8 +9,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Trash2, PlusCircle, Save, CheckCircle, Eye, EyeOff } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { doc, setDoc, onSnapshot } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { nanoid } from "nanoid";

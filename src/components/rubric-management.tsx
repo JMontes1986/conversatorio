@@ -14,8 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Trash2, MoreHorizontal, FilePen } from "lucide-react";
-import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from './ui/dropdown-menu';

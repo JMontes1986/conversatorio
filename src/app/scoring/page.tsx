@@ -16,8 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
 import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from '@/lib/documents';
 import { JudgeAuth } from '@/components/auth/judge-auth';
 import { useJudgeAuth } from '@/context/judge-auth-context';
 import { cn } from '@/lib/utils';
@@ -211,7 +211,6 @@ function ScoringPanel() {
         matchId: debateState.currentRound,
         judgeId: judge?.id || '',
         judgeName: judge?.name || 'Jurado Anónimo',
-        judgeCedula: judge?.cedula || '',
         teams: teamsScoreData.map(({name, total}) => ({name, total})),
         fullScores: teamsScoreData,
         createdAt: new Date(),

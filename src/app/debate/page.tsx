@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { doc, onSnapshot, setDoc } from '@/lib/documents';
 import { Loader2, QrCode, Zap, XCircle, Image as ImageIcon, Expand, Minimize } from 'lucide-react';
 import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useAuth } from '@/context/auth-context';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -37,6 +38,8 @@ interface DebateState {
 }
 
 export default function DebatePage() {
+  const { profile } = useAuth();
+  const canControl = profile?.role === 'admin' || profile?.role === 'moderator';
   const [debateState, setDebateState] = useState<DebateState | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -91,6 +94,7 @@ export default function DebatePage() {
   }
   
     const handleClearStudentQuestion = async () => {
+        if (!canControl) return;
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
@@ -132,10 +136,10 @@ export default function DebatePage() {
         {studentQuestionOverlay && (
              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
                 <div className="bg-background rounded-lg shadow-2xl p-8 max-w-4xl w-full text-center animate-in fade-in-50 zoom-in-95 relative">
-                     <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-8 w-8 text-muted-foreground" onClick={handleClearStudentQuestion}>
+                     {canControl && <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-8 w-8 text-muted-foreground" onClick={handleClearStudentQuestion}>
                         <XCircle className="h-5 w-5" />
                         <span className="sr-only">Cerrar</span>
-                    </Button>
+                    </Button>}
                     <Zap className="h-10 w-10 text-primary mx-auto mb-4" />
                     <h2 className="font-headline text-2xl font-bold mb-2">Pregunta del Público</h2>
                     <p className="text-3xl lg:text-4xl font-semibold whitespace-pre-wrap">

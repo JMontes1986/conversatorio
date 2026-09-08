@@ -18,8 +18,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { School, Loader2, UserPlus, Trash2, Users } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { collection, addDoc } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import React from "react";

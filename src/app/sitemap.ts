@@ -1,7 +1,8 @@
+import { getSiteUrl } from '@/lib/site-url';
 import { MetadataRoute } from 'next'
  
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://conversatorio-colgemelli.web.app'; // Reemplazar con el dominio de producción
+  const baseUrl = getSiteUrl();
 
   return [
     {

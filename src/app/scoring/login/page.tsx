@@ -22,6 +22,7 @@ import React from "react";
 import { useJudgeAuth } from "@/context/judge-auth-context";
 
 const formSchema = z.object({
+  token: z.string().min(1, "El token es requerido."),
   cedula: z.string().min(1, "El número de cédula es requerido."),
 });
 
@@ -37,6 +38,7 @@ export default function JudgeLoginPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       cedula: "",
+      token: "",
     },
   });
 
@@ -50,7 +52,7 @@ export default function JudgeLoginPage() {
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     try {
-      const success = await login(values.cedula);
+      const success = await login(values.cedula, values.token);
       if (success) {
         toast({
             title: "¡Acceso Correcto!",
@@ -65,7 +67,7 @@ export default function JudgeLoginPage() {
       toast({
         variant: "destructive",
         title: "Error de Acceso",
-        description: "Cédula no registrada o jurado inactivo. Contacte al administrador.",
+        description: "Cédula o token incorrectos, o jurado inactivo. Contacte al administrador.",
       });
     } finally {
       setIsSubmitting(false);
@@ -79,7 +81,7 @@ export default function JudgeLoginPage() {
             <ClipboardCheck className="mx-auto h-12 w-12 text-primary mb-4" />
             <CardTitle className="font-headline text-3xl">Acceso de Jurado</CardTitle>
             <CardDescription>
-            Ingrese su número de cédula para acceder al panel.
+            Ingrese su cédula y el token entregado por el administrador.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -98,6 +100,13 @@ export default function JudgeLoginPage() {
                     </FormItem>
                 )}
                 />
+                <FormField control={form.control} name="token" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Token de acceso</FormLabel>
+                      <FormControl><Input type="password" autoComplete="current-password" placeholder="Pegue su token" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                )} />
                 <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                   {isSubmitting ? "Verificando..." : "Ingresar"}

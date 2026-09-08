@@ -24,12 +24,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, MoreHorizontal, FilePen, Trash2, Loader2, KeyRound, Copy, Check, ToggleLeft, ToggleRight, UserPlus, ChevronDown, Users, CheckCircle2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, getDocs, where, deleteDoc, doc, updateDoc } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { AdminAuth } from '@/components/auth/admin-auth';
 import Link from 'next/link';
-import { nanoid } from 'nanoid';
+import { manageAccount } from '@/lib/accounts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EditSchoolForm } from '@/components/edit-school-form';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -75,6 +75,7 @@ interface JudgeData {
     id: string;
     name: string;
     cedula: string;
+    token?: string;
     status: 'active' | 'inactive';
 }
 interface ModeratorData {
@@ -182,12 +183,7 @@ function AdminDashboard() {
     }
     setIsSubmittingJudge(true);
     try {
-        await addDoc(collection(db, "judges"), {
-            name: newJudgeName,
-            cedula: newJudgeCedula,
-            status: 'active',
-            createdAt: serverTimestamp(),
-        });
+        await manageAccount({ role: 'judge', name: newJudgeName.trim(), identifier: newJudgeCedula.trim() });
         toast({ title: "Jurado Añadido", description: "El nuevo jurado ha sido registrado como activo." });
         setNewJudgeName("");
         setNewJudgeCedula("");
@@ -207,19 +203,7 @@ function AdminDashboard() {
     }
     setIsSubmittingModerator(true);
     try {
-        const existingModeratorQuery = query(collection(db, "moderators"), where("username", "==", newModeratorUsername.trim()));
-        const existingModeratorSnapshot = await getDocs(existingModeratorQuery);
-        if (!existingModeratorSnapshot.empty) {
-            toast({ variant: "destructive", title: "Error", description: "Ese nombre de usuario ya existe." });
-            return;
-        }
-
-        await addDoc(collection(db, "moderators"), {
-            username: newModeratorUsername.trim(),
-            token: nanoid(16),
-            status: 'active',
-            createdAt: serverTimestamp(),
-        });
+        await manageAccount({ role: 'moderator', identifier: newModeratorUsername.trim() });
         toast({ title: "Moderador Creado", description: "Se ha creado un nuevo moderador con su token de acceso." });
         setNewModeratorUsername("");
     } catch (error) {
@@ -232,7 +216,7 @@ function AdminDashboard() {
 
   const handleDeleteModerator = async (moderatorId: string) => {
     try {
-      await deleteDoc(doc(db, "moderators", moderatorId));
+      await manageAccount({ role: 'moderator', id: moderatorId }, 'DELETE');
       toast({ title: "Moderador Eliminado" });
     } catch (error) {
       console.error("Error deleting moderator:", error);
@@ -242,7 +226,7 @@ function AdminDashboard() {
 
   const handleDeleteJudge = async (judgeId: string) => {
     try {
-      await deleteDoc(doc(db, "judges", judgeId));
+      await manageAccount({ role: 'judge', id: judgeId }, 'DELETE');
       toast({ title: "Jurado Eliminado" });
     } catch (error) {
       console.error("Error deleting judge:", error);
@@ -572,7 +556,13 @@ function AdminDashboard() {
                                     ) : judges.map((judge) => (
                                         <TableRow key={judge.id}>
                                             <TableCell>{judge.name}</TableCell>
-                                            <TableCell>{judge.cedula}</TableCell>
+                                            <TableCell>
+                                                <div>{judge.cedula}</div>
+                                                {judge.token && <Button type="button" variant="outline" size="sm" onClick={async () => {
+                                                    try { await navigator.clipboard.writeText(judge.token!); toast({ title: 'Token copiado' }); }
+                                                    catch { toast({ variant: 'destructive', title: 'No se pudo copiar el token' }); }
+                                                }}><Copy className="mr-2 h-3 w-3" />Copiar token</Button>}
+                                            </TableCell>
                                             <TableCell className="text-center">
                                                 <Badge variant={judge.status === 'active' ? 'default' : 'destructive'}>
                                                     {judge.status === 'active' ? 'Activo' : 'Inactivo'}

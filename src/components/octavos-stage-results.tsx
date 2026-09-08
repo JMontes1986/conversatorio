@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, doc, orderBy } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { collection, onSnapshot, query, doc, orderBy } from "@/lib/documents";
 import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";

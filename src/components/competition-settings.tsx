@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertTriangle, Lock, Eye, Trash2, ShieldQuestion, FileQuestion } from "lucide-react";
-import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where, deleteDoc, writeBatch, getDocs } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from './ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';

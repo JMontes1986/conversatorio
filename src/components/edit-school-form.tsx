@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Loader2, UserPlus, Trash2, Users, CheckCircle } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { doc, updateDoc } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Separator } from "@/components/ui/separator";

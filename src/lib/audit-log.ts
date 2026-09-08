@@ -1,11 +1,11 @@
 
-'use server';
+'use client';
 
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, addDoc, serverTimestamp } from '@/lib/documents';
+import { db } from './supabase';
 
 /**
- * Registra una acción en el log de auditoría de Firestore.
+ * Registra una acción en el log de auditoría de Supabase.
  * @param actionDescription - Una descripción clara de la acción realizada.
  * @param details - Un objeto opcional con detalles adicionales sobre la acción.
  */

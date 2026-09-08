@@ -6,8 +6,8 @@ import { DebateControlPanel } from "@/components/debate-control-panel";
 import { DrawAnimation } from "@/components/draw-animation";
 import { RoundManagement } from "@/components/round-management";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { collection, onSnapshot, query, orderBy } from "@/lib/documents";
 import { Gavel, Shuffle, Swords } from "lucide-react";
 import { useEffect, useState } from "react";
 

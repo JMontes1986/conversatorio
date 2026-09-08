@@ -5,8 +5,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { RefreshCw, Loader2 } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, onSnapshot } from '@/lib/documents';
+import { db } from '@/lib/supabase';
 
 const DEBATE_STATE_DOC_ID = "current";
 

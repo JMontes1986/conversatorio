@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Loader2, Send, CheckCircle, Lightbulb, ArrowLeft, User } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, onSnapshot, getDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { collection, addDoc, doc, onSnapshot, getDoc, serverTimestamp } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -257,5 +257,5 @@ function QuestionLiveComponent() {
 }
 
 export default function LivePage() {
-    return <PublicPageLayout><QuestionLiveComponent /></PublicPageLayout>;
+    return <PublicPageLayout><React.Suspense fallback={<div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin" /></div>}><QuestionLiveComponent /></React.Suspense></PublicPageLayout>;
 }

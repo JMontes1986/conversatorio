@@ -1,107 +1,29 @@
+# Conversatorio Colgemelli
 
-# Plataforma de Debate Intercolegial - Conversatorio Colgemelli
+Plataforma de debate intercolegial construida con **Next.js, Supabase y Vercel**.
 
-Esta es una aplicación web full-stack construida con Next.js y Firebase, diseñada para gestionar de manera integral una competencia de debate intercolegial. La plataforma ofrece una experiencia completa tanto para los organizadores y participantes como para el público general.
+Incluye administración de colegios, jurados y moderadores, rondas, rúbrica, sorteo, marcador, control del debate, videos, preguntas del público, encuestas y auditoría.
 
-## Tecnologías Principales
+## Configuración
 
-- **Framework:** [Next.js](https://nextjs.org/) (con App Router)
-- **UI:** [ShadCN/UI](https://ui.shadcn.com/) y [Tailwind CSS](https://tailwindcss.com/)
-- **Base de Datos y Autenticación:** [Firebase](https://firebase.google.com/) (Firestore, Authentication)
-- **Estado y Formularios:** [React Hook Form](https://react-hook-form.com/) y [Zod](https://zod.dev/)
-- **Despliegue:** El código fuente se gestiona en [GitHub](https://github.com/) y el despliegue se realiza a través de [Netlify](https://www.netlify.com/).
+1. Crea un proyecto en Supabase y ejecuta [`supabase/schema.sql`](supabase/schema.sql) completo en SQL Editor.
+2. Crea el primer usuario en Authentication y asígnale el rol con [`supabase/create-admin.sql`](supabase/create-admin.sql).
+3. Copia [`.env.example`](.env.example) a `.env.local` y completa las variables.
+4. Usa Node.js 24 y ejecuta `npm ci` y `npm run dev`.
+5. Importa el repositorio en Vercel y configura las mismas variables.
 
----
+**[Guía completa: Supabase, cuentas, permisos, videos y despliegue](docs/SUPABASE-VERCEL.md).**
 
-## Módulos y Funcionalidades
+## Comprobaciones
 
-La aplicación se divide en varias áreas clave, cada una con un propósito específico y un nivel de acceso diferente.
+```sh
+npm run typecheck
+npm run test:schema
+npm run build
+```
 
-### 1. Vistas Públicas
+La prueba de SQL verifica políticas de acceso y operaciones reales en PostgreSQL embebido. El schema crea 15 tablas de datos, perfiles de usuarios, índices, funciones, políticas RLS, Realtime y Storage. La estructura de cada módulo se conserva en columnas JSONB.
 
-Estas secciones son accesibles para cualquier visitante sin necesidad de iniciar sesión.
+Los administradores entran con correo/contraseña; jurados con cédula/token; moderadores con usuario/token. Las cuentas se crean desde administración y se autentican con Supabase Auth.
 
-- **Página de Inicio (`/`)**: Una página de bienvenida dinámica cuyo contenido (títulos, textos, características e imágenes del carrusel) es completamente editable desde el panel de administrador.
-- **Marcador (`/scoreboard`)**: Muestra los resultados de la competencia en tiempo real. Incluye los resultados de la fase de grupos y un bracket del torneo que se actualiza automáticamente a medida que avanzan las rondas.
-- **Sorteo en Vivo (`/draw`)**: Una pantalla pública que refleja en tiempo real el sorteo de equipos en las diferentes fases del torneo, creando una experiencia transparente y emocionante.
-- **Página de Debate (`/debate`)**: Es la pantalla principal que los participantes y el público ven durante un debate. Muestra la pregunta activa, videos relacionados, mensajes del moderador y un temporizador persistente y sincronizado.
-- **Página de Preguntas del Público (`/live`)**: Permite a los espectadores enviar preguntas a los equipos durante el debate. Se accede a ella a través de un código QR interactivo en la página de debate.
-
-### 2. Roles de Usuario y Autenticación
-
-El sistema cuenta con tres roles de usuario bien definidos para gestionar la competencia:
-
-- **Administrador**: Tiene control total sobre todos los aspectos de la plataforma.
-- **Moderador**: Controla el flujo en vivo del debate (temporizador, preguntas, videos).
-- **Jurado**: Puede acceder a un panel específico para enviar las puntuaciones de las rondas.
-
-### 3. Panel de Administrador (`/admin`)
-
-Es el centro de control de la competencia. Es un panel protegido que requiere autenticación de administrador y está organizado en pestañas:
-
-- **Home**: Permite editar todo el contenido de la página de inicio.
-- **Programación**: Editor del cronograma del evento con **guardado automático**.
-- **Colegios**: Permite registrar, ver, editar, eliminar y verificar los colegios participantes. La edición de la información de un colegio cuenta con **guardado automático** para una gestión más eficiente.
-- **Rondas**: Para crear y eliminar las rondas del torneo, asignándolas a fases específicas (Ej: Fase de Grupos, Cuartos de Final).
-- **Rúbrica**: Permite definir los criterios de evaluación (nombre y descripción) que los jueces utilizarán para calificar.
-- **Sorteo**: Interfaz para realizar el sorteo automático de equipos para la fase de grupos.
-- **Bracket**: Permite configurar el bracket del torneo que se muestra públicamente.
-- **Encuesta**: Herramienta para crear y gestionar encuestas de satisfacción, y visualizar los resultados en tiempo real.
-- **Jurados**: Para registrar nuevos jurados con su nombre y cédula, y gestionar su estado (activo/inactivo).
-- **Moderadores**: Permite crear cuentas de moderador con un token de acceso único y gestionar su estado. También permite crear nuevos administradores.
-- **Control del Debate**: Una vista de moderador completa integrada para el administrador, desde donde puede enviar preguntas, videos, mensajes y controlar el temporizador.
-- **Ajustes Generales**: Panel para controlar el estado de la competencia (inscripciones abiertas/cerradas, resultados públicos/ocultos) y realizar acciones de reinicio.
-
-### 4. Panel de Moderador (`/moderator`)
-
-Interfaz simplificada y protegida para quienes dirigen los debates en vivo.
-
-- **Acceso**: Mediante un nombre de usuario y un token de acceso único generado por el administrador.
-- **Funcionalidades**:
-    - **Gestión de Rondas y Sorteo**: Puede visualizar la configuración de las rondas y el resultado de los sorteos.
-    - **Control del Debate**: Es la herramienta principal. Permite:
-        - Seleccionar la ronda activa y los equipos que se enfrentan.
-        - Controlar un temporizador global persistente y visible para todos.
-        - Enviar preguntas preparadas o videos a la pantalla principal.
-        - Proyectar preguntas del público, indicando claramente a qué equipo van dirigidas.
-        - Enviar mensajes temporales y limpiar la pantalla de los participantes.
-        - Subir videos y asociarlos a preguntas.
-
-### 5. Panel de Puntuación del Jurado (`/scoring`)
-
-Un portal seguro y sencillo para que los jueces califiquen las rondas.
-
-- **Acceso**: Mediante el número de cédula del jurado.
-- **Funcionalidades**:
-    - Muestra la ronda activa y los equipos que se están enfrentando.
-    - Presenta la rúbrica de evaluación definida por el administrador.
-    - Permite al juez asignar una puntuación (de 1 a 5) a cada equipo por cada criterio.
-    - Calcula el total automáticamente y lo envía a la base de datos.
-    - Muestra un historial de las puntuaciones que el juez ha enviado.
-
----
-
-## Cómo Empezar
-
-Para ejecutar este proyecto en un entorno de desarrollo local:
-
-1.  **Clonar el repositorio:**
-    ```bash
-    git clone <URL_DEL_REPOSITORIO>
-    cd <NOMBRE_DEL_PROYECTO>
-    ```
-
-2.  **Instalar dependencias:**
-    ```bash
-    npm install
-    ```
-
-3.  **Ejecutar la aplicación:**
-    ```bash
-    npm run dev
-    ```
-
-La aplicación estará disponible en `http://localhost:3000`.
-
-<!-- Punto de Restauración No. 2 -->
-<!-- Punto de Restauración No. 3 -->
+**El schema prepara una base nueva; no importa automáticamente los datos ni las cuentas anteriores de Firebase.**

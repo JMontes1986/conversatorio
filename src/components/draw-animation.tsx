@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Shuffle, ShieldCheck, Loader2, Users } from "lucide-react";
-import { collection, onSnapshot, query, where, doc, setDoc, getDocs, orderBy, deleteDoc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, where, doc, setDoc, getDocs, orderBy, deleteDoc, getDoc } from "@/lib/documents";
+import { db } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 const DRAW_STATE_DOC_ID = "liveDraw";

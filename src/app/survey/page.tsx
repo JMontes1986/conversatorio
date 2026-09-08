@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Send, CheckCircle, FileQuestion, EyeOff } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { collection, addDoc, doc, onSnapshot, serverTimestamp } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState, useMemo } from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,7 +76,7 @@ function PublicSurveyPage() {
         return z.object(schemaShape);
     }, [surveyConfig]);
     
-    type FormData = z.infer<typeof formSchema>;
+    type FormData = Record<string, string | undefined>;
     
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),

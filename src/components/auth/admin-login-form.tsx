@@ -19,8 +19,7 @@ import { Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import React from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { getSupabase } from "@/lib/supabase";
 
 const formSchema = z.object({
   email: z.string().email("Por favor, introduzca un correo electrónico válido."),
@@ -45,7 +44,14 @@ export function AdminLoginForm() {
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const supabase = getSupabase();
+      const { error } = await supabase.auth.signInWithPassword({ email: values.email, password: values.password });
+      if (error) throw error;
+      const { data: profile, error: profileError } = await supabase.rpc('current_profile');
+      if (profileError || profile?.role !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error('Esta cuenta no es administradora.');
+      }
       toast({
         title: "¡Inicio de Sesión Exitoso!",
         description: "Bienvenido al panel de administración.",

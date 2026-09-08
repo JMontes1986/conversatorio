@@ -13,8 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Save, PenLine } from "lucide-react";
-import { db } from '@/lib/firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/supabase';
+import { doc, setDoc, onSnapshot } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Slider } from './ui/slider';
 

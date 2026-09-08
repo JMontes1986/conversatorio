@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/supabase";
+import { doc, updateDoc } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import { Textarea } from "./ui/textarea";
