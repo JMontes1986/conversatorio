@@ -2,13 +2,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import * as Tone from "tone";
+import { TimerAudio } from "@/lib/timer-audio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Play, Pause, RotateCcw, Bell, TimerIcon } from "lucide-react";
 import { db } from "@/lib/supabase";
-import { doc, onSnapshot, setDoc, getDoc } from "@/lib/documents";
-import { cn } from "@/lib/utils";
+import { doc, onSnapshot, setDoc } from "@/lib/documents";
+import { useToast } from "@/hooks/use-toast";
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -28,10 +28,14 @@ interface TimerProps {
 export function Timer({ initialTime, title, showControls = true, size = 'default' }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [serverState, setServerState] = useState<TimerState | null>(null);
-  const synth = useRef<Tone.Synth | null>(null);
+  const audio = useRef<TimerAudio | null>(null);
+  const completedRun = useRef<number | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    synth.current = new Tone.Synth().toDestination();
+    const controller = new TimerAudio();
+    audio.current = controller;
+    return () => { controller.dispose(); audio.current = null; };
   }, []);
   
   useEffect(() => {
@@ -54,13 +58,15 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             const newTime = Math.max(0, serverState.duration - elapsed);
             setTimeRemaining(newTime);
 
-            if (newTime <= 0) {
-                 if (showControls) {
-                    toggleTimer(false); // Stop the timer on server
-                    playSound();
-                 }
+            if (newTime <= 0 && showControls && completedRun.current !== serverState.lastUpdated) {
+                completedRun.current = serverState.lastUpdated;
+                audio.current?.ring();
+                void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
+                    timer: { isActive: false, duration: 0, lastUpdated: Date.now() },
+                }, { merge: true }).catch(error => console.error("Error stopping expired timer:", error));
             }
         } else if (serverState) {
+            completedRun.current = null;
             setTimeRemaining(serverState.duration);
         }
     };
@@ -75,22 +81,20 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   
 
   const playSound = async () => {
-     if (Tone.context.state !== 'running') {
-      await Tone.start();
-    }
-    if (synth.current) {
-        synth.current.triggerAttackRelease("C5", "8n", Tone.now());
-        synth.current.triggerAttackRelease("G5", "8n", Tone.now() + 0.2);
+    const controller = audio.current;
+    if (await controller?.enable()) {
+        controller.ring();
+    } else {
+        toast({ title: "Audio no disponible", description: "No se pudo activar el sonido. El temporizador seguirá funcionando." });
     }
   };
   
-  const toggleTimer = async (forceState?: boolean) => {
+  const toggleTimer = async () => {
      if (!showControls) return;
 
-     if (Tone.context.state !== 'running') {
-      await Tone.start();
-    }
-    const newIsActive = forceState !== undefined ? forceState : !(serverState?.isActive);
+    // Start/resume synchronously from the button gesture; never from the tick.
+    void audio.current?.enable();
+    const newIsActive = !(serverState?.isActive);
 
     try {
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -157,7 +161,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                             </Button>
                         </div>
                      )}
-                     <Button onClick={playSound} variant="outline" size="icon" className="h-8 w-8">
+                     <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="h-8 w-8">
                         <Bell className="h-4 w-4" />
                     </Button>
               </CardContent>
@@ -211,7 +215,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     </Button>
                 </>
             )}
-            <Button onClick={playSound} variant="outline" size="icon" className="w-10 h-10">
+            <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="w-10 h-10">
                 <Bell className="h-4 w-4" />
             </Button>
         </div>
