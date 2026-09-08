@@ -22,7 +22,7 @@ import React from "react";
 import { getSupabase } from "@/lib/supabase";
 
 const formSchema = z.object({
-  email: z.string().email("Por favor, introduzca un correo electrónico válido."),
+  email: z.string().trim().email("Por favor, introduzca un correo electrónico válido."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
 });
 
@@ -46,11 +46,23 @@ export function AdminLoginForm() {
     try {
       const supabase = getSupabase();
       const { error } = await supabase.auth.signInWithPassword({ email: values.email, password: values.password });
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase authentication failed:', error.code);
+        throw new Error(error.code === 'invalid_credentials'
+          ? 'Correo o contraseña incorrectos para este proyecto de Supabase.'
+          : error.code === 'email_not_confirmed'
+            ? 'El correo de esta cuenta aún no está confirmado en Supabase.'
+            : 'No se pudo iniciar sesión en Supabase. Inténtalo de nuevo.');
+      }
       const { data: profile, error: profileError } = await supabase.rpc('current_profile');
-      if (profileError || profile?.role !== 'admin') {
+      if (profileError) {
+        console.error('Supabase profile lookup failed:', profileError);
         await supabase.auth.signOut();
-        throw new Error('Esta cuenta no es administradora.');
+        throw new Error('La contraseña fue aceptada, pero no se pudo consultar el perfil. Revisa que el schema esté instalado en el proyecto Supabase conectado a Vercel.');
+      }
+      if (profile?.role !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error('La contraseña fue aceptada, pero esta cuenta no tiene el rol administrador. Asigna el rol a este correo en public.profiles.');
       }
       toast({
         title: "¡Inicio de Sesión Exitoso!",
@@ -62,7 +74,7 @@ export function AdminLoginForm() {
       toast({
         variant: "destructive",
         title: "Error de Autenticación",
-        description: "Correo o contraseña incorrectos. Por favor, inténtelo de nuevo.",
+        description: error instanceof Error ? error.message : 'No se pudo iniciar sesión.',
       });
     } finally {
       setIsSubmitting(false);

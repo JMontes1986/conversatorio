@@ -78,6 +78,16 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     await assert.rejects(write([{ table: 'scores', id: 'duplicate', operation: 'insert', data: validScore }]), /unique constraint/);
     await as('anon');
     assert.equal(await count('scores'), 0);
+    // Repair an existing Auth user without a role, then check actual RLS access.
+    await pg.exec('reset role');
+    await pg.exec(`alter table auth.users add column email text;
+      update auth.users set email = 'sistemas@colgemelli.edu.co' where id = '${stranger}';`);
+    const repair = await readFile(new URL('../supabase/repair-admin.sql', import.meta.url), 'utf8');
+    await pg.exec(repair);
+    await pg.exec(repair);
+    await as('authenticated', stranger);
+    assert.equal((await pg.query('select current_profile() as p')).rows[0].p.role, 'admin');
+    assert.equal(await count('schools'), 1);
     await as('authenticated', admin);
     await write([{ table: 'settings', id: 'competition', operation: 'merge', data: { groupStageResultsPublished: true } }]);
     await as('anon');
