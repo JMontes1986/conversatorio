@@ -26,4 +26,4 @@ La prueba de SQL verifica políticas de acceso y operaciones reales en PostgreSQ
 
 Los administradores entran con correo/contraseña; jurados con cédula/token; moderadores con usuario/token. Las cuentas se crean desde administración y se autentican con Supabase Auth.
 
-**El schema prepara una base nueva; no importa automáticamente los datos ni las cuentas anteriores de Firebase.**
+**El schema prepara una base nueva; no importa automáticamente los datos ni las cuentas de sistemas anteriores.**

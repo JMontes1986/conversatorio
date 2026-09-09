@@ -7,7 +7,7 @@
 3. El script crea tablas, índices, funciones, políticas RLS, datos iniciales, la publicación Realtime y el bucket público `debate-media`.
 4. Puedes repetirlo: conserva los registros existentes. Está diseñado para un proyecto nuevo dedicado a Conversatorio; no debe mezclarse con otro sistema que tenga tablas del mismo nombre.
 
-Las tablas usan `id`, `data JSONB`, `created_at` y `updated_at`. `data` mantiene la estructura de los formularios existentes (equipos, participantes, preguntas de encuesta y llaves del torneo). Es almacenamiento PostgreSQL nativo; la aplicación ya no requiere el SDK ni los servicios de Firebase. Las operaciones se ejecutan en Supabase y las transacciones conservan juntos los cambios de cada lote.
+Las tablas usan `id`, `data JSONB`, `created_at` y `updated_at`. `data` mantiene la estructura de los formularios existentes (equipos, participantes, preguntas de encuesta y llaves del torneo). Es almacenamiento PostgreSQL nativo. Las operaciones se ejecutan en Supabase y las transacciones conservan juntos los cambios de cada lote.
 
 | Tabla | Contenido | Lectura |
 |---|---|---|
@@ -98,7 +98,7 @@ Después de configurar Supabase, comprueba desde dos navegadores o perfiles dist
 
 ## Datos anteriores
 
-Este cambio prepara la aplicación y una base nueva. **El SQL no copia los datos, usuarios ni videos existentes en Firebase.** No se accedió al proyecto antiguo. Si necesitas conservar el historial, exporta las colecciones y archivos antes de retirar ese servicio y prepara su importación manteniendo los IDs y las relaciones. Las contraseñas de Firebase no se copian con este schema; los administradores, jurados y moderadores deben aprovisionarse en Supabase. Los enlaces de videos antiguos deben sustituirse por los de Storage.
+Este cambio prepara la aplicación y una base nueva. **El SQL no copia los datos, usuarios ni videos de sistemas anteriores.** No se accedió al proyecto antiguo. Si necesitas conservar el historial, exporta los registros y archivos antes de retirar ese servicio y prepara su importación manteniendo los IDs y las relaciones. Las contraseñas anteriores no se copian con este schema; los administradores, jurados y moderadores deben aprovisionarse en Supabase. Los enlaces de videos antiguos deben sustituirse por los de Storage.
 
 Los logotipos que ya apuntaban a un bucket externo de Supabase conservan sus URLs. Puedes copiarlos a `debate-media` y cambiar los enlaces si también quieres que esos recursos pertenezcan al proyecto nuevo.
 

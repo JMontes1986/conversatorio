@@ -51,7 +51,7 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({ url }) => {
     )
   }
 
-  // Fallback to a standard video tag for direct links (e.g., from Firebase Storage)
+  // Use a standard video tag for direct media links, including Supabase Storage.
   return (
     <div className="aspect-video w-full">
         <video

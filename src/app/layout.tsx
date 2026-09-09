@@ -14,7 +14,8 @@ export const metadata: Metadata = {
   title: 'Conversatorio Colgemelli - Plataforma de Debate',
   description: 'Plataforma integral para la gestión de la competencia de debate intercolegial "Conversatorio Colgemelli".',
   icons: {
-    icon: '/favicon.ico',
+    icon: { url: '/conversatorio-icon.png', type: 'image/png', sizes: '192x192' },
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
 };
 
