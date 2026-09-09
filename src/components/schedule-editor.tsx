@@ -1,21 +1,20 @@
 
 "use client";
 
-import { useForm, useFieldArray, Control } from "react-hook-form";
+import { useForm, useFieldArray, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Save, Eye, EyeOff } from "lucide-react";
 import { db } from "@/lib/supabase";
 import { doc, setDoc, onSnapshot } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import { Switch } from "./ui/switch";
-import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
 
 const scheduleItemSchema = z.object({
@@ -70,6 +69,7 @@ export function ScheduleEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingVisibility, setIsSavingVisibility] = useState(false);
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -89,7 +89,7 @@ export function ScheduleEditor() {
             day1: data.day1 && data.day1.length > 0 ? data.day1.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
             day2: data.day2 && data.day2.length > 0 ? data.day2.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
         };
-        form.reset(sanitizedData);
+        form.reset(sanitizedData, { keepDirtyValues: true });
       } else {
         form.reset(defaultSchedule);
       }
@@ -98,6 +98,38 @@ export function ScheduleEditor() {
 
     return () => unsubscribe();
   }, [form]);
+
+  const handlePublicationChange = useCallback(async (
+    fieldName: "day1Published" | "day2Published",
+    published: boolean,
+  ) => {
+    const previousValue = form.getValues(fieldName) ?? false;
+    form.setValue(fieldName, published, { shouldDirty: true });
+    setIsSavingVisibility(true);
+
+    try {
+      await setDoc(
+        doc(db, 'siteContent', 'schedule'),
+        { [fieldName]: published },
+        { merge: true },
+      );
+      form.resetField(fieldName, { defaultValue: published });
+      toast({
+        title: published ? "Programación publicada" : "Programación ocultada",
+        description: "El cambio de visibilidad se guardó automáticamente.",
+      });
+    } catch (error) {
+      console.error("Error saving schedule visibility: ", error);
+      form.resetField(fieldName, { defaultValue: previousValue });
+      toast({
+        variant: "destructive",
+        title: "Error al cambiar la visibilidad",
+        description: "No se pudo guardar el cambio. Inténtelo nuevamente.",
+      });
+    } finally {
+      setIsSavingVisibility(false);
+    }
+  }, [form, toast]);
 
   const onSubmit = async (values: FormData) => {
     setIsSubmitting(true);
@@ -140,8 +172,20 @@ export function ScheduleEditor() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             
             <div className="space-y-6">
-                <ScheduleDayEditor day="day1" title="Actividades Día 1" control={form.control} />
-                <ScheduleDayEditor day="day2" title="Actividades Día 2" control={form.control} />
+                <ScheduleDayEditor
+                  day="day1"
+                  title="Actividades Día 1"
+                  control={form.control}
+                  isSavingVisibility={isSavingVisibility}
+                  onPublicationChange={handlePublicationChange}
+                />
+                <ScheduleDayEditor
+                  day="day2"
+                  title="Actividades Día 2"
+                  control={form.control}
+                  isSavingVisibility={isSavingVisibility}
+                  onPublicationChange={handlePublicationChange}
+                />
             </div>
             
             <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
@@ -155,7 +199,24 @@ export function ScheduleEditor() {
   );
 }
 
-function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", title: string, control: any }) {
+interface ScheduleDayEditorProps {
+  day: "day1" | "day2";
+  title: string;
+  control: Control<FormData>;
+  isSavingVisibility: boolean;
+  onPublicationChange: (
+    fieldName: "day1Published" | "day2Published",
+    published: boolean,
+  ) => Promise<void>;
+}
+
+function ScheduleDayEditor({
+  day,
+  title,
+  control,
+  isSavingVisibility,
+  onPublicationChange,
+}: ScheduleDayEditorProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name: day
@@ -202,7 +263,10 @@ function ScheduleDayEditor({ day, title, control }: { day: "day1" | "day2", titl
                     <FormControl>
                         <Switch
                             checked={field.value}
-                            onCheckedChange={field.onChange}
+                            disabled={isSavingVisibility}
+                            onCheckedChange={(checked) => {
+                              void onPublicationChange(publishedFieldName, checked);
+                            }}
                             className={cn(field.value && "data-[state=checked]:bg-green-600")}
                         />
                     </FormControl>

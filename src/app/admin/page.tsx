@@ -101,10 +101,23 @@ interface DebateState {
     teams: { name: string }[];
 }
 
+const ADMIN_VIEW_STORAGE_KEY = "conversatorio-admin-active-view";
+const ADMIN_VIEWS = new Set([
+  "dashboard", "home", "schedule", "schools", "rounds", "bracket", "rubric",
+  "draw", "survey", "debate-control", "results", "judges", "moderators", "logs",
+  "settings",
+]);
+
+function getInitialAdminView() {
+  if (typeof window === "undefined") return "dashboard";
+  const storedView = window.sessionStorage.getItem(ADMIN_VIEW_STORAGE_KEY);
+  return storedView && ADMIN_VIEWS.has(storedView) ? storedView : "dashboard";
+}
+
 
 function AdminDashboard() {
   const { toast } = useToast();
-  const [activeView, setActiveView] = useState("dashboard");
+  const [activeView, setActiveView] = useState(getInitialAdminView);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const [schools, setSchools] = useState<SchoolData[]>([]);
@@ -127,6 +140,10 @@ function AdminDashboard() {
 
   const [isSchoolEditDialogOpen, setIsSchoolEditDialogOpen] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(ADMIN_VIEW_STORAGE_KEY, activeView);
+  }, [activeView]);
 
   useEffect(() => {
     setLoading(true);

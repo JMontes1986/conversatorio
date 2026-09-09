@@ -16,7 +16,9 @@ export function AdminAuth({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
-  if (loading || !user) {
+  // Keep the dashboard mounted while an existing session is revalidated.
+  // Supabase can emit SIGNED_IN again when the browser tab regains focus.
+  if (!user) {
     return (
       <div className="flex justify-center items-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
