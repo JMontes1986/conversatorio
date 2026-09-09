@@ -49,6 +49,8 @@ type BracketStage = {
   matches: BracketMatch[];
 };
 
+type SeedingMode = "automatic" | "manual";
+
 const DEFAULT_TITLE = "Conversatorio Colgemelli";
 const DEFAULT_SUBTITLE = "Bracket del torneo";
 
@@ -307,6 +309,8 @@ export function TournamentBracket() {
   const [currentTeams, setCurrentTeams] = useState<string[]>([]);
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [subtitle, setSubtitle] = useState(DEFAULT_SUBTITLE);
+  const [seedingMode, setSeedingMode] = useState<SeedingMode>("automatic");
+  const [manualTeamOrder, setManualTeamOrder] = useState<string[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
 
   useEffect(() => {
@@ -350,6 +354,10 @@ export function TournamentBracket() {
       const data = snapshot.exists() ? snapshot.data() : {};
       setTitle(data.bracketTitle || DEFAULT_TITLE);
       setSubtitle(data.bracketSubtitle || DEFAULT_SUBTITLE);
+      setSeedingMode(data.bracketSeedingMode === "manual" ? "manual" : "automatic");
+      setManualTeamOrder(Array.isArray(data.bracketTeamOrder)
+        ? uniqueTeamNames(data.bracketTeamOrder)
+        : []);
       setPublicTeams(Array.isArray(data.bracketTeams)
         ? data.bracketTeams.filter((team): team is string => typeof team === "string")
         : []);
@@ -368,10 +376,18 @@ export function TournamentBracket() {
     };
   }, []);
 
-  const displayTeams = useMemo(
+  const availableTeams = useMemo(
     () => teams.length > 0 ? uniqueTeamNames(teams) : uniqueTeamNames(publicTeams),
     [teams, publicTeams],
   );
+
+  const displayTeams = useMemo(() => {
+    if (seedingMode !== "manual") return availableTeams;
+    const availableSet = new Set(availableTeams);
+    const savedOrder = manualTeamOrder.filter((team) => availableSet.has(team));
+    const savedSet = new Set(savedOrder);
+    return [...savedOrder, ...availableTeams.filter((team) => !savedSet.has(team))];
+  }, [availableTeams, manualTeamOrder, seedingMode]);
 
   useEffect(() => {
     if (teams.length === 0) return;
@@ -389,12 +405,12 @@ export function TournamentBracket() {
 
   const stages = useMemo(() => buildBracket(
     displayTeams,
-    drawMatchups,
+    seedingMode === "manual" ? [] : drawMatchups,
     rounds,
     scores,
     currentRound,
     currentTeams,
-  ), [displayTeams, drawMatchups, rounds, scores, currentRound, currentTeams]);
+  ), [displayTeams, drawMatchups, rounds, scores, currentRound, currentTeams, seedingMode]);
 
   const champion = stages.at(-1)?.matches[0]?.winner ?? null;
 
@@ -408,6 +424,9 @@ export function TournamentBracket() {
           </div>
           <Badge className="w-fit bg-amber-400 text-slate-950 hover:bg-amber-400">
             <Swords className="mr-1 h-4 w-4" /> {displayTeams.length} equipos
+          </Badge>
+          <Badge variant="outline" className="w-fit border-white/40 text-white">
+            {seedingMode === "manual" ? "Organización manual" : "Organización automática"}
           </Badge>
         </div>
       </CardHeader>
