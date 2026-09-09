@@ -678,8 +678,23 @@ function AdminDashboard() {
                                             <TableCell className="font-medium">{mod.username}</TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                    <Input type="text" readOnly value={mod.token} className="font-mono text-xs h-8"/>
-                                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => copyToken(mod.token, mod.id)}>
+                                                    <Input
+                                                        id={`moderator-token-${mod.id}`}
+                                                        name={`moderator-token-${mod.id}`}
+                                                        type="text"
+                                                        readOnly
+                                                        value={mod.token}
+                                                        aria-label={`Token de acceso de ${mod.username}`}
+                                                        className="font-mono text-xs h-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-8 w-8"
+                                                        aria-label={`Copiar token de ${mod.username}`}
+                                                        onClick={() => copyToken(mod.token, mod.id)}
+                                                    >
                                                         {copiedTokenId === mod.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                                                     </Button>
                                                 </div>
@@ -803,9 +818,3 @@ export default function AdminPage() {
         </AdminAuth>
     );
 }
-
-    
-
-    
-
-    

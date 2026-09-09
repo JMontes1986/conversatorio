@@ -82,6 +82,7 @@ export function TournamentBracket() {
                         {!isRefreshing && (
                             <iframe
                                 loading="lazy"
+                                title="Bracket del torneo en Canva"
                                 style={{
                                     position: 'absolute',
                                     width: '100%',
@@ -93,7 +94,6 @@ export function TournamentBracket() {
                                     margin: '0',
                                 }}
                                 src={canvaUrl}
-                                allowFullScreen
                                 allow="fullscreen"
                             ></iframe>
                         )}
