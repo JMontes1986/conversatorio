@@ -4,11 +4,13 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { Loader2, Swords, Users, Dices, Crown } from "lucide-react";
+import { Loader2, Swords, Users, Dices, Crown, ShieldAlert, ShieldCheck } from "lucide-react";
 import { doc, onSnapshot } from "@/lib/documents";
 import { db } from "@/lib/supabase";
+import { type DrawIntegrity, normalizeDrawMatchups, verifyGroupDraw } from "@/lib/draw-integrity";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
 const TIEBREAK_DOC_ID = "current";
@@ -23,6 +25,7 @@ type Phase = {
 }
 type DrawState = {
     phases: Phase[];
+    integrity?: DrawIntegrity;
 }
 type TiebreakState = {
     isActive: boolean;
@@ -66,6 +69,7 @@ export function PublicDrawDisplay() {
   const [drawState, setDrawState] = useState<DrawState | null>(null);
   const [tiebreakState, setTiebreakState] = useState<TiebreakState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [integrityStatus, setIntegrityStatus] = useState<"none" | "checking" | "valid" | "invalid">("none");
 
   useEffect(() => {
     setLoading(true);
@@ -92,6 +96,24 @@ export function PublicDrawDisplay() {
         unsubscribeTiebreak();
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const groupPhase = drawState?.phases?.find((phase) => phase.name === "Fase de Grupos");
+    const matchups = normalizeDrawMatchups(groupPhase?.matchups);
+    if (matchups.length === 0 || !drawState?.integrity) {
+      setIntegrityStatus("none");
+      return;
+    }
+
+    setIntegrityStatus("checking");
+    void verifyGroupDraw(matchups, drawState.integrity).then((isValid) => {
+      if (!cancelled) setIntegrityStatus(isValid ? "valid" : "invalid");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [drawState]);
 
   const TiebreakModal = () => {
       if (!tiebreakState || !tiebreakState.isActive) return null;
@@ -164,10 +186,23 @@ export function PublicDrawDisplay() {
             {drawState.phases.map(phase => (
                  <Card key={phase.name}>
                     <CardHeader>
-                        <CardTitle className="font-headline text-xl md:text-2xl flex items-center gap-3">
-                            <Users className="h-6 w-6 text-primary"/>
-                            {phase.name}
-                        </CardTitle>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <CardTitle className="font-headline text-xl md:text-2xl flex items-center gap-3">
+                                <Users className="h-6 w-6 text-primary"/>
+                                {phase.name}
+                            </CardTitle>
+                            {phase.name === "Fase de Grupos" && drawState.integrity && (
+                                <Badge variant={integrityStatus === "invalid" ? "destructive" : "secondary"} className="w-fit">
+                                    {integrityStatus === "invalid" ? <ShieldAlert className="mr-1 h-4 w-4" /> : <ShieldCheck className="mr-1 h-4 w-4" />}
+                                    {integrityStatus === "checking" ? "Verificando hash" : integrityStatus === "valid" ? "Sorteo verificado" : "Integridad inválida"}
+                                </Badge>
+                            )}
+                        </div>
+                        {phase.name === "Fase de Grupos" && drawState.integrity && (
+                            <p className="break-all font-mono text-xs text-muted-foreground" title="Hash SHA-256 del sorteo">
+                                SHA-256: {drawState.integrity.hash}
+                            </p>
+                        )}
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {phase.matchups.map(matchup => (

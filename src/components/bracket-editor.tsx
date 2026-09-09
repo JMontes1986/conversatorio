@@ -26,6 +26,7 @@ type SeedingMode = "automatic" | "manual";
 type SchoolData = {
     teamName?: string;
     schoolName?: string;
+    status?: string;
 };
 
 function sanitizeTeamNames(names: unknown[]) {
@@ -33,7 +34,7 @@ function sanitizeTeamNames(names: unknown[]) {
     const result: string[] = [];
     names.forEach((name) => {
         if (typeof name !== "string") return;
-        const normalized = name.trim();
+        const normalized = name.trim().normalize("NFC");
         if (!normalized || seen.has(normalized)) return;
         seen.add(normalized);
         result.push(normalized);
@@ -73,9 +74,10 @@ export function BracketEditor() {
         const unsubscribeTeams = onSnapshot(
             query(collection(db, "schools"), orderBy("createdAt", "asc")),
             (snapshot) => {
-                const names = sanitizeTeamNames(snapshot.docs.map((school) => {
+                const names = sanitizeTeamNames(snapshot.docs.flatMap((school) => {
                     const data = school.data() as SchoolData;
-                    return data.teamName || data.schoolName || "";
+                    if (data.status !== "Verificado") return [];
+                    return [data.teamName || data.schoolName || ""];
                 }));
                 setRegisteredTeams(names);
                 setLoadingTeams(false);
@@ -133,15 +135,25 @@ export function BracketEditor() {
         setIsSaving(true);
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const updatedAt = new Date().toISOString();
             await setDoc(docRef, { 
                 bracketTitle,
                 bracketSubtitle,
                 bracketSeedingMode: seedingMode,
                 bracketTeamOrder: teamOrder,
                 bracketTeams: registeredTeams,
+                bracketManualAccepted: seedingMode === "manual",
+                bracketManualAcceptedAt: seedingMode === "manual" ? updatedAt : null,
+                bracketConfigurationUpdatedAt: updatedAt,
             }, { merge: true });
             hasLocalChanges.current = false;
-            toast({ title: "Ajustes del Bracket Guardados" });
+            toast(seedingMode === "manual" ? {
+                title: "Organización manual aceptada",
+                description: "El orden definido por el administrador ya tiene prioridad sobre el sorteo automático.",
+            } : {
+                title: "Modo automático activado",
+                description: "El bracket volverá a utilizar únicamente el sorteo SHA-256 verificado.",
+            });
         } catch (error) {
             console.error("Error saving bracket settings:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los ajustes del bracket." });
@@ -190,7 +202,7 @@ export function BracketEditor() {
                     <div>
                         <p className="text-sm font-medium">Organización de las llaves</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            En modo manual, cada dos posiciones consecutivas forman un enfrentamiento.
+                            El modo automático usa el sorteo SHA-256 verificado y sus rondas. En modo manual, cada dos posiciones consecutivas forman un enfrentamiento.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

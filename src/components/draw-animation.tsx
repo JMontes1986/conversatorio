@@ -1,14 +1,21 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { Shuffle, ShieldCheck, Loader2, Users } from "lucide-react";
-import { collection, onSnapshot, query, where, doc, setDoc, getDocs, orderBy, deleteDoc, getDoc } from "@/lib/documents";
+import { Shuffle, ShieldCheck, ShieldAlert, Loader2, Users } from "lucide-react";
+import { collection, onSnapshot, query, where, doc, setDoc, orderBy } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import {
+  type DrawIntegrity,
+  type DrawMatchup,
+  normalizeDrawMatchups,
+  sealGroupDraw,
+  secureShuffle,
+  verifyGroupDraw,
+} from "@/lib/draw-integrity";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
 
@@ -23,28 +30,16 @@ type RoundData = {
     phase: string;
 }
 
-type Matchup = {
-    roundName: string;
-    teams: string[];
-}
 type Phase = {
     name: string;
-    matchups: Matchup[];
+    matchups: DrawMatchup[];
 }
 type LiveDrawState = {
     phases: Phase[];
+    integrity?: DrawIntegrity;
 }
 
-const shuffleArray = (array: any[]) => {
-  let currentIndex = array.length, randomIndex;
-  const newArray = [...array];
-  while (currentIndex !== 0) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-    [newArray[currentIndex], newArray[randomIndex]] = [newArray[randomIndex], newArray[currentIndex]];
-  }
-  return newArray;
-};
+type IntegrityStatus = "none" | "checking" | "valid" | "invalid";
 
 export function DrawAnimation() {
   const { toast } = useToast();
@@ -54,9 +49,11 @@ export function DrawAnimation() {
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
-  const [isFixing, setIsFixing] = useState(false);
+  const [isCheckingIntegrity, setIsCheckingIntegrity] = useState(false);
+  const [integrity, setIntegrity] = useState<DrawIntegrity | null>(null);
+  const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("none");
   
-  const [assignedTeams, setAssignedTeams] = useState<Matchup[]>([]);
+  const [assignedTeams, setAssignedTeams] = useState<DrawMatchup[]>([]);
 
 
  useEffect(() => {
@@ -83,9 +80,18 @@ export function DrawAnimation() {
             const data = docSnap.data() as LiveDrawState;
             const groupPhase = data.phases?.find(p => p.name === "Fase de Grupos");
             if (groupPhase && groupPhase.matchups.length > 0) {
-                setAssignedTeams(groupPhase.matchups);
+                setAssignedTeams(normalizeDrawMatchups(groupPhase.matchups));
+                setIntegrity(data.integrity ?? null);
                 setIsFinished(true); // Mark as finished if there's a saved state
+            } else {
+                setAssignedTeams([]);
+                setIntegrity(null);
+                setIsFinished(false);
             }
+        } else {
+            setAssignedTeams([]);
+            setIntegrity(null);
+            setIsFinished(false);
         }
         setLoading(false);
     });
@@ -97,18 +103,46 @@ export function DrawAnimation() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (assignedTeams.length === 0 || !integrity) {
+      setIntegrityStatus("none");
+      return;
+    }
+
+    setIntegrityStatus("checking");
+    void verifyGroupDraw(assignedTeams, integrity).then((isValid) => {
+      if (!cancelled) setIntegrityStatus(isValid ? "valid" : "invalid");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assignedTeams, integrity]);
+
   const startDraw = async () => {
     if (allTeams.length === 0 || groupRounds.length === 0) {
       toast({ variant: 'destructive', title: 'Error', description: 'No hay suficientes equipos o rondas de grupo configuradas.' });
       return;
     }
 
+    const requiredRounds = Math.ceil(allTeams.length / 2);
+    if (groupRounds.length !== requiredRounds) {
+      toast({
+        variant: "destructive",
+        title: "Las rondas no coinciden con los equipos",
+        description: `Con ${allTeams.length} equipos se necesitan ${requiredRounds} rondas de grupo, pero hay ${groupRounds.length} configuradas.`,
+      });
+      return;
+    }
+
     setIsDrawing(true);
     setIsFinished(false);
     setAssignedTeams([]);
+    setIntegrity(null);
 
-    const shuffledTeams = shuffleArray([...allTeams]);
-    const matchups: Matchup[] = [];
+    const shuffledTeams = secureShuffle(allTeams);
+    const matchups: DrawMatchup[] = [];
     const teamsPerRound = 2;
 
     for (let i = 0; i < groupRounds.length; i++) {
@@ -125,15 +159,19 @@ export function DrawAnimation() {
       setAssignedTeams(current => [...current, matchups[i]]);
     }
     
+    const sealedIntegrity = await sealGroupDraw(matchups);
     const drawState: LiveDrawState = {
         phases: [{
             name: "Fase de Grupos",
             matchups: matchups
-        }]
+        }],
+        integrity: sealedIntegrity,
     };
     
     try {
         await setDoc(doc(db, "drawState", DRAW_STATE_DOC_ID), drawState);
+        setIntegrity(sealedIntegrity);
+        setIntegrityStatus("valid");
         setIsDrawing(false);
         setIsFinished(true);
     } catch (error) {
@@ -143,15 +181,46 @@ export function DrawAnimation() {
     }
   };
   
-  const fixToBlockchain = () => {
-    setIsFixing(true);
-    toast({
-        title: "¡Sorteo Confirmado!",
-        description: "El resultado del sorteo ha sido fijado y es visible para todos."
-    })
-    setTimeout(() => {
-      setIsFixing(false);
-    }, 2000);
+  const handleIntegrity = async () => {
+    if (assignedTeams.length === 0) return;
+    setIsCheckingIntegrity(true);
+    try {
+      if (!integrity) {
+        const sealedIntegrity = await sealGroupDraw(assignedTeams);
+        await setDoc(
+          doc(db, "drawState", DRAW_STATE_DOC_ID),
+          { integrity: sealedIntegrity },
+          { merge: true },
+        );
+        setIntegrity(sealedIntegrity);
+        setIntegrityStatus("valid");
+        toast({
+          title: "Sorteo sellado",
+          description: "Se generó el hash SHA-256 para proteger la integridad del resultado.",
+        });
+        return;
+      }
+
+      const isValid = await verifyGroupDraw(assignedTeams, integrity);
+      setIntegrityStatus(isValid ? "valid" : "invalid");
+      toast(isValid ? {
+        title: "Integridad verificada",
+        description: "Las rondas y los equipos coinciden con el hash SHA-256 guardado.",
+      } : {
+        variant: "destructive",
+        title: "El sorteo fue alterado",
+        description: "El contenido actual no coincide con el hash guardado. El bracket automático no lo utilizará.",
+      });
+    } catch (error) {
+      console.error("Error checking draw integrity:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo verificar el sorteo",
+        description: "Inténtelo nuevamente.",
+      });
+    } finally {
+      setIsCheckingIntegrity(false);
+    }
   };
 
 
@@ -213,7 +282,7 @@ export function DrawAnimation() {
                 </p>
             </div>
         ) : (
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.max(1, groupRounds.length)} gap-6 min-h-[400px]`}>
+            <div className="grid min-h-[400px] grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {groupRounds.map(round => {
                 const matchup = assignedTeams.find(m => m.roundName === round.name);
                 return (
@@ -237,10 +306,19 @@ export function DrawAnimation() {
       {isFinished && (
         <div className="mt-8 text-center flex flex-col items-center gap-4 animate-in fade-in-50">
             <h2 className="font-headline text-2xl font-bold">¡Sorteo Completado!</h2>
-            <p className="text-muted-foreground">Los grupos han sido definidos. El resultado es ahora visible para el público.</p>
-             <Button onClick={fixToBlockchain} disabled={isFixing} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                {isFixing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                {isFixing ? "Fijando..." : "Confirmar Resultado"}
+            <p className="text-muted-foreground">Los grupos han sido definidos y se reflejan en el bracket automático.</p>
+            {integrity && (
+              <div className="max-w-full rounded-lg border bg-muted/40 px-4 py-3 text-left">
+                <p className="flex items-center justify-center gap-2 text-sm font-semibold">
+                  {integrityStatus === "invalid" ? <ShieldAlert className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4 text-emerald-600" />}
+                  {integrityStatus === "invalid" ? "Hash inválido" : "Sello de integridad SHA-256"}
+                </p>
+                <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{integrity.hash}</p>
+              </div>
+            )}
+             <Button onClick={handleIntegrity} disabled={isCheckingIntegrity} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                {isCheckingIntegrity ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                {isCheckingIntegrity ? "Verificando..." : integrity ? "Verificar Integridad" : "Sellar Sorteo Actual"}
             </Button>
         </div>
       )}

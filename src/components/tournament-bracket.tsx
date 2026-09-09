@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Loader2, Swords, Trophy } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldAlert, ShieldCheck, Swords, Trophy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from "@/lib/documents";
 import { db } from "@/lib/supabase";
+import {
+  type DrawIntegrity,
+  normalizeDrawMatchups,
+  verifyGroupDraw,
+} from "@/lib/draw-integrity";
 
 type SchoolData = {
   teamName?: string;
   schoolName?: string;
+  status?: string;
 };
 
 type RoundData = {
@@ -50,6 +56,7 @@ type BracketStage = {
 };
 
 type SeedingMode = "automatic" | "manual";
+type DrawIntegrityStatus = "none" | "checking" | "valid" | "invalid" | "rounds-mismatch" | "teams-mismatch";
 
 const DEFAULT_TITLE = "Conversatorio Colgemelli";
 const DEFAULT_SUBTITLE = "Bracket del torneo";
@@ -59,7 +66,7 @@ function uniqueTeamNames(names: unknown[]) {
   const uniqueNames: string[] = [];
   names.forEach((name) => {
     if (typeof name !== "string") return;
-    const normalized = name.trim();
+    const normalized = name.trim().normalize("NFC");
     if (!normalized || seen.has(normalized)) return;
     seen.add(normalized);
     uniqueNames.push(normalized);
@@ -305,21 +312,25 @@ export function TournamentBracket() {
   const [rounds, setRounds] = useState<RoundData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
   const [drawMatchups, setDrawMatchups] = useState<DrawMatchup[]>([]);
+  const [drawIntegrity, setDrawIntegrity] = useState<DrawIntegrity | null>(null);
+  const [drawIntegrityStatus, setDrawIntegrityStatus] = useState<DrawIntegrityStatus>("none");
   const [currentRound, setCurrentRound] = useState("");
   const [currentTeams, setCurrentTeams] = useState<string[]>([]);
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [subtitle, setSubtitle] = useState(DEFAULT_SUBTITLE);
   const [seedingMode, setSeedingMode] = useState<SeedingMode>("automatic");
   const [manualTeamOrder, setManualTeamOrder] = useState<string[]>([]);
+  const [manualAcceptedAt, setManualAcceptedAt] = useState<string | null>(null);
   const [loadingTeams, setLoadingTeams] = useState(true);
 
   useEffect(() => {
     const unsubscribeTeams = onSnapshot(
       query(collection(db, "schools"), orderBy("createdAt", "asc")),
       (snapshot) => {
-        setTeams(snapshot.docs.map((school) => {
+        setTeams(snapshot.docs.flatMap((school) => {
           const data = school.data() as SchoolData;
-          return data.teamName || data.schoolName || "";
+          if (data.status !== "Verificado") return [];
+          return [data.teamName || data.schoolName || ""];
         }));
         setLoadingTeams(false);
       },
@@ -343,11 +354,13 @@ export function TournamentBracket() {
     );
 
     const unsubscribeDraw = onSnapshot(doc(db, "drawState", "liveDraw"), (snapshot) => {
-      const phases = snapshot.exists() ? snapshot.data().phases : [];
+      const drawData = snapshot.exists() ? snapshot.data() : {};
+      const phases = drawData.phases;
       const groupPhase = Array.isArray(phases)
         ? phases.find((phase) => phase.name === "Fase de Grupos")
         : null;
-      setDrawMatchups(Array.isArray(groupPhase?.matchups) ? groupPhase.matchups : []);
+      setDrawMatchups(normalizeDrawMatchups(groupPhase?.matchups));
+      setDrawIntegrity(drawData.integrity ?? null);
     });
 
     const unsubscribeState = onSnapshot(doc(db, "debateState", "current"), (snapshot) => {
@@ -355,6 +368,11 @@ export function TournamentBracket() {
       setTitle(data.bracketTitle || DEFAULT_TITLE);
       setSubtitle(data.bracketSubtitle || DEFAULT_SUBTITLE);
       setSeedingMode(data.bracketSeedingMode === "manual" ? "manual" : "automatic");
+      setManualAcceptedAt(
+        data.bracketSeedingMode === "manual" && typeof data.bracketManualAcceptedAt === "string"
+          ? data.bracketManualAcceptedAt
+          : null,
+      );
       setManualTeamOrder(Array.isArray(data.bracketTeamOrder)
         ? uniqueTeamNames(data.bracketTeamOrder)
         : []);
@@ -390,6 +408,43 @@ export function TournamentBracket() {
   }, [availableTeams, manualTeamOrder, seedingMode]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (drawMatchups.length === 0 || !drawIntegrity) {
+      setDrawIntegrityStatus("none");
+      return;
+    }
+
+    setDrawIntegrityStatus("checking");
+    void verifyGroupDraw(drawMatchups, drawIntegrity).then((isValid) => {
+      if (cancelled) return;
+      if (!isValid) {
+        setDrawIntegrityStatus("invalid");
+        return;
+      }
+
+      const configuredRoundNames = rounds
+        .filter((round) => round.phase === "Fase de Grupos")
+        .map((round) => round.name.trim().normalize("NFC"));
+      const drawRoundNames = drawMatchups.map((matchup) => matchup.roundName);
+      if (JSON.stringify(configuredRoundNames) !== JSON.stringify(drawRoundNames)) {
+        setDrawIntegrityStatus("rounds-mismatch");
+        return;
+      }
+
+      const configuredTeams = [...availableTeams].sort((a, b) => a.localeCompare(b, "es"));
+      const drawnTeams = uniqueTeamNames(drawMatchups.flatMap((matchup) => matchup.teams))
+        .sort((a, b) => a.localeCompare(b, "es"));
+      setDrawIntegrityStatus(
+        JSON.stringify(configuredTeams) === JSON.stringify(drawnTeams) ? "valid" : "teams-mismatch",
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [availableTeams, drawIntegrity, drawMatchups, rounds]);
+
+  useEffect(() => {
     if (teams.length === 0) return;
     const sanitizedTeams = uniqueTeamNames(teams);
     if (JSON.stringify(sanitizedTeams) === JSON.stringify(uniqueTeamNames(publicTeams))) return;
@@ -405,12 +460,12 @@ export function TournamentBracket() {
 
   const stages = useMemo(() => buildBracket(
     displayTeams,
-    seedingMode === "manual" ? [] : drawMatchups,
+    seedingMode === "automatic" && drawIntegrityStatus === "valid" ? drawMatchups : [],
     rounds,
     scores,
     currentRound,
     currentTeams,
-  ), [displayTeams, drawMatchups, rounds, scores, currentRound, currentTeams, seedingMode]);
+  ), [displayTeams, drawIntegrityStatus, drawMatchups, rounds, scores, currentRound, currentTeams, seedingMode]);
 
   const champion = stages.at(-1)?.matches[0]?.winner ?? null;
 
@@ -426,11 +481,44 @@ export function TournamentBracket() {
             <Swords className="mr-1 h-4 w-4" /> {displayTeams.length} equipos
           </Badge>
           <Badge variant="outline" className="w-fit border-white/40 text-white">
-            {seedingMode === "manual" ? "Organización manual" : "Organización automática"}
+            {seedingMode === "manual" ? (
+              <><ShieldCheck className="mr-1 h-4 w-4" /> Cambio manual aceptado</>
+            ) : "Organización automática"}
           </Badge>
+          {seedingMode === "automatic" && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "w-fit border-white/40 text-white",
+                drawIntegrityStatus === "valid" && "border-emerald-300 bg-emerald-500/20",
+                ["invalid", "rounds-mismatch", "teams-mismatch"].includes(drawIntegrityStatus) && "border-red-300 bg-red-500/20",
+              )}
+            >
+              {drawIntegrityStatus === "valid" ? <ShieldCheck className="mr-1 h-4 w-4" /> : <ShieldAlert className="mr-1 h-4 w-4" />}
+              {{
+                none: "Sorteo sin sello",
+                checking: "Verificando sorteo",
+                valid: "Sorteo SHA-256 verificado",
+                invalid: "Hash del sorteo inválido",
+                "rounds-mismatch": "Las rondas no coinciden",
+                "teams-mismatch": "Los equipos no coinciden",
+              }[drawIntegrityStatus]}
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="bg-gradient-to-br from-slate-100 via-background to-orange-50 p-0 dark:from-slate-950 dark:via-background dark:to-orange-950/30">
+        {seedingMode === "automatic" && drawIntegrityStatus !== "valid" && drawIntegrityStatus !== "checking" && (
+          <div className="border-b border-amber-300 bg-amber-50 px-6 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            El bracket no aplicará el sorteo hasta que su hash, sus rondas y sus equipos coincidan. Mientras tanto muestra el orden de colegios verificados.
+          </div>
+        )}
+        {seedingMode === "manual" && (
+          <div className="border-b border-emerald-300 bg-emerald-50 px-6 py-3 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+            Esta organización manual fue aceptada por el administrador y reemplaza el orden del sorteo automático.
+            {manualAcceptedAt && ` Guardada el ${new Date(manualAcceptedAt).toLocaleString("es-CO")}.`}
+          </div>
+        )}
         {loadingTeams ? (
           <div className="flex min-h-96 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
