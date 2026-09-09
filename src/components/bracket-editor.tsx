@@ -16,7 +16,6 @@ import { Loader2, Save, PenLine } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { doc, setDoc, onSnapshot } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
-import { Slider } from './ui/slider';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -26,7 +25,6 @@ export function BracketEditor() {
     const { toast } = useToast();
     const [bracketTitle, setBracketTitle] = useState("¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
     const [bracketSubtitle, setBracketSubtitle] = useState("Debate Intercolegial");
-    const [bracketCanvaUrl, setBracketCanvaUrl] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -37,7 +35,6 @@ export function BracketEditor() {
                 const data = docSnap.data();
                 setBracketTitle(data.bracketTitle || "¿QUÉ SIGNIFICA SER JOVEN DEL SIGLO XXI?");
                 setBracketSubtitle(data.bracketSubtitle || "Debate Intercolegial");
-                setBracketCanvaUrl(data.bracketCanvaUrl || "");
             }
             setLoading(false);
         });
@@ -52,7 +49,6 @@ export function BracketEditor() {
             await setDoc(docRef, { 
                 bracketTitle,
                 bracketSubtitle,
-                bracketCanvaUrl,
             }, { merge: true });
             toast({ title: "Ajustes del Bracket Guardados" });
         } catch (error) {
@@ -80,20 +76,18 @@ export function BracketEditor() {
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><PenLine className="h-5 w-5"/>Editor del Bracket</CardTitle>
-                <CardDescription>Personalice el enlace de Canva que se muestra en el bracket del torneo.</CardDescription>
+                <CardDescription>
+                    Personalice el encabezado del bracket nativo. Los equipos y resultados se actualizan automáticamente desde el torneo.
+                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="bracket-canva-url">URL del Bracket de Canva</Label>
-                    <Input id="bracket-canva-url" placeholder="Pegue el enlace para compartir de Canva" value={bracketCanvaUrl} onChange={(e) => setBracketCanvaUrl(e.target.value)} />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="bracket-title">Título Principal (No se usa con Canva)</Label>
-                    <Input id="bracket-title" value={bracketTitle} onChange={(e) => setBracketTitle(e.target.value)} disabled />
+                    <Label htmlFor="bracket-title">Título principal</Label>
+                    <Input id="bracket-title" value={bracketTitle} onChange={(e) => setBracketTitle(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="bracket-subtitle">Subtítulo (No se usa con Canva)</Label>
-                    <Input id="bracket-subtitle" value={bracketSubtitle} onChange={(e) => setBracketSubtitle(e.target.value)} disabled />
+                    <Label htmlFor="bracket-subtitle">Subtítulo</Label>
+                    <Input id="bracket-subtitle" value={bracketSubtitle} onChange={(e) => setBracketSubtitle(e.target.value)} />
                 </div>
                 <Button className="w-full" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
@@ -103,4 +97,3 @@ export function BracketEditor() {
         </Card>
     );
 }
-
