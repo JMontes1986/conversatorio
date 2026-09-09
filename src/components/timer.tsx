@@ -82,7 +82,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   const playSound = async () => {
     const controller = audio.current;
-    if (await controller?.enable()) {
+    if (controller && await controller.enable()) {
         controller.ring();
     } else {
         toast({ title: "Audio no disponible", description: "No se pudo activar el sonido. El temporizador seguirá funcionando." });
