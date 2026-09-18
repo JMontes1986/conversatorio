@@ -12,12 +12,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, ArrowDown, ArrowUp, Bot, GripVertical, Loader2, PenLine, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Bot, GripVertical, Loader2, PenLine, RotateCcw, Save, Shuffle, SlidersHorizontal } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
+import { secureShuffle } from '@/lib/draw-integrity';
 
 
 const DEBATE_STATE_DOC_ID = "current";
@@ -47,6 +48,32 @@ function isVerifiedSchool(status: unknown) {
         && status.trim().normalize("NFC").toLocaleLowerCase("es") === "verificado";
 }
 
+function sameTeams(left: string[], right: string[]) {
+    if (left.length !== right.length) return false;
+    const rightSet = new Set(right);
+    return left.every((team) => rightSet.has(team));
+}
+
+function matchupSignature(teams: string[]) {
+    const pairs: string[] = [];
+    for (let index = 0; index < teams.length; index += 2) {
+        pairs.push(teams.slice(index, index + 2).sort((a, b) => a.localeCompare(b, "es")).join("::"));
+    }
+    return pairs.sort((a, b) => a.localeCompare(b, "es")).join("||");
+}
+
+function shuffleIntoNewMatchups(teams: string[], currentOrder: string[] = []) {
+    if (teams.length < 3) return secureShuffle(teams);
+    const currentSignature = matchupSignature(currentOrder);
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+        const candidate = secureShuffle(teams);
+        if (matchupSignature(candidate) !== currentSignature) return candidate;
+    }
+
+    return [...teams.slice(1), teams[0]];
+}
+
 
 export function BracketEditor() {
     const { toast } = useToast();
@@ -56,6 +83,7 @@ export function BracketEditor() {
     const [registeredTeams, setRegisteredTeams] = useState<string[]>([]);
     const [verifiedTeams, setVerifiedTeams] = useState<string[]>([]);
     const [teamOrder, setTeamOrder] = useState<string[]>([]);
+    const [automaticOrderIsRandomized, setAutomaticOrderIsRandomized] = useState(false);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [loadingConfig, setLoadingConfig] = useState(true);
@@ -73,6 +101,7 @@ export function BracketEditor() {
                 setTeamOrder(Array.isArray(data.bracketTeamOrder)
                     ? sanitizeTeamNames(data.bracketTeamOrder)
                     : []);
+                setAutomaticOrderIsRandomized(typeof data.bracketAutomaticRandomizedAt === "string");
             }
             setLoadingConfig(false);
         });
@@ -107,16 +136,26 @@ export function BracketEditor() {
     const availableTeams = seedingMode === "manual" ? registeredTeams : verifiedTeams;
 
     useEffect(() => {
-        setTeamOrder((currentOrder) => {
-            const availableSet = new Set(availableTeams);
-            const availableCurrentOrder = currentOrder.filter((team) => availableSet.has(team));
-            const currentSet = new Set(availableCurrentOrder);
-            return [
-                ...availableCurrentOrder,
-                ...availableTeams.filter((team) => !currentSet.has(team)),
-            ];
-        });
-    }, [availableTeams]);
+        if (loadingConfig || loadingTeams) return;
+        const availableSet = new Set(availableTeams);
+        const availableCurrentOrder = teamOrder.filter((team) => availableSet.has(team));
+
+        if (seedingMode === "automatic" && (
+            !automaticOrderIsRandomized
+            || !sameTeams(availableCurrentOrder, availableTeams)
+        )) {
+            setTeamOrder(shuffleIntoNewMatchups(availableTeams, teamOrder));
+            setAutomaticOrderIsRandomized(true);
+            return;
+        }
+
+        const currentSet = new Set(availableCurrentOrder);
+        const nextOrder = [
+            ...availableCurrentOrder,
+            ...availableTeams.filter((team) => !currentSet.has(team)),
+        ];
+        if (JSON.stringify(nextOrder) !== JSON.stringify(teamOrder)) setTeamOrder(nextOrder);
+    }, [automaticOrderIsRandomized, availableTeams, loadingConfig, loadingTeams, seedingMode, teamOrder]);
 
     const markChanged = () => {
         hasLocalChanges.current = true;
@@ -125,6 +164,23 @@ export function BracketEditor() {
     const changeMode = (mode: SeedingMode) => {
         markChanged();
         setSeedingMode(mode);
+        if (mode === "automatic") {
+            setTeamOrder(shuffleIntoNewMatchups(verifiedTeams, teamOrder));
+            setAutomaticOrderIsRandomized(true);
+        } else {
+            setTeamOrder((currentOrder) => {
+                const registeredSet = new Set(registeredTeams);
+                const savedTeams = currentOrder.filter((team) => registeredSet.has(team));
+                const savedSet = new Set(savedTeams);
+                return [...savedTeams, ...registeredTeams.filter((team) => !savedSet.has(team))];
+            });
+        }
+    };
+
+    const reshuffleAutomaticTeams = () => {
+        markChanged();
+        setTeamOrder(shuffleIntoNewMatchups(verifiedTeams, teamOrder));
+        setAutomaticOrderIsRandomized(true);
     };
 
     const moveTeam = (fromIndex: number, toIndex: number) => {
@@ -156,6 +212,7 @@ export function BracketEditor() {
                 bracketTeams: availableTeams,
                 bracketManualAccepted: seedingMode === "manual",
                 bracketManualAcceptedAt: seedingMode === "manual" ? updatedAt : null,
+                bracketAutomaticRandomizedAt: seedingMode === "automatic" ? updatedAt : null,
                 bracketConfigurationUpdatedAt: updatedAt,
             }, { merge: true });
             hasLocalChanges.current = false;
@@ -163,8 +220,8 @@ export function BracketEditor() {
                 title: "Organización manual aceptada",
                 description: "El orden definido por el administrador ya tiene prioridad sobre el sorteo automático.",
             } : {
-                title: "Modo automático activado",
-                description: "El bracket volverá a utilizar únicamente el sorteo SHA-256 verificado.",
+                title: "Llaves aleatorias guardadas",
+                description: "Los enfrentamientos iniciales quedaron sorteados y permanecerán estables hasta que vuelva a generarlos.",
             });
         } catch (error) {
             console.error("Error saving bracket settings:", error);
@@ -214,7 +271,7 @@ export function BracketEditor() {
                     <div>
                         <p className="text-sm font-medium">Organización de las llaves</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            El modo automático usa solo equipos verificados y el sorteo SHA-256. En modo manual puede organizar todos los colegios registrados; cada dos posiciones forman un enfrentamiento.
+                            El modo automático sortea aleatoriamente los equipos verificados. El resultado queda guardado y no cambia al recargar. En modo manual puede organizar todos los colegios registrados.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -243,6 +300,34 @@ export function BracketEditor() {
                                 Hay {registeredTeams.length} {registeredTeams.length === 1 ? "colegio registrado" : "colegios registrados"},
                                 pero ninguno está verificado. Verifíquelos en <strong>Colegios</strong> o use el modo manual.
                             </p>
+                        </div>
+                    )}
+
+                    {seedingMode === "automatic" && verifiedTeams.length > 0 && (
+                        <div className="space-y-3 pt-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-medium">Vista previa del sorteo</p>
+                                    <p className="text-xs text-muted-foreground">Cada fila corresponde a una llave inicial.</p>
+                                </div>
+                                <Button type="button" variant="outline" size="sm" onClick={reshuffleAutomaticTeams}>
+                                    <Shuffle className="mr-2 h-4 w-4" /> Volver a sortear
+                                </Button>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                {Array.from({ length: Math.ceil(teamOrder.length / 2) }, (_, matchIndex) => {
+                                    const firstTeam = teamOrder[matchIndex * 2];
+                                    const secondTeam = teamOrder[(matchIndex * 2) + 1];
+                                    return (
+                                        <div key={`${firstTeam}-${secondTeam || "bye"}`} className="rounded-lg border bg-muted/30 p-3">
+                                            <Badge variant="outline" className="mb-2">Llave {matchIndex + 1}</Badge>
+                                            <p className="font-medium">{firstTeam}</p>
+                                            <p className="my-1 text-xs text-muted-foreground">contra</p>
+                                            <p className="font-medium">{secondTeam || "Pase directo"}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
 
