@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Loader2, ShieldAlert, ShieldCheck, Swords, Trophy } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Loader2, Maximize2, Minimize2, Radio, ShieldAlert, ShieldCheck, Swords, Trophy } from "lucide-react";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
-import { collection, doc, onSnapshot, orderBy, query, setDoc } from "@/lib/documents";
+import { collection, doc, onSnapshot, orderBy, query } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import {
   type DrawIntegrity,
@@ -312,6 +313,7 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
 }
 
 export function TournamentBracket() {
+  const bracketRef = useRef<HTMLDivElement>(null);
   const [registeredTeams, setRegisteredTeams] = useState<string[]>([]);
   const [verifiedTeams, setVerifiedTeams] = useState<string[]>([]);
   const [publicTeams, setPublicTeams] = useState<string[]>([]);
@@ -329,6 +331,7 @@ export function TournamentBracket() {
   const [manualAcceptedAt, setManualAcceptedAt] = useState<string | null>(null);
   const [automaticRandomizedAt, setAutomaticRandomizedAt] = useState<string | null>(null);
   const [loadingTeams, setLoadingTeams] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     const unsubscribeTeams = onSnapshot(
@@ -410,6 +413,14 @@ export function TournamentBracket() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === bracketRef.current);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
   const liveTeams = seedingMode === "manual" ? registeredTeams : verifiedTeams;
   const availableTeams = useMemo(
     () => liveTeams.length > 0 ? uniqueTeamNames(liveTeams) : uniqueTeamNames(publicTeams),
@@ -460,20 +471,6 @@ export function TournamentBracket() {
     };
   }, [availableTeams, drawIntegrity, drawMatchups, rounds]);
 
-  useEffect(() => {
-    if (liveTeams.length === 0) return;
-    const sanitizedTeams = uniqueTeamNames(liveTeams);
-    if (JSON.stringify(sanitizedTeams) === JSON.stringify(uniqueTeamNames(publicTeams))) return;
-
-    void setDoc(
-      doc(db, "debateState", "current"),
-      { bracketTeams: sanitizedTeams },
-      { merge: true },
-    ).catch((error) => {
-      console.error("Error publishing bracket team names:", error);
-    });
-  }, [liveTeams, publicTeams]);
-
   const verifiedDrawIsCurrent = drawIntegrityStatus === "valid" && Boolean(drawIntegrity?.sealedAt) && (
     !automaticRandomizedAt
     || new Date(drawIntegrity!.sealedAt).getTime() >= new Date(automaticRandomizedAt).getTime()
@@ -493,42 +490,78 @@ export function TournamentBracket() {
 
   const champion = stages.at(-1)?.matches[0]?.winner ?? null;
 
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await bracketRef.current?.requestFullscreen();
+      }
+    } catch (error) {
+      console.error("No se pudo cambiar el modo de pantalla completa:", error);
+    }
+  };
+
   return (
-    <Card className="overflow-hidden border-0 shadow-xl">
+    <div
+      ref={bracketRef}
+      className={cn("bg-background", isFullscreen && "h-screen w-screen overflow-auto")}
+    >
+    <Card className={cn(
+      "overflow-hidden border-0 shadow-xl",
+      isFullscreen && "min-h-screen rounded-none shadow-none",
+    )}>
       <CardHeader className="border-b bg-gradient-to-r from-slate-950 via-slate-900 to-orange-950 text-white">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <CardTitle className="font-headline text-2xl md:text-3xl">{title}</CardTitle>
             <CardDescription className="mt-1 text-slate-300">{subtitle}</CardDescription>
           </div>
-          <Badge className="w-fit bg-amber-400 text-slate-950 hover:bg-amber-400">
-            <Swords className="mr-1 h-4 w-4" /> {displayTeams.length} equipos
-          </Badge>
-          <Badge variant="outline" className="w-fit border-white/40 text-white">
-            {seedingMode === "manual" ? (
-              <><ShieldCheck className="mr-1 h-4 w-4" /> Cambio manual aceptado</>
-            ) : "Organización automática"}
-          </Badge>
-          {seedingMode === "automatic" && (
-            <Badge
-              variant="outline"
-              className={cn(
-                "w-fit border-white/40 text-white",
-                effectiveDrawIntegrityStatus === "valid" && "border-emerald-300 bg-emerald-500/20",
-                ["invalid", "rounds-mismatch", "teams-mismatch"].includes(effectiveDrawIntegrityStatus) && "border-red-300 bg-red-500/20",
-              )}
-            >
-              {effectiveDrawIntegrityStatus === "valid" ? <ShieldCheck className="mr-1 h-4 w-4" /> : <ShieldAlert className="mr-1 h-4 w-4" />}
-              {{
-                none: automaticRandomizedAt ? "Aleatorio guardado" : "Sin sortear",
-                checking: "Verificando sorteo",
-                valid: "Sorteo SHA-256 verificado",
-                invalid: "Hash del sorteo inválido",
-                "rounds-mismatch": "Las rondas no coinciden",
-                "teams-mismatch": "Los equipos no coinciden",
-              }[effectiveDrawIntegrityStatus]}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="w-fit border-emerald-300 bg-emerald-500/20 text-emerald-50">
+              <Radio className="mr-1 h-4 w-4" /> En vivo · actualización automática
             </Badge>
-          )}
+            <Badge className="w-fit bg-amber-400 text-slate-950 hover:bg-amber-400">
+              <Swords className="mr-1 h-4 w-4" /> {displayTeams.length} equipos
+            </Badge>
+            <Badge variant="outline" className="w-fit border-white/40 text-white">
+              {seedingMode === "manual" ? (
+                <><ShieldCheck className="mr-1 h-4 w-4" /> Cambio manual aceptado</>
+              ) : "Organización automática"}
+            </Badge>
+            {seedingMode === "automatic" && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "w-fit border-white/40 text-white",
+                  effectiveDrawIntegrityStatus === "valid" && "border-emerald-300 bg-emerald-500/20",
+                  ["invalid", "rounds-mismatch", "teams-mismatch"].includes(effectiveDrawIntegrityStatus) && "border-red-300 bg-red-500/20",
+                )}
+              >
+                {effectiveDrawIntegrityStatus === "valid" ? <ShieldCheck className="mr-1 h-4 w-4" /> : <ShieldAlert className="mr-1 h-4 w-4" />}
+                {{
+                  none: automaticRandomizedAt ? "Aleatorio guardado" : "Sin sortear",
+                  checking: "Verificando sorteo",
+                  valid: "Sorteo SHA-256 verificado",
+                  invalid: "Hash del sorteo inválido",
+                  "rounds-mismatch": "Las rondas no coinciden",
+                  "teams-mismatch": "Los equipos no coinciden",
+                }[effectiveDrawIntegrityStatus]}
+              </Badge>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={toggleFullscreen}
+              className="border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+              aria-label={isFullscreen ? "Salir de pantalla completa" : "Ver bracket en pantalla completa"}
+              aria-pressed={isFullscreen}
+            >
+              {isFullscreen ? <Minimize2 className="mr-2 h-4 w-4" /> : <Maximize2 className="mr-2 h-4 w-4" />}
+              {isFullscreen ? "Salir" : "Pantalla completa"}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="bg-gradient-to-br from-slate-100 via-background to-orange-50 p-0 dark:from-slate-950 dark:via-background dark:to-orange-950/30">
@@ -581,7 +614,7 @@ export function TournamentBracket() {
                 <h3 id="champion-title" className="mb-6 text-center font-headline text-xl font-bold uppercase tracking-wide">
                   Campeón
                 </h3>
-                <div className={cn(
+                <div aria-live="polite" className={cn(
                   "rounded-2xl border-2 p-6 text-center shadow-lg",
                   champion
                     ? "border-amber-400 bg-gradient-to-br from-amber-300 to-orange-400 text-slate-950"
@@ -596,5 +629,6 @@ export function TournamentBracket() {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }

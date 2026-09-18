@@ -15,6 +15,7 @@ import {
   Shuffle,
   FileQuestion,
   Calendar,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ import { db } from "@/lib/supabase";
 
 const baseNavLinks = [
   { href: "/programacion", label: "Programación", icon: Calendar },
+  { href: "/bracket", label: "Bracket", icon: Network },
   { href: "/scoreboard", label: "Marcador", icon: Trophy },
   { href: "/draw", label: "Sorteo", icon: Shuffle },
   { href: "/debate", label: "Debate", icon: MessageSquare },
