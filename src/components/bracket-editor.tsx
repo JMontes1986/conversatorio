@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowDown, ArrowUp, Bot, GripVertical, Loader2, PenLine, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Bot, GripVertical, Loader2, PenLine, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,11 @@ function sanitizeTeamNames(names: unknown[]) {
     return result;
 }
 
+function isVerifiedSchool(status: unknown) {
+    return typeof status === "string"
+        && status.trim().normalize("NFC").toLocaleLowerCase("es") === "verificado";
+}
+
 
 export function BracketEditor() {
     const { toast } = useToast();
@@ -49,6 +54,7 @@ export function BracketEditor() {
     const [bracketSubtitle, setBracketSubtitle] = useState("Debate Intercolegial");
     const [seedingMode, setSeedingMode] = useState<SeedingMode>("automatic");
     const [registeredTeams, setRegisteredTeams] = useState<string[]>([]);
+    const [verifiedTeams, setVerifiedTeams] = useState<string[]>([]);
     const [teamOrder, setTeamOrder] = useState<string[]>([]);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -74,12 +80,16 @@ export function BracketEditor() {
         const unsubscribeTeams = onSnapshot(
             query(collection(db, "schools"), orderBy("createdAt", "asc")),
             (snapshot) => {
-                const names = sanitizeTeamNames(snapshot.docs.flatMap((school) => {
-                    const data = school.data() as SchoolData;
-                    if (data.status !== "Verificado") return [];
-                    return [data.teamName || data.schoolName || ""];
+                const schools = snapshot.docs.map((school) => school.data() as SchoolData);
+                const names = sanitizeTeamNames(schools.map((school) => (
+                    school.teamName || school.schoolName || ""
+                )));
+                const verifiedNames = sanitizeTeamNames(schools.flatMap((school) => {
+                    if (!isVerifiedSchool(school.status)) return [];
+                    return [school.teamName || school.schoolName || ""];
                 }));
                 setRegisteredTeams(names);
+                setVerifiedTeams(verifiedNames);
                 setLoadingTeams(false);
             },
             (error) => {
@@ -94,17 +104,19 @@ export function BracketEditor() {
         };
     }, []);
 
+    const availableTeams = seedingMode === "manual" ? registeredTeams : verifiedTeams;
+
     useEffect(() => {
         setTeamOrder((currentOrder) => {
-            const registeredSet = new Set(registeredTeams);
-            const availableCurrentOrder = currentOrder.filter((team) => registeredSet.has(team));
+            const availableSet = new Set(availableTeams);
+            const availableCurrentOrder = currentOrder.filter((team) => availableSet.has(team));
             const currentSet = new Set(availableCurrentOrder);
             return [
                 ...availableCurrentOrder,
-                ...registeredTeams.filter((team) => !currentSet.has(team)),
+                ...availableTeams.filter((team) => !currentSet.has(team)),
             ];
         });
-    }, [registeredTeams]);
+    }, [availableTeams]);
 
     const markChanged = () => {
         hasLocalChanges.current = true;
@@ -128,7 +140,7 @@ export function BracketEditor() {
 
     const resetTeamOrder = () => {
         markChanged();
-        setTeamOrder(registeredTeams);
+        setTeamOrder(availableTeams);
     };
 
     const handleSave = async () => {
@@ -141,7 +153,7 @@ export function BracketEditor() {
                 bracketSubtitle,
                 bracketSeedingMode: seedingMode,
                 bracketTeamOrder: teamOrder,
-                bracketTeams: registeredTeams,
+                bracketTeams: availableTeams,
                 bracketManualAccepted: seedingMode === "manual",
                 bracketManualAcceptedAt: seedingMode === "manual" ? updatedAt : null,
                 bracketConfigurationUpdatedAt: updatedAt,
@@ -202,7 +214,7 @@ export function BracketEditor() {
                     <div>
                         <p className="text-sm font-medium">Organización de las llaves</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            El modo automático usa el sorteo SHA-256 verificado y sus rondas. En modo manual, cada dos posiciones consecutivas forman un enfrentamiento.
+                            El modo automático usa solo equipos verificados y el sorteo SHA-256. En modo manual puede organizar todos los colegios registrados; cada dos posiciones forman un enfrentamiento.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -223,6 +235,16 @@ export function BracketEditor() {
                             <SlidersHorizontal className="mr-2 h-4 w-4" /> Manual
                         </Button>
                     </div>
+
+                    {seedingMode === "automatic" && verifiedTeams.length === 0 && registeredTeams.length > 0 && (
+                        <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <p>
+                                Hay {registeredTeams.length} {registeredTeams.length === 1 ? "colegio registrado" : "colegios registrados"},
+                                pero ninguno está verificado. Verifíquelos en <strong>Colegios</strong> o use el modo manual.
+                            </p>
+                        </div>
+                    )}
 
                     {seedingMode === "manual" && (
                         <div className="space-y-3 pt-2">
@@ -287,7 +309,7 @@ export function BracketEditor() {
                                 </div>
                             ) : (
                                 <p className="rounded-lg bg-muted p-4 text-center text-sm text-muted-foreground">
-                                    No hay equipos registrados para organizar.
+                                    No hay colegios registrados para organizar.
                                 </p>
                             )}
                         </div>

@@ -74,6 +74,11 @@ function uniqueTeamNames(names: unknown[]) {
   return uniqueNames;
 }
 
+function isVerifiedSchool(status: unknown) {
+  return typeof status === "string"
+    && status.trim().normalize("NFC").toLocaleLowerCase("es") === "verificado";
+}
+
 function scoreResult(matchName: string, scores: ScoreData[]) {
   const matchingScores = scores.filter(
     (score) => score.matchId.split("-bye-")[0] === matchName,
@@ -307,7 +312,8 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
 }
 
 export function TournamentBracket() {
-  const [teams, setTeams] = useState<string[]>([]);
+  const [registeredTeams, setRegisteredTeams] = useState<string[]>([]);
+  const [verifiedTeams, setVerifiedTeams] = useState<string[]>([]);
   const [publicTeams, setPublicTeams] = useState<string[]>([]);
   const [rounds, setRounds] = useState<RoundData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
@@ -327,11 +333,15 @@ export function TournamentBracket() {
     const unsubscribeTeams = onSnapshot(
       query(collection(db, "schools"), orderBy("createdAt", "asc")),
       (snapshot) => {
-        setTeams(snapshot.docs.flatMap((school) => {
-          const data = school.data() as SchoolData;
-          if (data.status !== "Verificado") return [];
-          return [data.teamName || data.schoolName || ""];
-        }));
+        const schools = snapshot.docs.map((school) => school.data() as SchoolData);
+        setRegisteredTeams(uniqueTeamNames(schools.map((school) => (
+          school.teamName || school.schoolName || ""
+        ))));
+        setVerifiedTeams(uniqueTeamNames(schools.flatMap((school) => (
+          isVerifiedSchool(school.status)
+            ? [school.teamName || school.schoolName || ""]
+            : []
+        ))));
         setLoadingTeams(false);
       },
       (error) => {
@@ -394,9 +404,10 @@ export function TournamentBracket() {
     };
   }, []);
 
+  const liveTeams = seedingMode === "manual" ? registeredTeams : verifiedTeams;
   const availableTeams = useMemo(
-    () => teams.length > 0 ? uniqueTeamNames(teams) : uniqueTeamNames(publicTeams),
-    [teams, publicTeams],
+    () => liveTeams.length > 0 ? uniqueTeamNames(liveTeams) : uniqueTeamNames(publicTeams),
+    [liveTeams, publicTeams],
   );
 
   const displayTeams = useMemo(() => {
@@ -445,8 +456,8 @@ export function TournamentBracket() {
   }, [availableTeams, drawIntegrity, drawMatchups, rounds]);
 
   useEffect(() => {
-    if (teams.length === 0) return;
-    const sanitizedTeams = uniqueTeamNames(teams);
+    if (liveTeams.length === 0) return;
+    const sanitizedTeams = uniqueTeamNames(liveTeams);
     if (JSON.stringify(sanitizedTeams) === JSON.stringify(uniqueTeamNames(publicTeams))) return;
 
     void setDoc(
@@ -456,7 +467,7 @@ export function TournamentBracket() {
     ).catch((error) => {
       console.error("Error publishing bracket team names:", error);
     });
-  }, [teams, publicTeams]);
+  }, [liveTeams, publicTeams]);
 
   const stages = useMemo(() => buildBracket(
     displayTeams,
