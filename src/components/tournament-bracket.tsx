@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Loader2, Maximize2, Minimize2, Radio, ShieldAlert, ShieldCheck, Swords, Trophy } from "lucide-react";
+import { CheckCircle2, Loader2, Maximize2, Minimize2, Radio, ShieldAlert, ShieldCheck, Shuffle, Swords, Trophy } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -489,6 +489,7 @@ export function TournamentBracket() {
   ), [displayTeams, drawMatchups, rounds, scores, currentRound, currentTeams, seedingMode, verifiedDrawIsCurrent]);
 
   const champion = stages.at(-1)?.matches[0]?.winner ?? null;
+  const automaticDrawPending = seedingMode === "automatic" && effectiveDrawIntegrityStatus !== "valid";
 
   const toggleFullscreen = async () => {
     try {
@@ -578,9 +579,15 @@ export function TournamentBracket() {
             {manualAcceptedAt && ` Guardada el ${new Date(manualAcceptedAt).toLocaleString("es-CO")}.`}
           </div>
         )}
-        {loadingTeams ? (
+        {loadingTeams || effectiveDrawIntegrityStatus === "checking" ? (
           <div className="flex min-h-96 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : automaticDrawPending ? (
+          <div className="flex min-h-80 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
+            <Shuffle className="h-12 w-12" />
+            <p className="font-medium">Esperando el sorteo automático.</p>
+            <p className="max-w-lg text-sm">Cuando el administrador guarde el sorteo, estas mismas llaves aparecerán aquí automáticamente.</p>
           </div>
         ) : stages.length === 0 ? (
           <div className="flex min-h-80 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">

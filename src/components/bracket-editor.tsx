@@ -12,16 +12,17 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, ArrowDown, ArrowUp, Bot, GripVertical, Loader2, PenLine, RotateCcw, Save, Shuffle, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Bot, GripVertical, Loader2, PenLine, RotateCcw, Save, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
-import { secureShuffle } from '@/lib/draw-integrity';
+import { type DrawMatchup, normalizeDrawMatchups } from '@/lib/draw-integrity';
 
 
 const DEBATE_STATE_DOC_ID = "current";
+const DRAW_STATE_DOC_ID = "liveDraw";
 type SeedingMode = "automatic" | "manual";
 
 type SchoolData = {
@@ -48,32 +49,11 @@ function isVerifiedSchool(status: unknown) {
         && status.trim().normalize("NFC").toLocaleLowerCase("es") === "verificado";
 }
 
-function sameTeams(left: string[], right: string[]) {
+function sameTeamSet(left: string[], right: string[]) {
     if (left.length !== right.length) return false;
     const rightSet = new Set(right);
     return left.every((team) => rightSet.has(team));
 }
-
-function matchupSignature(teams: string[]) {
-    const pairs: string[] = [];
-    for (let index = 0; index < teams.length; index += 2) {
-        pairs.push(teams.slice(index, index + 2).sort((a, b) => a.localeCompare(b, "es")).join("::"));
-    }
-    return pairs.sort((a, b) => a.localeCompare(b, "es")).join("||");
-}
-
-function shuffleIntoNewMatchups(teams: string[], currentOrder: string[] = []) {
-    if (teams.length < 3) return secureShuffle(teams);
-    const currentSignature = matchupSignature(currentOrder);
-
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-        const candidate = secureShuffle(teams);
-        if (matchupSignature(candidate) !== currentSignature) return candidate;
-    }
-
-    return [...teams.slice(1), teams[0]];
-}
-
 
 export function BracketEditor() {
     const { toast } = useToast();
@@ -83,7 +63,7 @@ export function BracketEditor() {
     const [registeredTeams, setRegisteredTeams] = useState<string[]>([]);
     const [verifiedTeams, setVerifiedTeams] = useState<string[]>([]);
     const [teamOrder, setTeamOrder] = useState<string[]>([]);
-    const [automaticOrderIsRandomized, setAutomaticOrderIsRandomized] = useState(false);
+    const [automaticMatchups, setAutomaticMatchups] = useState<DrawMatchup[]>([]);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [loadingConfig, setLoadingConfig] = useState(true);
@@ -101,9 +81,16 @@ export function BracketEditor() {
                 setTeamOrder(Array.isArray(data.bracketTeamOrder)
                     ? sanitizeTeamNames(data.bracketTeamOrder)
                     : []);
-                setAutomaticOrderIsRandomized(typeof data.bracketAutomaticRandomizedAt === "string");
             }
             setLoadingConfig(false);
+        });
+
+        const unsubscribeDraw = onSnapshot(doc(db, "drawState", DRAW_STATE_DOC_ID), (docSnap) => {
+            const data = docSnap.exists() ? docSnap.data() : {};
+            const groupPhase = Array.isArray(data.phases)
+                ? data.phases.find((phase) => phase.name === "Fase de Grupos")
+                : null;
+            setAutomaticMatchups(normalizeDrawMatchups(groupPhase?.matchups));
         });
 
         const unsubscribeTeams = onSnapshot(
@@ -129,33 +116,28 @@ export function BracketEditor() {
 
         return () => {
             unsubscribeConfig();
+            unsubscribeDraw();
             unsubscribeTeams();
         };
     }, []);
 
     const availableTeams = seedingMode === "manual" ? registeredTeams : verifiedTeams;
+    const automaticDrawTeams = sanitizeTeamNames(automaticMatchups.flatMap((matchup) => matchup.teams));
+    const automaticDrawIsCurrent = sameTeamSet(automaticDrawTeams, verifiedTeams);
 
     useEffect(() => {
         if (loadingConfig || loadingTeams) return;
+        if (seedingMode !== "manual") return;
+
         const availableSet = new Set(availableTeams);
         const availableCurrentOrder = teamOrder.filter((team) => availableSet.has(team));
-
-        if (seedingMode === "automatic" && (
-            !automaticOrderIsRandomized
-            || !sameTeams(availableCurrentOrder, availableTeams)
-        )) {
-            setTeamOrder(shuffleIntoNewMatchups(availableTeams, teamOrder));
-            setAutomaticOrderIsRandomized(true);
-            return;
-        }
-
         const currentSet = new Set(availableCurrentOrder);
         const nextOrder = [
             ...availableCurrentOrder,
             ...availableTeams.filter((team) => !currentSet.has(team)),
         ];
         if (JSON.stringify(nextOrder) !== JSON.stringify(teamOrder)) setTeamOrder(nextOrder);
-    }, [automaticOrderIsRandomized, availableTeams, loadingConfig, loadingTeams, seedingMode, teamOrder]);
+    }, [availableTeams, loadingConfig, loadingTeams, seedingMode, teamOrder]);
 
     const markChanged = () => {
         hasLocalChanges.current = true;
@@ -164,10 +146,7 @@ export function BracketEditor() {
     const changeMode = (mode: SeedingMode) => {
         markChanged();
         setSeedingMode(mode);
-        if (mode === "automatic") {
-            setTeamOrder(shuffleIntoNewMatchups(verifiedTeams, teamOrder));
-            setAutomaticOrderIsRandomized(true);
-        } else {
+        if (mode === "manual") {
             setTeamOrder((currentOrder) => {
                 const registeredSet = new Set(registeredTeams);
                 const savedTeams = currentOrder.filter((team) => registeredSet.has(team));
@@ -175,12 +154,6 @@ export function BracketEditor() {
                 return [...savedTeams, ...registeredTeams.filter((team) => !savedSet.has(team))];
             });
         }
-    };
-
-    const reshuffleAutomaticTeams = () => {
-        markChanged();
-        setTeamOrder(shuffleIntoNewMatchups(verifiedTeams, teamOrder));
-        setAutomaticOrderIsRandomized(true);
     };
 
     const moveTeam = (fromIndex: number, toIndex: number) => {
@@ -204,24 +177,24 @@ export function BracketEditor() {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             const updatedAt = new Date().toISOString();
-            await setDoc(docRef, { 
+            const settings: Record<string, unknown> = {
                 bracketTitle,
                 bracketSubtitle,
                 bracketSeedingMode: seedingMode,
-                bracketTeamOrder: teamOrder,
                 bracketTeams: availableTeams,
                 bracketManualAccepted: seedingMode === "manual",
                 bracketManualAcceptedAt: seedingMode === "manual" ? updatedAt : null,
-                bracketAutomaticRandomizedAt: seedingMode === "automatic" ? updatedAt : null,
                 bracketConfigurationUpdatedAt: updatedAt,
-            }, { merge: true });
+            };
+            if (seedingMode === "manual") settings.bracketTeamOrder = teamOrder;
+            await setDoc(docRef, settings, { merge: true });
             hasLocalChanges.current = false;
             toast(seedingMode === "manual" ? {
                 title: "Organización manual aceptada",
                 description: "El orden definido por el administrador ya tiene prioridad sobre el sorteo automático.",
             } : {
-                title: "Llaves aleatorias guardadas",
-                description: "Los enfrentamientos iniciales quedaron sorteados y permanecerán estables hasta que vuelva a generarlos.",
+                title: "Bracket automático activado",
+                description: "Las llaves usarán exactamente el último resultado guardado en Sorteo.",
             });
         } catch (error) {
             console.error("Error saving bracket settings:", error);
@@ -271,7 +244,7 @@ export function BracketEditor() {
                     <div>
                         <p className="text-sm font-medium">Organización de las llaves</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                            El modo automático sortea aleatoriamente los equipos verificados. El resultado queda guardado y no cambia al recargar. En modo manual puede organizar todos los colegios registrados.
+                            El modo automático usa exclusivamente el resultado de Sorteo. En modo manual puede organizar todos los colegios registrados.
                         </p>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -305,29 +278,36 @@ export function BracketEditor() {
 
                     {seedingMode === "automatic" && verifiedTeams.length > 0 && (
                         <div className="space-y-3 pt-2">
-                            <div className="flex items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-sm font-medium">Vista previa del sorteo</p>
-                                    <p className="text-xs text-muted-foreground">Cada fila corresponde a una llave inicial.</p>
-                                </div>
-                                <Button type="button" variant="outline" size="sm" onClick={reshuffleAutomaticTeams}>
-                                    <Shuffle className="mr-2 h-4 w-4" /> Volver a sortear
-                                </Button>
+                            <div className={cn(
+                                "flex gap-2 rounded-lg border p-3 text-sm",
+                                automaticDrawIsCurrent
+                                    ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100"
+                                    : "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100",
+                            )}>
+                                {automaticDrawIsCurrent
+                                    ? <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                                    : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+                                <p>{automaticDrawIsCurrent
+                                    ? <>El bracket y la pantalla pública reproducen estas mismas llaves. Para cambiarlas, realice un nuevo sorteo desde <strong>Sorteo</strong>.</>
+                                    : <>El último sorteo ya no coincide con los equipos verificados. Realice un nuevo sorteo para actualizar el bracket.</>
+                                }</p>
                             </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                                {Array.from({ length: Math.ceil(teamOrder.length / 2) }, (_, matchIndex) => {
-                                    const firstTeam = teamOrder[matchIndex * 2];
-                                    const secondTeam = teamOrder[(matchIndex * 2) + 1];
-                                    return (
-                                        <div key={`${firstTeam}-${secondTeam || "bye"}`} className="rounded-lg border bg-muted/30 p-3">
-                                            <Badge variant="outline" className="mb-2">Llave {matchIndex + 1}</Badge>
-                                            <p className="font-medium">{firstTeam}</p>
+                            {automaticMatchups.length > 0 ? (
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {automaticMatchups.map((matchup) => (
+                                        <div key={matchup.roundName} className="rounded-lg border bg-muted/30 p-3">
+                                            <Badge variant="outline" className="mb-2">{matchup.roundName}</Badge>
+                                            <p className="font-medium">{matchup.teams[0]}</p>
                                             <p className="my-1 text-xs text-muted-foreground">contra</p>
-                                            <p className="font-medium">{secondTeam || "Pase directo"}</p>
+                                            <p className="font-medium">{matchup.teams[1] || "Pase directo"}</p>
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="rounded-lg bg-muted p-4 text-center text-sm text-muted-foreground">
+                                    Aún no hay un sorteo guardado. Las llaves aparecerán aquí después de realizarlo.
+                                </p>
+                            )}
                         </div>
                     )}
 

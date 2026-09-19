@@ -135,6 +135,9 @@ export async function deleteDoc(ref: DocumentRef) { await commit([{ ...ref, oper
 export function writeBatch(_db: typeof db) {
   const operations: Mutation[] = [];
   return {
+    set: (ref: DocumentRef, data: Data, options?: { merge: boolean }) => {
+      operations.push({ ...ref, operation: options?.merge ? 'merge' : 'set', data });
+    },
     delete: (ref: DocumentRef) => { operations.push({ ...ref, operation: 'delete' }); },
     commit: () => commit(operations),
   };

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shuffle, ShieldCheck, ShieldAlert, Loader2, Users } from "lucide-react";
-import { collection, onSnapshot, query, where, doc, setDoc, orderBy } from "@/lib/documents";
+import { addDoc, collection, onSnapshot, query, where, doc, setDoc, orderBy, serverTimestamp, writeBatch } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/lib/draw-integrity";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
+const DEBATE_STATE_DOC_ID = "current";
 
 type Team = {
   id: string;
@@ -41,10 +42,20 @@ type LiveDrawState = {
 
 type IntegrityStatus = "none" | "checking" | "valid" | "invalid";
 
+function groupLabel(index: number) {
+  return index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
+}
+
+function sameTeamSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((team) => rightSet.has(team));
+}
+
 export function DrawAnimation() {
   const { toast } = useToast();
   const [allTeams, setAllTeams] = useState<Team[]>([]);
-  const [groupRounds, setGroupRounds] = useState<RoundData[]>([]);
+  const [allRounds, setAllRounds] = useState<RoundData[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -70,8 +81,7 @@ export function DrawAnimation() {
 
     const unsubRounds = onSnapshot(query(collection(db, "rounds"), orderBy("createdAt", "asc")), (snapshot) => {
         const roundsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RoundData));
-        const filteredRounds = roundsData.filter(r => r.phase === "Fase de Grupos");
-        setGroupRounds(filteredRounds);
+        setAllRounds(roundsData);
     });
 
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
@@ -120,18 +130,25 @@ export function DrawAnimation() {
     };
   }, [assignedTeams, integrity]);
 
+  const groupRounds = allRounds.filter((round) => round.phase === "Fase de Grupos");
+  const assignedTeamNames = assignedTeams.flatMap((matchup) => matchup.teams);
+  const eligibleTeamNames = allTeams.map((team) => team.name);
+  const drawMatchesCurrentSetup = sameTeamSet(assignedTeamNames, eligibleTeamNames)
+    && assignedTeams.length === groupRounds.length
+    && assignedTeams.every((matchup, index) => matchup.roundName === groupRounds[index]?.name);
+
   const startDraw = async () => {
-    if (allTeams.length === 0 || groupRounds.length === 0) {
-      toast({ variant: 'destructive', title: 'Error', description: 'No hay suficientes equipos o rondas de grupo configuradas.' });
+    if (allTeams.length === 0) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No hay equipos verificados para realizar el sorteo.' });
       return;
     }
 
     const requiredRounds = Math.ceil(allTeams.length / 2);
-    if (groupRounds.length !== requiredRounds) {
+    if (groupRounds.length > requiredRounds) {
       toast({
         variant: "destructive",
         title: "Las rondas no coinciden con los equipos",
-        description: `Con ${allTeams.length} equipos se necesitan ${requiredRounds} rondas de grupo, pero hay ${groupRounds.length} configuradas.`,
+        description: `Con ${allTeams.length} equipos se necesitan ${requiredRounds} rondas de grupo, pero hay ${groupRounds.length}. Elimine las rondas sobrantes.`,
       });
       return;
     }
@@ -141,43 +158,82 @@ export function DrawAnimation() {
     setAssignedTeams([]);
     setIntegrity(null);
 
-    const shuffledTeams = secureShuffle(allTeams);
-    const matchups: DrawMatchup[] = [];
-    const teamsPerRound = 2;
+    try {
+      let roundsForDraw = groupRounds;
+      if (roundsForDraw.length < requiredRounds) {
+        const existingNames = new Set(allRounds.map((round) => round.name.trim().normalize("NFC")));
+        const missingRounds: RoundData[] = [];
+        let labelIndex = 0;
 
-    for (let i = 0; i < groupRounds.length; i++) {
-        const round = groupRounds[i];
-        const teamsForThisRound = shuffledTeams.slice(i * teamsPerRound, (i * teamsPerRound) + teamsPerRound).map(t => t.name);
-        if (teamsForThisRound.length > 0) {
-            matchups.push({ roundName: round.name, teams: teamsForThisRound });
+        while (roundsForDraw.length + missingRounds.length < requiredRounds) {
+          const name = `Grupo ${groupLabel(labelIndex)}`;
+          labelIndex += 1;
+          if (existingNames.has(name)) continue;
+          existingNames.add(name);
+          const roundRef = await addDoc(collection(db, "rounds"), {
+            name,
+            phase: "Fase de Grupos",
+            createdAt: serverTimestamp(),
+          });
+          missingRounds.push({ id: roundRef.id, name, phase: "Fase de Grupos" });
         }
-    }
-    
-    // Simulate animation
-    for (let i = 0; i < matchups.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAssignedTeams(current => [...current, matchups[i]]);
-    }
-    
-    const sealedIntegrity = await sealGroupDraw(matchups);
-    const drawState: LiveDrawState = {
+
+        roundsForDraw = [...roundsForDraw, ...missingRounds];
+        setAllRounds((current) => [...current, ...missingRounds]);
+      }
+
+      const shuffledTeams = secureShuffle(allTeams);
+      const matchups: DrawMatchup[] = [];
+      const teamsPerRound = 2;
+
+      for (let i = 0; i < roundsForDraw.length; i++) {
+          const round = roundsForDraw[i];
+          const teamsForThisRound = shuffledTeams.slice(i * teamsPerRound, (i * teamsPerRound) + teamsPerRound).map(t => t.name);
+          if (teamsForThisRound.length > 0) {
+              matchups.push({ roundName: round.name, teams: teamsForThisRound });
+          }
+      }
+
+      // Reveal each matchup before publishing the exact same data to the bracket.
+      for (let i = 0; i < matchups.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setAssignedTeams(current => [...current, matchups[i]]);
+      }
+
+      const sealedIntegrity = await sealGroupDraw(matchups);
+      const drawState: LiveDrawState = {
         phases: [{
             name: "Fase de Grupos",
             matchups: matchups
         }],
         integrity: sealedIntegrity,
-    };
-    
-    try {
-        await setDoc(doc(db, "drawState", DRAW_STATE_DOC_ID), drawState);
-        setIntegrity(sealedIntegrity);
-        setIntegrityStatus("valid");
-        setIsDrawing(false);
-        setIsFinished(true);
+      };
+
+      const bracketTeamOrder = matchups.flatMap((matchup) => matchup.teams);
+      const batch = writeBatch(db);
+      batch.set(doc(db, "drawState", DRAW_STATE_DOC_ID), drawState);
+      batch.set(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
+        bracketSeedingMode: "automatic",
+        bracketTeamOrder,
+        bracketTeams: bracketTeamOrder,
+        bracketManualAccepted: false,
+        bracketManualAcceptedAt: null,
+        bracketAutomaticRandomizedAt: sealedIntegrity.sealedAt,
+        bracketConfigurationUpdatedAt: sealedIntegrity.sealedAt,
+      }, { merge: true });
+      await batch.commit();
+      setIntegrity(sealedIntegrity);
+      setIntegrityStatus("valid");
+      setIsFinished(true);
+      toast({
+        title: "Sorteo y bracket sincronizados",
+        description: "Las mismas llaves ya están visibles en el bracket automático.",
+      });
     } catch (error) {
-        console.error("Error saving draw state:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el resultado del sorteo.' });
-        setIsDrawing(false);
+      console.error("Error creating or saving draw state:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar y sincronizar el sorteo.' });
+    } finally {
+      setIsDrawing(false);
     }
   };
   
@@ -261,7 +317,7 @@ export function DrawAnimation() {
                 </p>
             </div>
             <div className="flex gap-2">
-                <Button onClick={startDraw} disabled={isDrawing || loading || allTeams.length === 0 || groupRounds.length === 0}>
+                <Button onClick={startDraw} disabled={isDrawing || loading || allTeams.length === 0}>
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
                     {loading ? "Cargando..." : isFinished ? "Volver a Sortear" : "Iniciar Sorteo"}
                 </Button>
@@ -272,13 +328,16 @@ export function DrawAnimation() {
             <div className="flex justify-center items-center min-h-[400px]">
                 <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-        ) : allTeams.length === 0 || groupRounds.length === 0 ? (
+        ) : allTeams.length === 0 ? (
             <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
                 <p className="text-muted-foreground text-center px-4">
-                    {allTeams.length === 0 
-                        ? "No hay colegios verificados para el sorteo."
-                        : "No hay rondas de 'Fase de Grupos' configuradas."
-                    }
+                    No hay colegios verificados para el sorteo.
+                </p>
+            </div>
+        ) : groupRounds.length === 0 ? (
+            <div className="flex min-h-[400px] items-center justify-center rounded-lg bg-secondary/50">
+                <p className="max-w-lg px-4 text-center text-muted-foreground">
+                    Al iniciar el sorteo se crearán automáticamente las rondas necesarias y sus llaves se copiarán al bracket.
                 </p>
             </div>
         ) : (
@@ -305,8 +364,14 @@ export function DrawAnimation() {
 
       {isFinished && (
         <div className="mt-8 text-center flex flex-col items-center gap-4 animate-in fade-in-50">
-            <h2 className="font-headline text-2xl font-bold">¡Sorteo Completado!</h2>
-            <p className="text-muted-foreground">Los grupos han sido definidos y se reflejan en el bracket automático.</p>
+            <h2 className="font-headline text-2xl font-bold">
+              {drawMatchesCurrentSetup ? "¡Sorteo Completado!" : "Sorteo desactualizado"}
+            </h2>
+            <p className="text-muted-foreground">
+              {drawMatchesCurrentSetup
+                ? "Los grupos han sido definidos y se reflejan exactamente igual en el bracket automático."
+                : "Los equipos o las rondas cambiaron. Vuelva a sortear para sincronizar el bracket."}
+            </p>
             {integrity && (
               <div className="max-w-full rounded-lg border bg-muted/40 px-4 py-3 text-left">
                 <p className="flex items-center justify-center gap-2 text-sm font-semibold">
