@@ -506,13 +506,16 @@ export function TournamentBracket() {
   return (
     <div
       ref={bracketRef}
-      className={cn("bg-background", isFullscreen && "h-screen w-screen overflow-auto")}
+      className={cn("bg-background", isFullscreen && "h-screen w-screen overflow-hidden")}
     >
     <Card className={cn(
       "overflow-hidden border-0 shadow-xl",
-      isFullscreen && "min-h-screen rounded-none shadow-none",
+      isFullscreen && "flex h-screen w-screen flex-col rounded-none shadow-none",
     )}>
-      <CardHeader className="border-b bg-gradient-to-r from-slate-950 via-slate-900 to-orange-950 text-white">
+      <CardHeader className={cn(
+        "border-b bg-gradient-to-r from-slate-950 via-slate-900 to-orange-950 text-white",
+        isFullscreen && "shrink-0 px-6 py-5",
+      )}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <CardTitle className="font-headline text-2xl md:text-3xl">{title}</CardTitle>
@@ -565,7 +568,10 @@ export function TournamentBracket() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="bg-gradient-to-br from-slate-100 via-background to-orange-50 p-0 dark:from-slate-950 dark:via-background dark:to-orange-950/30">
+      <CardContent className={cn(
+        "bg-gradient-to-br from-slate-100 via-background to-orange-50 p-0 dark:from-slate-950 dark:via-background dark:to-orange-950/30",
+        isFullscreen && "flex min-h-0 flex-1 flex-col",
+      )}>
         {seedingMode === "automatic" && effectiveDrawIntegrityStatus !== "valid" && effectiveDrawIntegrityStatus !== "checking" && (
           <div className="border-b border-amber-300 bg-amber-50 px-6 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
             {automaticRandomizedAt
@@ -580,23 +586,29 @@ export function TournamentBracket() {
           </div>
         )}
         {loadingTeams || effectiveDrawIntegrityStatus === "checking" ? (
-          <div className="flex min-h-96 items-center justify-center">
+          <div className={cn("flex min-h-96 items-center justify-center", isFullscreen && "flex-1")}>
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : automaticDrawPending ? (
-          <div className="flex min-h-80 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
+          <div className={cn("flex min-h-80 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground", isFullscreen && "flex-1")}>
             <Shuffle className="h-12 w-12" />
             <p className="font-medium">Esperando el sorteo automático.</p>
             <p className="max-w-lg text-sm">Cuando el administrador guarde el sorteo, estas mismas llaves aparecerán aquí automáticamente.</p>
           </div>
         ) : stages.length === 0 ? (
-          <div className="flex min-h-80 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
+          <div className={cn("flex min-h-80 flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground", isFullscreen && "flex-1")}>
             <Swords className="h-12 w-12" />
             <p className="font-medium">Aún no hay equipos registrados para crear el bracket.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto p-6 md:p-10">
-            <div className="flex min-w-max items-stretch gap-10">
+          <div className={cn(
+            "overflow-x-auto p-6 md:p-10",
+            isFullscreen && "flex min-h-0 flex-1 items-stretch",
+          )}>
+            <div className={cn(
+              "flex min-w-max items-stretch gap-10",
+              isFullscreen && "min-h-full min-w-full flex-1 justify-around",
+            )}>
               {stages.map((stage, stageIndex) => (
                 <section key={stage.id} className="flex w-64 shrink-0 flex-col" aria-labelledby={`${stage.id}-title`}>
                   <h3

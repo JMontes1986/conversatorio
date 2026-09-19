@@ -35,6 +35,13 @@ interface DebateState {
     questionId: string;
 }
 
+interface DrawState {
+    phases?: {
+        name: string;
+        matchups?: { roundName: string; teams: string[] }[];
+    }[];
+}
+
 
 function PublicPageLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -57,13 +64,15 @@ function QuestionLiveComponent() {
     const { toast } = useToast();
     const [questionId, setQuestionId] = useState<string | null>(null);
     const [debateQuestion, setDebateQuestion] = useState<string>('');
+    const [debateQuestionRound, setDebateQuestionRound] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [studentName, setStudentName] = useState('');
     const [studentQuestion, setStudentQuestion] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [debateState, setDebateState] = useState<DebateState | null>(null);
-    const [targetTeam, setTargetTeam] = useState<string>("");
+    const [drawState, setDrawState] = useState<DrawState | null>(null);
+    const [targetTeam, setTargetTeam] = useState<string>("Ambos Equipos");
 
     useEffect(() => {
         const q_id = searchParams.get('q_id');
@@ -77,24 +86,47 @@ function QuestionLiveComponent() {
             const questionRef = doc(db, 'questions', q_id);
             getDoc(questionRef).then(docSnap => {
                 if (docSnap.exists()) {
-                    setDebateQuestion(docSnap.data().text);
+                    const data = docSnap.data();
+                    setDebateQuestion(data.text);
+                    setDebateQuestionRound(typeof data.round === "string" ? data.round : "");
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: 'Pregunta de debate no encontrada.'});
                 }
             });
 
             const debateStateRef = doc(db, "debateState", "current");
-            const unsubscribe = onSnapshot(debateStateRef, (docSnap) => {
+            const unsubscribeDebateState = onSnapshot(debateStateRef, (docSnap) => {
                 if (docSnap.exists()) {
                     setDebateState(docSnap.data() as DebateState);
                 }
                 setLoading(false);
             });
-            return () => unsubscribe();
+            const unsubscribeDrawState = onSnapshot(doc(db, "drawState", "liveDraw"), (docSnap) => {
+                setDrawState(docSnap.exists() ? docSnap.data() as DrawState : null);
+            });
+            return () => {
+                unsubscribeDebateState();
+                unsubscribeDrawState();
+            };
         } else {
             setLoading(false);
         }
     }, [searchParams, toast]);
+
+    const activeTeamNames = Array.from(new Set(
+        (debateState?.teams ?? [])
+            .map((team) => team.name?.trim())
+            .filter((name): name is string => Boolean(name)),
+    ));
+    const drawnTeamNames = Array.from(new Set(
+        (drawState?.phases ?? [])
+            .flatMap((phase) => phase.matchups ?? [])
+            .find((matchup) => matchup.roundName === (debateState?.currentRound || debateQuestionRound))
+            ?.teams
+            .map((team) => team.trim())
+            .filter(Boolean) ?? [],
+    ));
+    const targetTeams = activeTeamNames.length > 0 ? activeTeamNames : drawnTeamNames;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -220,30 +252,36 @@ function QuestionLiveComponent() {
                             />
                         </div>
 
-                        {debateState && debateState.teams && debateState.teams.length > 0 && (
-                            <div>
-                                <Label className="block text-sm font-medium text-muted-foreground mb-2">
-                                   ¿A quién va dirigida su pregunta?
-                                </Label>
-                                <RadioGroup
-                                    onValueChange={setTargetTeam}
-                                    value={targetTeam}
-                                    className="grid grid-cols-1 gap-2"
-                                    disabled={isSubmitting}
-                                >
-                                    {debateState.teams.map(team => (
-                                        <div className="flex items-center space-x-2" key={team.name}>
-                                            <RadioGroupItem value={team.name} id={team.name}/>
-                                            <Label htmlFor={team.name} className="font-normal">{team.name}</Label>
+                        <div>
+                            <Label className="mb-2 block text-sm font-medium text-muted-foreground">
+                               ¿A quién va dirigida su pregunta?
+                            </Label>
+                            <RadioGroup
+                                onValueChange={setTargetTeam}
+                                value={targetTeam}
+                                className="grid grid-cols-1 gap-2"
+                                disabled={isSubmitting}
+                            >
+                                {targetTeams.map((teamName, index) => {
+                                    const optionId = `target-team-${index}`;
+                                    return (
+                                        <div className="flex items-center space-x-2" key={teamName}>
+                                            <RadioGroupItem value={teamName} id={optionId}/>
+                                            <Label htmlFor={optionId} className="font-normal">{teamName}</Label>
                                         </div>
-                                    ))}
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="Ambos Equipos" id="ambos" />
-                                        <Label htmlFor="ambos" className="font-normal">Ambos Equipos</Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-                        )}
+                                    );
+                                })}
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="Ambos Equipos" id="ambos" />
+                                    <Label htmlFor="ambos" className="font-normal">Ambos Equipos</Label>
+                                </div>
+                            </RadioGroup>
+                            {targetTeams.length === 0 && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Aún no hay equipos activos; la pregunta se enviará a ambos equipos.
+                                </p>
+                            )}
+                        </div>
 
                         <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
