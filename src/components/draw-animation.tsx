@@ -4,6 +4,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Shuffle, ShieldCheck, ShieldAlert, Loader2, Users } from "lucide-react";
 import { addDoc, collection, onSnapshot, query, where, doc, setDoc, orderBy, serverTimestamp, writeBatch } from "@/lib/documents";
 import { db } from "@/lib/supabase";
@@ -16,6 +18,13 @@ import {
   secureShuffle,
   verifyGroupDraw,
 } from "@/lib/draw-integrity";
+import {
+  DEFAULT_TOURNAMENT_FORMAT,
+  type TournamentFormat,
+  expectedQualifierCount,
+  requiredRoundCount,
+  normalizeTournamentFormat,
+} from "@/lib/tournament-format";
 
 const DRAW_STATE_DOC_ID = "liveDraw";
 const DEBATE_STATE_DOC_ID = "current";
@@ -56,6 +65,8 @@ export function DrawAnimation() {
   const { toast } = useToast();
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [allRounds, setAllRounds] = useState<RoundData[]>([]);
+  const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
+  const [isSavingFormat, setIsSavingFormat] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -84,6 +95,12 @@ export function DrawAnimation() {
         setAllRounds(roundsData);
     });
 
+    const settingsRef = doc(db, "settings", "competition");
+    const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
+      const data = docSnap.exists() ? docSnap.data() : {};
+      setTournamentFormat(normalizeTournamentFormat(data.tournamentFormat));
+    });
+
     const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
     const unsubDrawState = onSnapshot(drawStateRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -109,6 +126,7 @@ export function DrawAnimation() {
     return () => {
       unsubTeams();
       unsubRounds();
+      unsubSettings();
       unsubDrawState();
     };
   }, []);
@@ -131,11 +149,59 @@ export function DrawAnimation() {
   }, [assignedTeams, integrity]);
 
   const groupRounds = allRounds.filter((round) => round.phase === "Fase de Grupos");
+  const groupFormat = tournamentFormat.groupStage;
+  const semifinalFormat = tournamentFormat.semifinals;
+  const finalFormat = tournamentFormat.final;
+  const projectedGroupRounds = requiredRoundCount(allTeams.length, groupFormat.teamsPerRound);
+  const projectedSemifinalTeams = expectedQualifierCount(allTeams.length, groupFormat);
+  const projectedSemifinalRounds = requiredRoundCount(projectedSemifinalTeams, semifinalFormat.teamsPerRound);
+  const projectedFinalTeams = projectedSemifinalRounds * semifinalFormat.qualifiersPerRound;
+  const projectedFinalRounds = requiredRoundCount(projectedFinalTeams, finalFormat.teamsPerRound);
   const assignedTeamNames = assignedTeams.flatMap((matchup) => matchup.teams);
   const eligibleTeamNames = allTeams.map((team) => team.name);
   const drawMatchesCurrentSetup = sameTeamSet(assignedTeamNames, eligibleTeamNames)
     && assignedTeams.length === groupRounds.length
     && assignedTeams.every((matchup, index) => matchup.roundName === groupRounds[index]?.name);
+
+  const updatePhaseFormat = (
+    phase: keyof TournamentFormat,
+    field: "teamsPerRound" | "qualifiersPerRound",
+    rawValue: string,
+  ) => {
+    const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return;
+    setTournamentFormat((current) => normalizeTournamentFormat({
+      ...current,
+      [phase]: {
+        ...current[phase],
+        [field]: parsed,
+      },
+    }));
+  };
+
+  const saveTournamentFormat = async () => {
+    setIsSavingFormat(true);
+    try {
+      await setDoc(
+        doc(db, "settings", "competition"),
+        { tournamentFormat },
+        { merge: true },
+      );
+      toast({
+        title: "Formato guardado",
+        description: "La cantidad de equipos y clasificados por fase quedó actualizada.",
+      });
+    } catch (error) {
+      console.error("Error saving tournament format:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo guardar el formato",
+        description: "Revise la conexión e inténtelo nuevamente.",
+      });
+    } finally {
+      setIsSavingFormat(false);
+    }
+  };
 
   const startDraw = async () => {
     if (allTeams.length === 0) {
@@ -143,7 +209,7 @@ export function DrawAnimation() {
       return;
     }
 
-    const requiredRounds = Math.ceil(allTeams.length / 2);
+    const requiredRounds = requiredRoundCount(allTeams.length, groupFormat.teamsPerRound);
     if (groupRounds.length > requiredRounds) {
       toast({
         variant: "destructive",
@@ -184,7 +250,7 @@ export function DrawAnimation() {
 
       const shuffledTeams = secureShuffle(allTeams);
       const matchups: DrawMatchup[] = [];
-      const teamsPerRound = 2;
+      const teamsPerRound = groupFormat.teamsPerRound;
 
       for (let i = 0; i < roundsForDraw.length; i++) {
           const round = roundsForDraw[i];
@@ -286,6 +352,66 @@ export function DrawAnimation() {
             <h1 className="font-headline text-3xl font-bold">Sorteo Automático de Grupos</h1>
             <p className="text-muted-foreground">Realice el sorteo para la Fase de Grupos. El resultado se reflejará para el público.</p>
         </div>
+
+        <Card className="mb-8">
+            <CardHeader>
+                <CardTitle>Formato del Torneo</CardTitle>
+                <CardDescription>
+                    Defina cuántos equipos compiten y cuántos clasifican en cada fase. Con la configuración actual:
+                    {" "}{allTeams.length} equipos → {projectedSemifinalTeams} semifinalistas → {projectedFinalTeams} finalistas.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                <div className="grid gap-4 md:grid-cols-3">
+                    {([
+                      ["groupStage", "Ronda inicial", groupFormat, projectedGroupRounds],
+                      ["semifinals", "Semifinal", semifinalFormat, projectedSemifinalRounds],
+                      ["final", "Final", finalFormat, projectedFinalRounds],
+                    ] as const).map(([key, title, phaseFormat, projectedRounds]) => (
+                      <div key={key} className="space-y-3 rounded-lg border p-4">
+                        <div>
+                          <p className="font-semibold">{title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {projectedRounds} {projectedRounds === 1 ? "ronda" : "rondas"} proyectadas
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`${key}-teams`}>Equipos por ronda</Label>
+                          <Input
+                            id={`${key}-teams`}
+                            type="number"
+                            min={2}
+                            value={phaseFormat.teamsPerRound}
+                            onChange={(event) => updatePhaseFormat(key, "teamsPerRound", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`${key}-qualifiers`}>Clasifican por ronda</Label>
+                          <Input
+                            id={`${key}-qualifiers`}
+                            type="number"
+                            min={1}
+                            max={Math.max(1, phaseFormat.teamsPerRound - 1)}
+                            value={phaseFormat.qualifiersPerRound}
+                            onChange={(event) => updatePhaseFormat(key, "qualifiersPerRound", event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-4 py-3 text-sm">
+                  <span>
+                    Formato actual: <strong>{groupFormat.teamsPerRound}/{groupFormat.qualifiersPerRound}</strong>
+                    {" → "}<strong>{semifinalFormat.teamsPerRound}/{semifinalFormat.qualifiersPerRound}</strong>
+                    {" → "}<strong>{finalFormat.teamsPerRound}/{finalFormat.qualifiersPerRound}</strong>
+                  </span>
+                  <Button type="button" variant="secondary" onClick={saveTournamentFormat} disabled={isSavingFormat}>
+                    {isSavingFormat && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar formato
+                  </Button>
+                </div>
+            </CardContent>
+        </Card>
 
         <Card className="mb-8">
             <CardHeader>
