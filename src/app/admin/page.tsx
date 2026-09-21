@@ -75,7 +75,7 @@ interface JudgeData {
     id: string;
     name: string;
     cedula: string;
-    token?: string;
+    passwordConfigured?: boolean;
     status: 'active' | 'inactive';
 }
 interface ModeratorData {
@@ -132,6 +132,8 @@ function AdminDashboard() {
   
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeCedula, setNewJudgeCedula] = useState("");
+  const [newJudgePassword, setNewJudgePassword] = useState("");
+  const [judgePasswordDrafts, setJudgePasswordDrafts] = useState<Record<string, string>>({});
   const [isSubmittingJudge, setIsSubmittingJudge] = useState(false);
   
   const [newModeratorUsername, setNewModeratorUsername] = useState("");
@@ -194,16 +196,22 @@ function AdminDashboard() {
 
  const handleAddJudge = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newJudgeName.trim() || !newJudgeCedula.trim()) {
-        toast({ variant: "destructive", title: "Error", description: "Nombre y cédula son requeridos." });
+    if (!newJudgeName.trim() || !newJudgeCedula.trim() || newJudgePassword.length < 8) {
+        toast({ variant: "destructive", title: "Error", description: "Nombre, cédula y una contraseña de mínimo 8 caracteres son requeridos." });
         return;
     }
     setIsSubmittingJudge(true);
     try {
-        await manageAccount({ role: 'judge', name: newJudgeName.trim(), identifier: newJudgeCedula.trim() });
-        toast({ title: "Jurado Añadido", description: "El nuevo jurado ha sido registrado como activo." });
+        await manageAccount({
+            role: 'judge',
+            name: newJudgeName.trim(),
+            identifier: newJudgeCedula.trim(),
+            password: newJudgePassword,
+        });
+        toast({ title: "Jurado Añadido", description: "El jurado fue creado. Entrará con su cédula y la contraseña asignada." });
         setNewJudgeName("");
         setNewJudgeCedula("");
+        setNewJudgePassword("");
     } catch (error) {
         console.error("Error adding judge:", error);
         toast({ variant: "destructive", title: "Error", description: "No se pudo añadir el jurado." });
@@ -238,6 +246,28 @@ function AdminDashboard() {
     } catch (error) {
       console.error("Error deleting moderator:", error);
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el moderador." });
+    }
+  };
+
+  const handleResetJudgePassword = async (judge: JudgeData) => {
+    const password = judgePasswordDrafts[judge.id] || "";
+    if (password.length < 8) {
+      toast({ variant: "destructive", title: "Contraseña inválida", description: "Debe tener al menos 8 caracteres." });
+      return;
+    }
+    setIsSubmittingJudge(true);
+    try {
+      await manageAccount({ role: 'judge', id: judge.id, password }, 'PATCH');
+      setJudgePasswordDrafts(current => ({ ...current, [judge.id]: "" }));
+      toast({
+        title: "Contraseña actualizada",
+        description: `Ya puede entregar la nueva contraseña a ${judge.name}. La anterior dejó de ser válida.`,
+      });
+    } catch (error) {
+      console.error("Error resetting judge password:", error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar la contraseña del jurado." });
+    } finally {
+      setIsSubmittingJudge(false);
     }
   };
 
@@ -541,6 +571,21 @@ function AdminDashboard() {
                                     <Label htmlFor="judge-cedula">Cédula</Label>
                                     <Input id="judge-cedula" value={newJudgeCedula} onChange={(e) => setNewJudgeCedula(e.target.value)} placeholder="Cédula del jurado" disabled={isSubmittingJudge}/>
                                 </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="judge-password">Contraseña de acceso</Label>
+                                    <Input
+                                        id="judge-password"
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={newJudgePassword}
+                                        onChange={(e) => setNewJudgePassword(e.target.value)}
+                                        placeholder="Mínimo 8 caracteres"
+                                        disabled={isSubmittingJudge}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Entréguela directamente al jurado. La plataforma no la mostrará ni la almacenará en texto legible.
+                                    </p>
+                                </div>
                                 <Button type="submit" className="w-full" disabled={isSubmittingJudge}>
                                     {isSubmittingJudge && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Añadir Jurado
@@ -575,10 +620,9 @@ function AdminDashboard() {
                                             <TableCell>{judge.name}</TableCell>
                                             <TableCell>
                                                 <div>{judge.cedula}</div>
-                                                {judge.token && <Button type="button" variant="outline" size="sm" onClick={async () => {
-                                                    try { await navigator.clipboard.writeText(judge.token!); toast({ title: 'Token copiado' }); }
-                                                    catch { toast({ variant: 'destructive', title: 'No se pudo copiar el token' }); }
-                                                }}><Copy className="mr-2 h-3 w-3" />Copiar token</Button>}
+                                                {!judge.passwordConfigured && (
+                                                    <Badge variant="destructive" className="mt-1">Requiere contraseña nueva</Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <Badge variant={judge.status === 'active' ? 'default' : 'destructive'}>
@@ -586,6 +630,29 @@ function AdminDashboard() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
+                                                <div className="mb-2 ml-auto flex max-w-sm items-center justify-end gap-2">
+                                                    <Input
+                                                        type="password"
+                                                        autoComplete="new-password"
+                                                        placeholder="Nueva contraseña"
+                                                        value={judgePasswordDrafts[judge.id] || ""}
+                                                        onChange={(event) => setJudgePasswordDrafts(current => ({
+                                                            ...current,
+                                                            [judge.id]: event.target.value,
+                                                        }))}
+                                                        className="h-8 max-w-[190px]"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={isSubmittingJudge || (judgePasswordDrafts[judge.id] || "").length < 8}
+                                                        onClick={() => handleResetJudgePassword(judge)}
+                                                    >
+                                                        <KeyRound className="mr-2 h-3 w-3" />
+                                                        Cambiar
+                                                    </Button>
+                                                </div>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button aria-haspopup="true" size="icon" variant="ghost">
