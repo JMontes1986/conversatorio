@@ -43,6 +43,15 @@ begin
 end $$;
 
 create unique index if not exists judges_cedula_unique on public.judges ((lower(data->>'cedula')));
+
+-- Migración de seguridad: los antiguos tokens de jurado dejan de almacenarse y deben reemplazarse
+-- por una contraseña administrada desde el panel. El hash real lo gestiona Supabase Auth.
+update public.judges
+set data = (data - 'token') || jsonb_build_object('passwordConfigured', false)
+where data ? 'token';
+update public.judges
+set data = data || jsonb_build_object('passwordConfigured', false)
+where not (data ? 'passwordConfigured');
 create unique index if not exists moderators_username_unique on public.moderators ((lower(data->>'username')));
 create unique index if not exists scores_judge_match_unique on public.scores ((data->>'judgeId'), (data->>'matchId'))
   where data->>'judgeId' <> 'system';
@@ -55,7 +64,12 @@ create or replace function private.app_role() returns text
 language sql stable security definer set search_path = '' as $$
   select p.role from public.profiles p where p.id = auth.uid() and (
     p.role = 'admin'
-    or (p.role = 'judge' and exists (select 1 from public.judges j where j.id = p.subject_id and j.data->>'status' = 'active'))
+    or (p.role = 'judge' and exists (
+      select 1 from public.judges j
+      where j.id = p.subject_id
+        and j.data->>'status' = 'active'
+        and j.data->>'passwordConfigured' = 'true'
+    ))
     or (p.role = 'moderator' and exists (select 1 from public.moderators m where m.id = p.subject_id and m.data->>'status' = 'active'))
   );
 $$;
@@ -224,6 +238,21 @@ begin
     'teams', totals, 'fullScores', details,
     'createdAt', jsonb_build_object('seconds', floor(extract(epoch from now())), 'nanoseconds', 0));
   new.created_at := now();
+
+  insert into public.audit_logs(data) values (jsonb_build_object(
+    'category', 'judge_action',
+    'action', 'judge_score_submitted',
+    'actorRole', 'judge',
+    'subjectId', private.subject_id(),
+    'subjectName', (select display_name from public.profiles where id = auth.uid()),
+    'identifier', (select identifier from public.profiles where id = auth.uid()),
+    'details', jsonb_build_object(
+      'round', state->>'currentRound',
+      'teams', totals,
+      'scoreRecordId', new.id
+    )
+  ));
+
   return new;
 end $$;
 drop trigger if exists validate_judge_score on public.scores;
