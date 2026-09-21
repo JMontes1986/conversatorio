@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info, User } from 'lucide-react';
+import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info, User, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/supabase';
 import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from '@/lib/documents';
@@ -52,7 +52,7 @@ interface ScoreData {
 
 function ScoringPanel() {
   const { toast } = useToast();
-  const { judge } = useJudgeAuth();
+  const { judge, logout } = useJudgeAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
   const [debateState, setDebateState] = useState<DebateState>({
@@ -273,13 +273,26 @@ function ScoringPanel() {
 
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
-      <div className="mb-8 text-center">
-        <h1 className="font-headline text-3xl md:text-4xl font-bold">
-          Panel de Puntuación del Jurado
-        </h1>
-        <div className="text-muted-foreground mt-2 capitalize">
-            Jurado: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
+      <div className="mb-8 flex flex-col items-center justify-between gap-4 md:flex-row md:text-left">
+        <div>
+          <h1 className="font-headline text-3xl md:text-4xl font-bold">
+            Panel de Puntuación del Jurado
+          </h1>
+          <div className="text-muted-foreground mt-2 capitalize">
+              Jurado: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
+          </div>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={async () => {
+            await logout();
+            window.location.href = "/scoring/login";
+          }}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Cerrar sesión
+        </Button>
       </div>
       
       {debateState.teams.length > 0 ? (
