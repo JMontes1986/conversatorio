@@ -66,7 +66,7 @@ type BracketStage = {
 };
 
 type SeedingMode = "automatic" | "manual";
-type DrawIntegrityStatus = "none" | "checking" | "valid" | "invalid" | "rounds-mismatch" | "teams-mismatch";
+type DrawIntegrityStatus = "none" | "checking" | "valid" | "invalid" | "rounds-mismatch" | "teams-mismatch" | "format-mismatch";
 
 const DEFAULT_TITLE = "Conversatorio Colgemelli";
 const DEFAULT_SUBTITLE = "Bracket del torneo";
@@ -373,6 +373,7 @@ export function TournamentBracket() {
   const [scores, setScores] = useState<ScoreData[]>([]);
   const [drawMatchups, setDrawMatchups] = useState<DrawMatchup[]>([]);
   const [drawIntegrity, setDrawIntegrity] = useState<DrawIntegrity | null>(null);
+  const [drawTournamentFormat, setDrawTournamentFormat] = useState<TournamentFormat | null>(null);
   const [drawIntegrityStatus, setDrawIntegrityStatus] = useState<DrawIntegrityStatus>("none");
   const [currentRound, setCurrentRound] = useState("");
   const [currentTeams, setCurrentTeams] = useState<string[]>([]);
@@ -428,6 +429,9 @@ export function TournamentBracket() {
         : null;
       setDrawMatchups(normalizeDrawMatchups(groupPhase?.matchups));
       setDrawIntegrity(drawData.integrity ?? null);
+      setDrawTournamentFormat(drawData.tournamentFormat
+        ? normalizeTournamentFormat(drawData.tournamentFormat)
+        : null);
     });
 
     const unsubscribeSettings = onSnapshot(doc(db, "settings", "competition"), (snapshot) => {
@@ -508,6 +512,11 @@ export function TournamentBracket() {
         return;
       }
 
+      if (!drawTournamentFormat || JSON.stringify(drawTournamentFormat) !== JSON.stringify(tournamentFormat)) {
+        setDrawIntegrityStatus("format-mismatch");
+        return;
+      }
+
       const configuredRoundNames = rounds
         .filter((round) => round.phase === "Fase de Grupos")
         .map((round) => round.name.trim().normalize("NFC"));
@@ -528,7 +537,7 @@ export function TournamentBracket() {
     return () => {
       cancelled = true;
     };
-  }, [availableTeams, drawIntegrity, drawMatchups, rounds]);
+  }, [availableTeams, drawIntegrity, drawMatchups, rounds, drawTournamentFormat, tournamentFormat]);
 
   const verifiedDrawIsCurrent = drawIntegrityStatus === "valid" && Boolean(drawIntegrity?.sealedAt) && (
     !automaticRandomizedAt
@@ -599,7 +608,7 @@ export function TournamentBracket() {
                 className={cn(
                   "w-fit border-white/40 text-white",
                   effectiveDrawIntegrityStatus === "valid" && "border-emerald-300 bg-emerald-500/20",
-                  ["invalid", "rounds-mismatch", "teams-mismatch"].includes(effectiveDrawIntegrityStatus) && "border-red-300 bg-red-500/20",
+                  ["invalid", "rounds-mismatch", "teams-mismatch", "format-mismatch"].includes(effectiveDrawIntegrityStatus) && "border-red-300 bg-red-500/20",
                 )}
               >
                 {effectiveDrawIntegrityStatus === "valid" ? <ShieldCheck className="mr-1 h-4 w-4" /> : <ShieldAlert className="mr-1 h-4 w-4" />}
@@ -610,6 +619,7 @@ export function TournamentBracket() {
                   invalid: "Hash del sorteo inválido",
                   "rounds-mismatch": "Las rondas no coinciden",
                   "teams-mismatch": "Los equipos no coinciden",
+                  "format-mismatch": "El formato del torneo cambió",
                 }[effectiveDrawIntegrityStatus]}
               </Badge>
             )}
