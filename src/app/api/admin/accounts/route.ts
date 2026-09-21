@@ -6,7 +6,12 @@ import { z } from 'zod';
 export const runtime = 'nodejs';
 const accountSchema = z.discriminatedUnion('role', [
   z.object({ role: z.literal('admin'), email: z.string().email(), password: z.string().min(8).max(128) }),
-  z.object({ role: z.literal('judge'), name: z.string().trim().min(1).max(200), identifier: z.string().trim().min(1).max(100) }),
+  z.object({
+    role: z.literal('judge'),
+    name: z.string().trim().min(1).max(200),
+    identifier: z.string().trim().min(1).max(100),
+    password: z.string().min(8).max(128),
+  }),
   z.object({ role: z.literal('moderator'), identifier: z.string().trim().min(1).max(100) }),
 ]);
 async function authorize(request: Request) {
@@ -30,17 +35,23 @@ export async function POST(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Datos no válidos. La contraseña de administrador debe tener al menos 8 caracteres.' }, { status: 400 });
     const input = parsed.data;
     const id = randomUUID();
-    const token = input.role === 'admin' ? input.password : randomBytes(18).toString('base64url');
+    const credential = input.role === 'admin'
+      ? input.password
+      : input.role === 'judge'
+        ? input.password
+        : randomBytes(18).toString('base64url');
     const identifier = input.role === 'admin' ? input.email.trim().toLowerCase() : input.identifier.trim().toLowerCase();
     const email = input.role === 'admin' ? identifier : `${createHash('sha256').update(`${input.role}:${identifier}`).digest('hex')}@participants.conversatorio.invalid`;
     const name = input.role === 'judge' ? input.name : identifier;
-    const { data: { user }, error } = await supabase.auth.admin.createUser({ email, password: token, email_confirm: true });
+    const { data: { user }, error } = await supabase.auth.admin.createUser({ email, password: credential, email_confirm: true });
     if (error || !user) return NextResponse.json({ error: 'No se pudo crear la cuenta. Comprueba que el correo, cédula o usuario no esté registrado.' }, { status: 400 });
     const table = input.role === 'judge' ? 'judges' : 'moderators';
     let inserted = false;
     try {
       if (input.role !== 'admin') {
-        const data = input.role === 'judge' ? { name, cedula: identifier, token, status: 'active' } : { username: identifier, token, status: 'active' };
+        const data = input.role === 'judge'
+          ? { name, cedula: identifier, status: 'active', passwordConfigured: true }
+          : { username: identifier, token: credential, status: 'active' };
         const result = await supabase.from(table).insert({ id, data });
         if (result.error) throw result.error;
         inserted = true;
@@ -52,12 +63,79 @@ export async function POST(request: Request) {
       await supabase.auth.admin.deleteUser(user.id);
       throw cause;
     }
+    if (input.role === 'judge') {
+      await supabase.from('audit_logs').insert({
+        id: randomUUID(),
+        data: {
+          category: 'judge_security',
+          action: 'judge_account_created',
+          actorRole: 'admin',
+          subjectId: id,
+          subjectName: name,
+          details: { identifier },
+        },
+      });
+    }
     return NextResponse.json({ id, role: input.role }, { status: 201 });
   } catch (cause) {
     console.error('Account creation failed:', cause);
     return NextResponse.json({ error: 'No se pudo crear la cuenta. Revisa el schema y las variables de Supabase del servidor.' }, { status: 500 });
   }
 }
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await authorize(request);
+    if (!supabase) return NextResponse.json({ error: 'Acceso reservado al administrador.' }, { status: 403 });
+
+    const parsed = z.object({
+      role: z.literal('judge'),
+      id: z.string().min(1).max(200),
+      password: z.string().min(8).max(128),
+    }).safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'La nueva contraseña debe tener entre 8 y 128 caracteres.' }, { status: 400 });
+    }
+
+    const { id, password } = parsed.data;
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id,display_name,identifier')
+      .eq('role', 'judge')
+      .eq('subject_id', id)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile) return NextResponse.json({ error: 'Jurado no encontrado.' }, { status: 404 });
+
+    const updated = await supabase.auth.admin.updateUserById(profile.id, { password });
+    if (updated.error) throw updated.error;
+
+    const judgeUpdate = await supabase.from('judges').update({
+      data: {
+        ...(await supabase.from('judges').select('data').eq('id', id).single()).data?.data,
+        passwordConfigured: true,
+      },
+    }).eq('id', id);
+    if (judgeUpdate.error) throw judgeUpdate.error;
+
+    await supabase.from('audit_logs').insert({
+      id: randomUUID(),
+      data: {
+        category: 'judge_security',
+        action: 'judge_password_changed',
+        actorRole: 'admin',
+        subjectId: id,
+        subjectName: profile.display_name,
+        details: { identifier: profile.identifier },
+      },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (cause) {
+    console.error('Judge password update failed:', cause);
+    return NextResponse.json({ error: 'No se pudo actualizar la contraseña del jurado.' }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const supabase = await authorize(request);
