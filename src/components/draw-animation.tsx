@@ -47,6 +47,7 @@ type Phase = {
 type LiveDrawState = {
     phases: Phase[];
     integrity?: DrawIntegrity;
+    tournamentFormat?: TournamentFormat;
 }
 
 type IntegrityStatus = "none" | "checking" | "valid" | "invalid";
@@ -66,6 +67,7 @@ export function DrawAnimation() {
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [allRounds, setAllRounds] = useState<RoundData[]>([]);
   const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
+  const [drawTournamentFormat, setDrawTournamentFormat] = useState<TournamentFormat | null>(null);
   const [isSavingFormat, setIsSavingFormat] = useState(false);
   
   const [loading, setLoading] = useState(true);
@@ -105,6 +107,7 @@ export function DrawAnimation() {
     const unsubDrawState = onSnapshot(drawStateRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data() as LiveDrawState;
+            setDrawTournamentFormat(data.tournamentFormat ? normalizeTournamentFormat(data.tournamentFormat) : null);
             const groupPhase = data.phases?.find(p => p.name === "Fase de Grupos");
             if (groupPhase && groupPhase.matchups.length > 0) {
                 setAssignedTeams(normalizeDrawMatchups(groupPhase.matchups));
@@ -118,6 +121,7 @@ export function DrawAnimation() {
         } else {
             setAssignedTeams([]);
             setIntegrity(null);
+            setDrawTournamentFormat(null);
             setIsFinished(false);
         }
         setLoading(false);
@@ -161,7 +165,9 @@ export function DrawAnimation() {
   const eligibleTeamNames = allTeams.map((team) => team.name);
   const drawMatchesCurrentSetup = sameTeamSet(assignedTeamNames, eligibleTeamNames)
     && assignedTeams.length === groupRounds.length
-    && assignedTeams.every((matchup, index) => matchup.roundName === groupRounds[index]?.name);
+    && assignedTeams.every((matchup, index) => matchup.roundName === groupRounds[index]?.name)
+    && Boolean(drawTournamentFormat)
+    && JSON.stringify(drawTournamentFormat) === JSON.stringify(tournamentFormat);
 
   const updatePhaseFormat = (
     phase: keyof TournamentFormat,
@@ -225,6 +231,12 @@ export function DrawAnimation() {
     setIntegrity(null);
 
     try {
+      await setDoc(
+        doc(db, "settings", "competition"),
+        { tournamentFormat },
+        { merge: true },
+      );
+
       let roundsForDraw = groupRounds;
       if (roundsForDraw.length < requiredRounds) {
         const existingNames = new Set(allRounds.map((round) => round.name.trim().normalize("NFC")));
@@ -268,6 +280,7 @@ export function DrawAnimation() {
 
       const sealedIntegrity = await sealGroupDraw(matchups);
       const drawState: LiveDrawState = {
+        tournamentFormat,
         phases: [{
             name: "Fase de Grupos",
             matchups: matchups
@@ -289,6 +302,7 @@ export function DrawAnimation() {
       }, { merge: true });
       await batch.commit();
       setIntegrity(sealedIntegrity);
+      setDrawTournamentFormat(tournamentFormat);
       setIntegrityStatus("valid");
       setIsFinished(true);
       toast({
