@@ -7,6 +7,7 @@ import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
+import { DEFAULT_TOURNAMENT_FORMAT } from "@/lib/tournament-format";
 
 type ScoreData = {
   id: string;
@@ -31,6 +32,7 @@ type MatchResult = {
     id: string;
     teams: { name: string; total: number }[];
     winner: string | null;
+    qualifiers: string[];
     isTie: boolean;
     isBye?: boolean;
     isPending?: boolean;
@@ -76,6 +78,7 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
                     id: matchId,
                     teams: [{ name: team.name, total: team.total }],
                     winner: team.name,
+                    qualifiers: [team.name],
                     isTie: false,
                     isBye: true,
                 };
@@ -91,18 +94,24 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
             const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
             let winner: string | null = null;
             let isTie = false;
+            let qualifiers: string[] = [];
 
             if (teams.length > 0) {
-                const maxScore = Math.max(...teams.map(t => t.total));
-                const winners = teams.filter(t => t.total === maxScore);
+                const sortedTeams = [...teams].sort((a, b) => b.total - a.total);
+                const maxScore = sortedTeams[0]?.total;
+                const winners = sortedTeams.filter(t => t.total === maxScore);
                 if (winners.length === 1) {
                     winner = winners[0].name;
-                } else {
-                    isTie = true;
                 }
+
+                const qualifierCount = DEFAULT_TOURNAMENT_FORMAT.semifinals.qualifiersPerRound;
+                const cutoff = sortedTeams[qualifierCount - 1];
+                const next = sortedTeams[qualifierCount];
+                isTie = Boolean(cutoff && next && cutoff.total === next.total);
+                qualifiers = isTie ? [] : sortedTeams.slice(0, qualifierCount).map(team => team.name);
             }
 
-            return { id: matchId, teams, winner, isTie };
+            return { id: matchId, teams, winner, qualifiers, isTie };
         });
 
         if (debateState?.currentRound && debateState.teams.length > 0) {
@@ -114,6 +123,7 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
                         id: debateState.currentRound,
                         teams: debateState.teams.map(t => ({ name: t.name, total: 0 })),
                         winner: null,
+                        qualifiers: [],
                         isTie: false,
                         isPending: true,
                     });
@@ -202,10 +212,13 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
                             </TableHeader>
                             <TableBody>
                                 {match.teams.sort((a, b) => b.total - a.total).map(team => (
-                                    <TableRow key={team.name} className={team.name === match.winner ? "font-bold" : ""}>
+                                    <TableRow key={team.name} className={match.qualifiers.includes(team.name) ? "font-bold" : ""}>
                                         <TableCell className="flex items-center gap-2">
                                             {team.name}
                                             {team.name === match.winner && <Trophy className="h-4 w-4 text-amber-500" />}
+                                            {match.qualifiers.includes(team.name) && (
+                                                <Badge variant="secondary" className="ml-1">Clasificado</Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-right text-lg">{team.total}</TableCell>
                                     </TableRow>
