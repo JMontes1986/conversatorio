@@ -13,6 +13,12 @@ import {
   normalizeDrawMatchups,
   verifyGroupDraw,
 } from "@/lib/draw-integrity";
+import {
+  DEFAULT_TOURNAMENT_FORMAT,
+  type TournamentFormat,
+  formatForPhase,
+  normalizeTournamentFormat,
+} from "@/lib/tournament-format";
 
 type SchoolData = {
   teamName?: string;
@@ -47,6 +53,9 @@ type BracketMatch = {
   label: string;
   teams: TeamSlot[];
   winner: string | null;
+  qualifiers: string[];
+  qualifiersPerRound: number;
+  qualificationTie: boolean;
   isBye: boolean;
 };
 
@@ -57,7 +66,7 @@ type BracketStage = {
 };
 
 type SeedingMode = "automatic" | "manual";
-type DrawIntegrityStatus = "none" | "checking" | "valid" | "invalid" | "rounds-mismatch" | "teams-mismatch";
+type DrawIntegrityStatus = "none" | "checking" | "valid" | "invalid" | "rounds-mismatch" | "teams-mismatch" | "format-mismatch";
 
 const DEFAULT_TITLE = "Conversatorio Colgemelli";
 const DEFAULT_SUBTITLE = "Bracket del torneo";
@@ -80,7 +89,7 @@ function isVerifiedSchool(status: unknown) {
     && status.trim().normalize("NFC").toLocaleLowerCase("es") === "verificado";
 }
 
-function scoreResult(matchName: string, scores: ScoreData[]) {
+function scoreResult(matchName: string, scores: ScoreData[], qualifiersPerRound = 1) {
   const matchingScores = scores.filter(
     (score) => score.matchId.split("-bye-")[0] === matchName,
   );
@@ -100,11 +109,23 @@ function scoreResult(matchName: string, scores: ScoreData[]) {
   })).sort((a, b) => b.score - a.score);
 
   if (teams.length === 0) return null;
+
+  const cutoffIndex = Math.min(qualifiersPerRound, teams.length) - 1;
+  const cutoffScore = teams[cutoffIndex]?.score;
+  const nextScore = teams[cutoffIndex + 1]?.score;
+  const qualificationTie = cutoffScore !== undefined
+    && nextScore !== undefined
+    && cutoffScore === nextScore;
+
+  const qualifiers = qualificationTie
+    ? []
+    : teams.slice(0, Math.min(qualifiersPerRound, teams.length)).map((team) => team.name);
+
   const winner = teams.length === 1 || teams[0].score > teams[1].score
     ? teams[0].name
     : null;
 
-  return { teams, winner };
+  return { teams, winner, qualifiers, qualificationTie };
 }
 
 function stageTitle(matchCount: number) {
@@ -122,17 +143,27 @@ function configuredStageTitle(phase: string, matchCount: number) {
   return phase;
 }
 
-function advancingSlot(match: BracketMatch): TeamSlot {
+function advancingSlots(match: BracketMatch): TeamSlot[] {
+  if (match.qualifiers.length > 0) {
+    return match.qualifiers.map((name) => ({
+      name,
+      pending: false,
+    }));
+  }
+
   if (match.isBye && match.teams.length === 1) {
-    return {
+    return [{
       name: match.winner ?? match.teams[0].name,
       pending: !match.winner || match.teams[0].pending,
-    };
+    }];
   }
-  return {
-    name: match.winner ?? `Ganador de ${match.label}`,
-    pending: !match.winner,
-  };
+
+  return Array.from({ length: match.qualifiersPerRound }, (_, index) => ({
+    name: match.qualifiersPerRound === 1
+      ? `Ganador de ${match.label}`
+      : `Clasificado ${index + 1} de ${match.label}`,
+    pending: true,
+  }));
 }
 
 function buildBracket(
@@ -142,6 +173,7 @@ function buildBracket(
   scores: ScoreData[],
   currentRound: string,
   currentTeams: string[],
+  tournamentFormat: TournamentFormat,
 ) {
   const registeredTeams = uniqueTeamNames(
     teamNames.length > 0 ? teamNames : drawMatchups.flatMap((matchup) => matchup.teams),
@@ -158,8 +190,9 @@ function buildBracket(
   });
 
   const unassignedTeams = registeredTeams.filter((team) => !assignedTeams.has(team));
-  for (let index = 0; index < unassignedTeams.length; index += 2) {
-    initialPairs.push({ teams: unassignedTeams.slice(index, index + 2) });
+  const initialTeamsPerRound = tournamentFormat.groupStage.teamsPerRound;
+  for (let index = 0; index < unassignedTeams.length; index += initialTeamsPerRound) {
+    initialPairs.push({ teams: unassignedTeams.slice(index, index + initialTeamsPerRound) });
   }
 
   const groupRounds = rounds.filter((round) => round.phase === "Fase de Grupos");
@@ -167,13 +200,18 @@ function buildBracket(
 
   const initialMatches = initialPairs.map((pair, index): BracketMatch => {
     const label = pair.label || groupRounds[index]?.name || `Llave ${index + 1}`;
-    const result = scoreResult(label, scores);
+    const qualifiersPerRound = tournamentFormat.groupStage.qualifiersPerRound;
+    const result = scoreResult(label, scores, qualifiersPerRound);
     const isBye = pair.teams.length === 1;
+    const qualifiers = result?.qualifiers ?? (isBye ? [pair.teams[0]] : []);
     return {
       id: `initial-${index}`,
       label,
       teams: result?.teams ?? pair.teams.map((name) => ({ name, pending: false })),
       winner: result?.winner ?? (isBye ? pair.teams[0] : null),
+      qualifiers,
+      qualifiersPerRound,
+      qualificationTie: result?.qualificationTie ?? false,
       isBye,
     };
   });
@@ -198,18 +236,19 @@ function buildBracket(
 
   configuredPhases.forEach((phase) => {
     if (previousMatches.length === 0 || phase.rounds.length === 0) return;
-    const advancingSlots = previousMatches.map(advancingSlot);
-    const baseSize = Math.floor(advancingSlots.length / phase.rounds.length);
-    const remainder = advancingSlots.length % phase.rounds.length;
+    const advancing = previousMatches.flatMap(advancingSlots);
+    const baseSize = Math.floor(advancing.length / phase.rounds.length);
+    const remainder = advancing.length % phase.rounds.length;
     let slotIndex = 0;
 
     const matches = phase.rounds.map((round, roundIndex): BracketMatch => {
       const receivesExtraSlot = remainder > 0 && roundIndex >= phase.rounds.length - remainder;
       const slotCount = baseSize + (receivesExtraSlot ? 1 : 0);
-      const slots = advancingSlots.slice(slotIndex, slotIndex + slotCount);
+      const slots = advancing.slice(slotIndex, slotIndex + slotCount);
       slotIndex += slotCount;
 
-      const result = scoreResult(round.name, scores);
+      const phaseFormat = formatForPhase(tournamentFormat, phase.name);
+      const result = scoreResult(round.name, scores, phaseFormat.qualifiersPerRound);
       const activeTeams = round.name === currentRound
         ? uniqueTeamNames(currentTeams).map((name) => ({ name, pending: false }))
         : null;
@@ -223,6 +262,9 @@ function buildBracket(
         label: round.name,
         teams: displayedTeams,
         winner: result?.winner ?? (isBye && !displayedTeams[0].pending ? displayedTeams[0].name : null),
+        qualifiers: result?.qualifiers ?? (isBye && !displayedTeams[0].pending ? [displayedTeams[0].name] : []),
+        qualifiersPerRound: phaseFormat.qualifiersPerRound,
+        qualificationTie: result?.qualificationTie ?? false,
         isBye,
       };
     });
@@ -237,15 +279,16 @@ function buildBracket(
   });
 
   while (previousMatches.length > 1) {
-    const advancingSlots = previousMatches.map(advancingSlot);
+    const advancing = previousMatches.flatMap(advancingSlots);
     const nextMatches: BracketMatch[] = [];
+    const teamsPerRound = tournamentFormat.final.teamsPerRound;
 
-    for (let index = 0; index < advancingSlots.length; index += 2) {
-      const slots = advancingSlots.slice(index, index + 2);
+    for (let index = 0; index < advancing.length; index += teamsPerRound) {
+      const slots = advancing.slice(index, index + teamsPerRound);
       const isBye = slots.length === 1;
       const label = isBye ? "Pase directo" : `Llave ${stages.length + 1}.${nextMatches.length + 1}`;
 
-      const result = scoreResult(label, scores);
+      const result = scoreResult(label, scores, tournamentFormat.final.qualifiersPerRound);
       const activeTeams = label === currentRound
         ? uniqueTeamNames(currentTeams).map((name) => ({ name, pending: false }))
         : null;
@@ -256,6 +299,9 @@ function buildBracket(
         label,
         teams: displayedTeams,
         winner: result?.winner ?? (isBye && !slots[0].pending ? slots[0].name : null),
+        qualifiers: result?.qualifiers ?? (isBye && !slots[0].pending ? [slots[0].name] : []),
+        qualifiersPerRound: tournamentFormat.final.qualifiersPerRound,
+        qualificationTie: result?.qualificationTie ?? false,
         isBye,
       });
     }
@@ -284,6 +330,7 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
       <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
         {match.teams.map((team, index) => {
           const isWinner = match.winner === team.name;
+          const isQualifier = match.qualifiers.includes(team.name);
           return (
             <div
               key={`${match.id}-${team.name}-${index}`}
@@ -291,7 +338,7 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
                 "flex min-h-12 items-center justify-between gap-3 px-4 py-3",
                 index > 0 && "border-t",
                 team.pending && "bg-muted/40 text-muted-foreground",
-                isWinner && "bg-emerald-600 font-semibold text-white",
+                isQualifier && "bg-emerald-600 font-semibold text-white",
               )}
             >
               <span className="min-w-0 truncate">{team.name}</span>
@@ -299,12 +346,17 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
                 {typeof team.score === "number" && (
                   <span className="tabular-nums">{team.score}</span>
                 )}
-                {isWinner && <CheckCircle2 className="h-4 w-4" aria-label="Ganador de la llave" />}
+                {isQualifier && <CheckCircle2 className="h-4 w-4" aria-label="Equipo clasificado" />}
               </span>
             </div>
           );
         })}
       </div>
+      {match.qualificationTie && (
+        <p className="mt-2 text-xs font-medium text-amber-600">
+          Empate en el corte de clasificación. Debe resolverse antes de avanzar.
+        </p>
+      )}
       {!isLastStage && (
         <div className="absolute left-full top-[calc(50%+10px)] h-px w-10 bg-border" aria-hidden="true" />
       )}
@@ -321,6 +373,7 @@ export function TournamentBracket() {
   const [scores, setScores] = useState<ScoreData[]>([]);
   const [drawMatchups, setDrawMatchups] = useState<DrawMatchup[]>([]);
   const [drawIntegrity, setDrawIntegrity] = useState<DrawIntegrity | null>(null);
+  const [drawTournamentFormat, setDrawTournamentFormat] = useState<TournamentFormat | null>(null);
   const [drawIntegrityStatus, setDrawIntegrityStatus] = useState<DrawIntegrityStatus>("none");
   const [currentRound, setCurrentRound] = useState("");
   const [currentTeams, setCurrentTeams] = useState<string[]>([]);
@@ -330,6 +383,7 @@ export function TournamentBracket() {
   const [manualTeamOrder, setManualTeamOrder] = useState<string[]>([]);
   const [manualAcceptedAt, setManualAcceptedAt] = useState<string | null>(null);
   const [automaticRandomizedAt, setAutomaticRandomizedAt] = useState<string | null>(null);
+  const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -375,6 +429,14 @@ export function TournamentBracket() {
         : null;
       setDrawMatchups(normalizeDrawMatchups(groupPhase?.matchups));
       setDrawIntegrity(drawData.integrity ?? null);
+      setDrawTournamentFormat(drawData.tournamentFormat
+        ? normalizeTournamentFormat(drawData.tournamentFormat)
+        : null);
+    });
+
+    const unsubscribeSettings = onSnapshot(doc(db, "settings", "competition"), (snapshot) => {
+      const data = snapshot.exists() ? snapshot.data() : {};
+      setTournamentFormat(normalizeTournamentFormat(data.tournamentFormat));
     });
 
     const unsubscribeState = onSnapshot(doc(db, "debateState", "current"), (snapshot) => {
@@ -409,6 +471,7 @@ export function TournamentBracket() {
       unsubscribeRounds();
       unsubscribeScores();
       unsubscribeDraw();
+      unsubscribeSettings();
       unsubscribeState();
     };
   }, []);
@@ -449,6 +512,11 @@ export function TournamentBracket() {
         return;
       }
 
+      if (!drawTournamentFormat || JSON.stringify(drawTournamentFormat) !== JSON.stringify(tournamentFormat)) {
+        setDrawIntegrityStatus("format-mismatch");
+        return;
+      }
+
       const configuredRoundNames = rounds
         .filter((round) => round.phase === "Fase de Grupos")
         .map((round) => round.name.trim().normalize("NFC"));
@@ -469,7 +537,7 @@ export function TournamentBracket() {
     return () => {
       cancelled = true;
     };
-  }, [availableTeams, drawIntegrity, drawMatchups, rounds]);
+  }, [availableTeams, drawIntegrity, drawMatchups, rounds, drawTournamentFormat, tournamentFormat]);
 
   const verifiedDrawIsCurrent = drawIntegrityStatus === "valid" && Boolean(drawIntegrity?.sealedAt) && (
     !automaticRandomizedAt
@@ -486,7 +554,8 @@ export function TournamentBracket() {
     scores,
     currentRound,
     currentTeams,
-  ), [displayTeams, drawMatchups, rounds, scores, currentRound, currentTeams, seedingMode, verifiedDrawIsCurrent]);
+    tournamentFormat,
+  ), [displayTeams, drawMatchups, rounds, scores, currentRound, currentTeams, seedingMode, verifiedDrawIsCurrent, tournamentFormat]);
 
   const champion = stages.at(-1)?.matches[0]?.winner ?? null;
   const automaticDrawPending = seedingMode === "automatic" && effectiveDrawIntegrityStatus !== "valid";
@@ -539,7 +608,7 @@ export function TournamentBracket() {
                 className={cn(
                   "w-fit border-white/40 text-white",
                   effectiveDrawIntegrityStatus === "valid" && "border-emerald-300 bg-emerald-500/20",
-                  ["invalid", "rounds-mismatch", "teams-mismatch"].includes(effectiveDrawIntegrityStatus) && "border-red-300 bg-red-500/20",
+                  ["invalid", "rounds-mismatch", "teams-mismatch", "format-mismatch"].includes(effectiveDrawIntegrityStatus) && "border-red-300 bg-red-500/20",
                 )}
               >
                 {effectiveDrawIntegrityStatus === "valid" ? <ShieldCheck className="mr-1 h-4 w-4" /> : <ShieldAlert className="mr-1 h-4 w-4" />}
@@ -550,6 +619,7 @@ export function TournamentBracket() {
                   invalid: "Hash del sorteo inválido",
                   "rounds-mismatch": "Las rondas no coinciden",
                   "teams-mismatch": "Los equipos no coinciden",
+                  "format-mismatch": "El formato del torneo cambió",
                 }[effectiveDrawIntegrityStatus]}
               </Badge>
             )}

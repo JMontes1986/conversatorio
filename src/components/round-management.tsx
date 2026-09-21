@@ -16,6 +16,12 @@ import { Label } from "@/components/ui/label";
 import { AlertTriangle, Loader2, Sparkles, Trash2, Swords, MoreHorizontal, Folder } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc } from '@/lib/documents';
+import {
+    DEFAULT_TOURNAMENT_FORMAT,
+    type TournamentFormat,
+    normalizeTournamentFormat,
+    requiredRoundCount,
+} from '@/lib/tournament-format';
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from './ui/dropdown-menu';
@@ -52,6 +58,7 @@ export function RoundManagement() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [registeredSchoolCount, setRegisteredSchoolCount] = useState(0);
     const [verifiedSchoolCount, setVerifiedSchoolCount] = useState(0);
+    const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
 
     useEffect(() => {
         const roundsQuery = query(collection(db, "rounds"), orderBy("createdAt", "asc"));
@@ -77,9 +84,19 @@ export function RoundManagement() {
             (error) => console.error("Error fetching schools for round generation:", error),
         );
 
+        const unsubscribeSettings = onSnapshot(
+            doc(db, "settings", "competition"),
+            (snapshot) => {
+                const data = snapshot.exists() ? snapshot.data() : {};
+                setTournamentFormat(normalizeTournamentFormat(data.tournamentFormat));
+            },
+            (error) => console.error("Error fetching tournament format:", error),
+        );
+
         return () => {
             unsubscribeRounds();
             unsubscribeSchools();
+            unsubscribeSettings();
         };
     }, []);
     
@@ -131,12 +148,15 @@ export function RoundManagement() {
         }
     };
 
-    const requiredGroupRounds = Math.ceil(verifiedSchoolCount / 2);
+    const requiredGroupRounds = requiredRoundCount(
+        verifiedSchoolCount,
+        tournamentFormat.groupStage.teamsPerRound,
+    );
     const currentGroupRounds = rounds.filter((round) => round.phase === "Fase de Grupos").length;
     const missingGroupRounds = Math.max(0, requiredGroupRounds - currentGroupRounds);
 
     const handleGenerateGroupRounds = async () => {
-        if (verifiedSchoolCount < 2 || missingGroupRounds === 0) return;
+        if (verifiedSchoolCount < tournamentFormat.groupStage.teamsPerRound || missingGroupRounds === 0) return;
 
         setIsSubmitting(true);
         try {

@@ -49,6 +49,12 @@ import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import {
+    DEFAULT_TOURNAMENT_FORMAT,
+    type TournamentFormat,
+    formatForPhase,
+    normalizeTournamentFormat,
+} from '@/lib/tournament-format';
 
 const ScoringStatusTracker = dynamic(() => import('@/components/scoring-status-tracker').then(mod => mod.ScoringStatusTracker), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
@@ -189,6 +195,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
+    const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
 
     useEffect(() => {
         setLoadingRounds(true);
@@ -202,8 +209,18 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             setLoadingRounds(false);
         });
 
+        const unsubscribeSettings = onSnapshot(
+            doc(db, "settings", "competition"),
+            (snapshot) => {
+                const data = snapshot.exists() ? snapshot.data() : {};
+                setTournamentFormat(normalizeTournamentFormat(data.tournamentFormat));
+            },
+            (error) => console.error("Error fetching tournament format:", error),
+        );
+
         return () => {
             unsubscribeRounds();
+            unsubscribeSettings();
         };
     }, []);
     
@@ -265,12 +282,16 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
 
     const handleRoundChange = useCallback((roundName: string) => {
         setCurrentRound(roundName);
-        if (roundName === 'Ronda 7') {
-             setTeams([{ id: nanoid(), name: '', isBye: false }, { id: nanoid(), name: '', isBye: false }, { id: nanoid(), name: '', isBye: false }]);
-        } else {
-             setTeams([{ id: nanoid(), name: '', isBye: false }, { id: nanoid(), name: '', isBye: false }]);
-        }
-    }, []);
+        const selectedRound = debateRounds.find((round) => round.name === roundName);
+        const teamsPerRound = selectedRound
+            ? formatForPhase(tournamentFormat, selectedRound.phase).teamsPerRound
+            : 2;
+        setTeams(Array.from({ length: teamsPerRound }, () => ({
+            id: nanoid(),
+            name: '',
+            isBye: false,
+        })));
+    }, [debateRounds, tournamentFormat]);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -376,26 +397,32 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
         setTeams(teams.map(team => team.id === id ? { ...team, name } : team));
     };
     
+    const selectedRoundData = debateRounds.find((round) => round.name === currentRound);
+    const targetTeamsPerRound = selectedRoundData
+        ? formatForPhase(tournamentFormat, selectedRoundData.phase).teamsPerRound
+        : 2;
+
     const handleByeChange = (id: string, isBye: boolean) => {
         const newTeams = teams.map(t => t.id === id ? { ...t, isBye } : t);
         if (isBye) {
-            const otherTeamId = newTeams.find(t => t.id !== id)?.id;
-            if (otherTeamId) {
-                // Set only one team if it's a bye
-                setTeams(newTeams.filter(t => t.id === id));
-            }
+            setTeams(newTeams.filter(t => t.id === id));
+        } else if (newTeams.length === 1) {
+            setTeams([
+                newTeams[0],
+                ...Array.from({ length: Math.max(0, targetTeamsPerRound - 1) }, () => ({
+                    id: nanoid(),
+                    name: '',
+                    isBye: false,
+                })),
+            ]);
         } else {
-            // If unchecking bye, add a second team selector back
-            if (newTeams.length === 1) {
-                setTeams([...newTeams, { id: nanoid(), name: '', isBye: false }]);
-            } else {
-                 setTeams(newTeams);
-            }
+            setTeams(newTeams);
         }
     }
 
 
     const addTeam = () => {
+        if (teams.length >= targetTeamsPerRound) return;
         setTeams([...teams, { id: nanoid(), name: '', isBye: false }]);
     };
 
@@ -520,7 +547,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                                 )}
                             </div>
                         ))}
-                         {!isByeRound && currentRound === 'Ronda 7' && teams.length < 3 && (
+                         {!isByeRound && teams.length < targetTeamsPerRound && (
                             <Button type="button" variant="outline" size="sm" onClick={addTeam} disabled={isSubmitting}>
                                 <Plus className="mr-2 h-4 w-4" /> Añadir Equipo
                             </Button>

@@ -10,6 +10,11 @@ import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
+import {
+    DEFAULT_TOURNAMENT_FORMAT,
+    type TournamentFormat,
+    normalizeTournamentFormat,
+} from "@/lib/tournament-format";
 
 type RoundData = {
   id: string;
@@ -34,6 +39,7 @@ type MatchResult = {
     id: string;
     teams: { name: string; total: number }[];
     winner: string | null;
+    qualifiers: string[];
     isTie: boolean;
     judges: number;
     isBye?: boolean;
@@ -48,6 +54,7 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
     const [scores, setScores] = useState<ScoreData[]>([]);
     const [drawnTeams, setDrawnTeams] = useState<DrawnTeam[]>([]);
     const [loading, setLoading] = useState(true);
+    const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
 
     useEffect(() => {
         const roundsQuery = query(
@@ -66,6 +73,12 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
             setScores(scoresData);
         });
         
+        const settingsRef = doc(db, "settings", "competition");
+        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+            const data = docSnap.exists() ? docSnap.data() : {};
+            setTournamentFormat(normalizeTournamentFormat(data.tournamentFormat));
+        });
+
         const drawStateRef = doc(db, "drawState", "liveDraw");
         const unsubscribeDrawState = onSnapshot(drawStateRef, (docSnap) => {
              if (docSnap.exists()) {
@@ -87,6 +100,7 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
         return () => {
             unsubscribeRounds();
             unsubscribeScores();
+            unsubscribeSettings();
             unsubscribeDrawState();
         };
     }, []);
@@ -105,6 +119,7 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
                     id: round.name,
                     teams: [winnerTeam],
                     winner: winnerTeam.name,
+                    qualifiers: [winnerTeam.name],
                     isTie: false,
                     judges: 0,
                     isBye: true,
@@ -124,24 +139,31 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
                 });
             });
 
-            const teams = Object.entries(teamTotals).map(([name, total]) => ({ name, total }));
+            const teams = Object.entries(teamTotals)
+                .map(([name, total]) => ({ name, total }))
+                .sort((a, b) => b.total - a.total);
             let winner: string | null = null;
             let isTie = false;
+            let qualifiers: string[] = [];
 
             if (teams.length > 0) {
-                const maxScore = Math.max(...teams.map(t => t.total));
+                const maxScore = teams[0].total;
                 const winners = teams.filter(t => t.total === maxScore);
                 if (winners.length === 1) {
                     winner = winners[0].name;
-                } else if (winners.length > 1) {
-                    isTie = true;
                 }
+
+                const qualifierCount = tournamentFormat.groupStage.qualifiersPerRound;
+                const cutoff = teams[qualifierCount - 1];
+                const next = teams[qualifierCount];
+                isTie = Boolean(cutoff && next && cutoff.total === next.total);
+                qualifiers = isTie ? [] : teams.slice(0, qualifierCount).map(team => team.name);
             }
 
             return {
                 id: round.id,
                 name: round.name,
-                match: { id: round.name, teams, winner, isTie, judges: judges.size } as MatchResult,
+                match: { id: round.name, teams, winner, qualifiers, isTie, judges: judges.size } as MatchResult,
             };
         }
 
@@ -153,6 +175,7 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
                     id: round.name,
                     teams: teamsForRound.map(name => ({name, total: 0})),
                     winner: null,
+                    qualifiers: [],
                     isTie: false,
                     judges: 0,
                 } as MatchResult,
@@ -233,10 +256,13 @@ export function GroupStageResults({ resultsPublished }: GroupStageResultsProps) 
                                 </TableHeader>
                                 <TableBody>
                                     {result.match.teams.map(team => (
-                                        <TableRow key={team.name} className={team.name === result.match?.winner ? "font-bold" : ""}>
+                                        <TableRow key={team.name} className={result.match?.qualifiers.includes(team.name) ? "font-bold" : ""}>
                                             <TableCell className="flex items-center gap-2">
                                                 {team.name}
                                                 {team.name === result.match?.winner && <Trophy className="h-4 w-4 text-amber-500" />}
+                                                {result.match?.qualifiers.includes(team.name) && (
+                                                    <Badge variant="secondary" className="ml-1">Clasificado</Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right text-lg">{team.total}</TableCell>
                                         </TableRow>
