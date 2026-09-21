@@ -54,6 +54,7 @@ const SemifinalsStageResults = dynamic(() => import('@/components/semifinals-sta
 const KnockoutStageResults = dynamic(() => import('@/components/knockout-stage-results').then(mod => mod.KnockoutStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const FinalResultCard = dynamic(() => import('@/components/final-result-card').then(mod => mod.FinalResultCard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const AuditLogViewer = dynamic(() => import('@/components/audit-log-viewer').then(mod => mod.AuditLogViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const JudgeAuditViewer = dynamic(() => import('@/components/judge-audit-viewer').then(mod => mod.JudgeAuditViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const RealTimeDashboard = dynamic(() => import('@/components/real-time-dashboard').then(mod => mod.RealTimeDashboard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
@@ -104,7 +105,7 @@ interface DebateState {
 const ADMIN_VIEW_STORAGE_KEY = "conversatorio-admin-active-view";
 const ADMIN_VIEWS = new Set([
   "dashboard", "home", "schedule", "schools", "rounds", "bracket", "rubric",
-  "draw", "survey", "debate-control", "results", "judges", "moderators", "logs",
+  "draw", "survey", "debate-control", "results", "judges", "moderators", "judge-audit", "logs",
   "settings",
 ]);
 
@@ -551,6 +552,7 @@ function AdminDashboard() {
         case "rubric": return <RubricManagement />;
         case "draw": return <DrawAnimation />;
         case "survey": return <SurveyManagement />;
+        case "judge-audit": return <JudgeAuditViewer />;
         case "logs": return <AuditLogViewer />;
         case "settings": return <CompetitionSettings allScores={scores} />;
         case "judges": return (
