@@ -2,12 +2,18 @@
 
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, Trophy, EyeOff, CheckCircle, Swords } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
-import { DEFAULT_TOURNAMENT_FORMAT } from "@/lib/tournament-format";
+import {
+    DEFAULT_TOURNAMENT_FORMAT,
+    type TournamentFormat,
+    normalizeTournamentFormat,
+} from "@/lib/tournament-format";
+import { db } from "@/lib/supabase";
+import { doc, onSnapshot } from "@/lib/documents";
 
 type ScoreData = {
   id: string;
@@ -47,6 +53,15 @@ interface SemifinalsStageResultsProps {
 }
 
 export function SemifinalsStageResults({ allScores, allRounds, debateState, resultsPublished, loading }: SemifinalsStageResultsProps) {
+    const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
+
+    useEffect(() => {
+        const unsubscribe = onSnapshot(doc(db, "settings", "competition"), (snapshot) => {
+            const data = snapshot.exists() ? snapshot.data() : {};
+            setTournamentFormat(normalizeTournamentFormat(data.tournamentFormat));
+        });
+        return unsubscribe;
+    }, []);
 
     const semifinalsResults = useMemo(() => {
         if (loading) return [];
@@ -104,7 +119,7 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
                     winner = winners[0].name;
                 }
 
-                const qualifierCount = DEFAULT_TOURNAMENT_FORMAT.semifinals.qualifiersPerRound;
+                const qualifierCount = tournamentFormat.semifinals.qualifiersPerRound;
                 const cutoff = sortedTeams[qualifierCount - 1];
                 const next = sortedTeams[qualifierCount];
                 isTie = Boolean(cutoff && next && cutoff.total === next.total);
@@ -139,7 +154,7 @@ export function SemifinalsStageResults({ allScores, allRounds, debateState, resu
 
         return processedMatches;
 
-    }, [allScores, debateState, allRounds, loading]);
+    }, [allScores, debateState, allRounds, loading, tournamentFormat]);
 
 
     if (loading) {
