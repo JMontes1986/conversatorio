@@ -9,8 +9,7 @@ import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
-import Image from 'next/image';
-import { normalizeExternalImageUrl } from '@/lib/external-image';
+import { externalImageDisplayUrl } from '@/lib/external-image';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
@@ -185,7 +184,7 @@ export default function DebatePage() {
                  {showImage ? (
                      <div className="w-full h-full flex items-center justify-center">
                         <img
-                          src={normalizeExternalImageUrl(temporaryImageUrl!).displayUrl}
+                          src={externalImageDisplayUrl(temporaryImageUrl!)}
                           alt="Imagen temporal"
                           className="max-h-full max-w-full rounded-lg object-contain"
                           referrerPolicy="no-referrer"
@@ -222,7 +221,7 @@ export default function DebatePage() {
                          <div className="relative flex h-full w-full items-center justify-center">
                             {sidebarImageUrl ? (
                               <img
-                                src={normalizeExternalImageUrl(sidebarImageUrl).displayUrl}
+                                src={externalImageDisplayUrl(sidebarImageUrl)}
                                 alt="Imagen de barra lateral"
                                 className="max-h-full max-w-full object-contain"
                                 referrerPolicy="no-referrer"
