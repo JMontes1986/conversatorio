@@ -52,7 +52,21 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
       { table: 'questions', id: 'q1', operation: 'insert', data: { text: 'Pregunta activa' } },
       { table: 'questions', id: 'q2', operation: 'insert', data: { text: 'Pregunta privada' } },
     ]);
+
+    await as('service_role');
+    await pg.exec(`insert into public.tiebreak(id,data) values (
+      'Grupo A',
+      '{"sealed":true,"roundName":"Grupo A","phase":"Fase de Grupos","integrity":{"algorithm":"SHA-256","version":1,"hash":"abc"}}'
+    )`);
+    await as('authenticated', admin);
+    await assert.rejects(
+      pg.exec(`update public.tiebreak set data = data || '{"winner":"FORGED"}'::jsonb where id='Grupo A'`),
+      /sellado/,
+    );
+    await assert.rejects(pg.exec("delete from public.tiebreak where id='Grupo A'"), /sellado/);
+
     await as('anon');
+    assert.equal(await count('tiebreak'), 0);
     assert.equal(await count('debate_state'), 1);
     await assert.rejects(count('schools'), /permission denied/);
     await assert.rejects(count('judges'), /permission denied/);
@@ -95,8 +109,12 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     await write([{ table: 'settings', id: 'competition', operation: 'merge', data: { groupStageResultsPublished: true } }]);
     await as('anon');
     assert.equal(await count('scores'), 1);
+    assert.equal(await count('tiebreak'), 1);
     await as('authenticated', admin);
     await write([{ table: 'settings', id: 'competition', operation: 'merge', data: { groupStageResultsPublished: false } }]);
+    await as('anon');
+    assert.equal(await count('tiebreak'), 0);
+    await as('authenticated', admin);
     await write([{ table: 'judges', id: 'judge-1', operation: 'update', data: { status: 'inactive' } }]);
     await as('authenticated', judge);
     assert.equal((await pg.query('select current_profile() as p')).rows[0].p, null);
