@@ -91,6 +91,24 @@ export async function POST(request: Request) {
       .eq('id', 'competition');
     if (settingsUpdate.error) throw settingsUpdate.error;
 
+    const { data: debateStateRow, error: debateStateReadError } = await supabase
+      .from('debate_state')
+      .select('data')
+      .eq('id', 'current')
+      .maybeSingle();
+    if (debateStateReadError) throw debateStateReadError;
+
+    const debateStateUpdate = await supabase
+      .from('debate_state')
+      .update({
+        data: {
+          ...(debateStateRow?.data || {}),
+          publicTiebreak: null,
+        },
+      })
+      .eq('id', 'current');
+    if (debateStateUpdate.error) throw debateStateUpdate.error;
+
     await supabase.from('audit_logs').insert({
       id: randomUUID(),
       data: {
