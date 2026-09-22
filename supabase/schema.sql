@@ -104,22 +104,47 @@ do $$
 declare t text;
 begin
   foreach t in array array['schools','judges','moderators','scores','rounds','rubric','questions',
-    'student_questions','survey_responses','site_content','settings','debate_state','draw_state','tiebreak'] loop
+    'student_questions','survey_responses','site_content','settings','debate_state','draw_state'] loop
     execute format('drop policy if exists admin_all on public.%I', t);
     execute format('create policy admin_all on public.%I for all to authenticated
       using ((select private.app_role()) = ''admin'') with check ((select private.app_role()) = ''admin'')', t);
   end loop;
-  foreach t in array array['questions','debate_state','draw_state','tiebreak','student_questions'] loop
+  foreach t in array array['questions','debate_state','draw_state','student_questions'] loop
     execute format('drop policy if exists moderator_manage on public.%I', t);
     execute format('create policy moderator_manage on public.%I for all to authenticated
       using ((select private.app_role()) = ''moderator'') with check ((select private.app_role()) = ''moderator'')', t);
   end loop;
-  foreach t in array array['rounds','rubric','site_content','settings','debate_state','draw_state','tiebreak'] loop
+  foreach t in array array['rounds','rubric','site_content','settings','debate_state','draw_state'] loop
     execute format('grant select on public.%I to anon', t);
     execute format('drop policy if exists public_read on public.%I', t);
     execute format('create policy public_read on public.%I for select to anon, authenticated using (true)', t);
   end loop;
 end $$;
+
+-- Desempates sellados: lectura para organización; lectura pública solo cuando la fase fue publicada.
+grant select on public.tiebreak to anon, authenticated;
+drop policy if exists admin_all on public.tiebreak;
+drop policy if exists moderator_manage on public.tiebreak;
+drop policy if exists public_read on public.tiebreak;
+drop policy if exists tiebreak_organizer_read on public.tiebreak;
+create policy tiebreak_organizer_read on public.tiebreak for select to authenticated
+  using ((select private.app_role()) in ('admin','moderator'));
+drop policy if exists published_tiebreak on public.tiebreak;
+create policy published_tiebreak on public.tiebreak for select to anon, authenticated using (
+  exists (
+    select 1
+    from public.rounds r
+    join public.settings s on s.id = 'competition'
+    where r.data->>'name' = tiebreak.data->>'roundName'
+      and case r.data->>'phase'
+        when 'Fase de Grupos' then s.data->>'groupStageResultsPublished' = 'true'
+        when 'Fase de semifinal' then s.data->>'semifinalsResultsPublished' = 'true'
+        when 'Fase de semifinales' then s.data->>'semifinalsResultsPublished' = 'true'
+        when 'Fase de Finales' then s.data->>'finalsResultsPublished' = 'true'
+        when 'FINAL' then s.data->>'finalsResultsPublished' = 'true'
+        else false end
+  )
+);
 
 drop policy if exists moderator_schools on public.schools;
 create policy moderator_schools on public.schools for select to authenticated using ((select private.app_role()) = 'moderator');
@@ -197,6 +222,34 @@ begin
     execute format('create trigger prepare_document before insert or update on public.%I for each row execute function private.prepare_document()', t);
   end loop;
 end $$;
+
+-- Un desempate sellado es inmutable incluso para el administrador de la plataforma.
+create or replace function private.protect_sealed_tiebreak() returns trigger
+language plpgsql set search_path = '' as $
+begin
+  if old.data->>'sealed' = 'true' then
+    raise exception 'El desempate está sellado y no puede modificarse ni eliminarse.';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $;
+drop trigger if exists protect_sealed_tiebreak on public.tiebreak;
+create trigger protect_sealed_tiebreak
+before update or delete on public.tiebreak
+for each row execute function private.protect_sealed_tiebreak();
+
+-- La puntuación técnica asociada a un desempate sellado tampoco se puede alterar o borrar.
+create or replace function private.protect_tiebreak_score() returns trigger
+language plpgsql set search_path = '' as $
+begin
+  if old.data ? 'tiebreakSealHash' then
+    raise exception 'La puntuación de desempate está sellada y es inmutable.';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $;
+drop trigger if exists protect_tiebreak_score on public.scores;
+create trigger protect_tiebreak_score
+before update or delete on public.scores
+for each row execute function private.protect_tiebreak_score();
 
 -- Un jurado solo puntúa la ronda/equipos activos, con valores 1..5 por criterio.
 -- Los totales y su identidad se obtienen del servidor; no se confía en el formulario.
