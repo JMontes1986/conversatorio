@@ -56,6 +56,7 @@ const FinalResultCard = dynamic(() => import('@/components/final-result-card').t
 const AuditLogViewer = dynamic(() => import('@/components/audit-log-viewer').then(mod => mod.AuditLogViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const JudgeAuditViewer = dynamic(() => import('@/components/judge-audit-viewer').then(mod => mod.JudgeAuditViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const RealTimeDashboard = dynamic(() => import('@/components/real-time-dashboard').then(mod => mod.RealTimeDashboard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const AdminNetworkMonitor = dynamic(() => import('@/components/admin-network-monitor').then(mod => mod.AdminNetworkMonitor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 interface Student {
@@ -928,6 +929,8 @@ function AdminDashboard() {
         />
         <main className="flex-1 p-4 md:p-6 lg:p-8">
             {renderContent()}
+
+            <AdminNetworkMonitor />
 
             <Dialog open={isJudgeEditDialogOpen} onOpenChange={setIsJudgeEditDialogOpen}>
                 <DialogContent className="max-w-md">
