@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import {
+  createCompetitionBackup,
+  currentCompetitionHash,
+} from '@/lib/server/competition-backup';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -38,15 +42,47 @@ export async function POST(request: Request) {
 
     const { supabase, user, profile } = auth;
 
+    // La copia cifrada se crea y verifica antes de cualquier borrado.
+    const backup = await createCompetitionBackup(supabase, 'before_reset');
+
     // Si el schema actualizado ya está instalado, usamos la operación SQL atómica,
     // que es la única autorizada para retirar desempates sellados.
     const rpcReset = await supabase.rpc('reset_competition_results');
     if (!rpcReset.error) {
+      const newHash = await currentCompetitionHash(supabase);
+
+      const { data: settingsRow } = await supabase
+        .from('settings')
+        .select('data')
+        .eq('id', 'competition')
+        .maybeSingle();
+
+      const activeVersion = {
+        kind: 'current',
+        createdAt: new Date().toISOString(),
+        hash: newHash,
+        previousBackupId: backup.id,
+        previousBackupHash: backup.hash,
+      };
+
+      const settingsUpdate = await supabase
+        .from('settings')
+        .upsert({
+          id: 'competition',
+          data: {
+            ...(settingsRow?.data || {}),
+            activeVersion,
+          },
+        });
+      if (settingsUpdate.error) throw settingsUpdate.error;
+
       return NextResponse.json({
         ok: true,
         deletedScores: rpcReset.data?.deletedScores ?? 0,
         deletedTiebreaks: rpcReset.data?.deletedTiebreaks ?? 0,
         mode: 'database',
+        backup,
+        activeVersion,
       });
     }
 
@@ -124,11 +160,39 @@ export async function POST(request: Request) {
       },
     });
 
+    const newHash = await currentCompetitionHash(supabase);
+    const activeVersion = {
+      kind: 'current',
+      createdAt: new Date().toISOString(),
+      hash: newHash,
+      previousBackupId: backup.id,
+      previousBackupHash: backup.hash,
+    };
+
+    const { data: refreshedSettings } = await supabase
+      .from('settings')
+      .select('data')
+      .eq('id', 'competition')
+      .maybeSingle();
+
+    const versionUpdate = await supabase
+      .from('settings')
+      .upsert({
+        id: 'competition',
+        data: {
+          ...(refreshedSettings?.data || {}),
+          activeVersion,
+        },
+      });
+    if (versionUpdate.error) throw versionUpdate.error;
+
     return NextResponse.json({
       ok: true,
       deletedScores: scoreCount || 0,
       deletedTiebreaks: tiebreakCount || 0,
       mode: 'compatibility',
+      backup,
+      activeVersion,
     });
   } catch (cause) {
     console.error('Competition results reset failed:', cause);
