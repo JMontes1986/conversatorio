@@ -223,33 +223,98 @@ begin
   end loop;
 end $$;
 
--- Un desempate sellado es inmutable incluso para el administrador de la plataforma.
+-- Un desempate sellado es inmutable durante la competencia. La única excepción
+-- es el procedimiento administrativo de reinicio total de resultados.
 create or replace function private.protect_sealed_tiebreak() returns trigger
 language plpgsql set search_path = '' as $
 begin
+  if current_setting('app.conversatorio_admin_reset', true) = 'true'
+     and private.app_role() = 'admin' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
+
   if old.data->>'sealed' = 'true' then
     raise exception 'El desempate está sellado y no puede modificarse ni eliminarse.';
   end if;
-  return case when tg_op = 'DELETE' then old else new end;
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
 end $;
 drop trigger if exists protect_sealed_tiebreak on public.tiebreak;
 create trigger protect_sealed_tiebreak
 before update or delete on public.tiebreak
 for each row execute function private.protect_sealed_tiebreak();
 
--- La puntuación técnica asociada a un desempate sellado tampoco se puede alterar o borrar.
+-- La puntuación técnica asociada a un desempate sellado tampoco se puede alterar o borrar
+-- fuera del procedimiento oficial de reinicio.
 create or replace function private.protect_tiebreak_score() returns trigger
 language plpgsql set search_path = '' as $
 begin
+  if current_setting('app.conversatorio_admin_reset', true) = 'true'
+     and private.app_role() = 'admin' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
+
   if old.data ? 'tiebreakSealHash' then
     raise exception 'La puntuación de desempate está sellada y es inmutable.';
   end if;
-  return case when tg_op = 'DELETE' then old else new end;
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
 end $;
 drop trigger if exists protect_tiebreak_score on public.scores;
 create trigger protect_tiebreak_score
 before update or delete on public.scores
 for each row execute function private.protect_tiebreak_score();
+
+-- Reinicio administrativo de resultados. Es la única operación de la aplicación que
+-- puede retirar desempates sellados para iniciar un nuevo conversatorio.
+create or replace function public.reset_competition_results() returns jsonb
+language plpgsql security definer set search_path = '' as $
+declare
+  deleted_scores integer := 0;
+  deleted_tiebreaks integer := 0;
+begin
+  if private.app_role() is distinct from 'admin' then
+    raise exception 'Acceso reservado al administrador.';
+  end if;
+
+  perform set_config('app.conversatorio_admin_reset', 'true', true);
+
+  delete from public.tiebreak;
+  get diagnostics deleted_tiebreaks = row_count;
+
+  delete from public.scores;
+  get diagnostics deleted_scores = row_count;
+
+  update public.settings
+  set data = data
+    || jsonb_build_object(
+      'groupStageResultsPublished', false,
+      'semifinalsResultsPublished', false,
+      'finalsResultsPublished', false
+    )
+  where id = 'competition';
+
+  insert into public.audit_logs(data) values (jsonb_build_object(
+    'category', 'competition_reset',
+    'action', 'competition_results_reset',
+    'actorRole', 'admin',
+    'details', jsonb_build_object(
+      'deletedScores', deleted_scores,
+      'deletedTiebreaks', deleted_tiebreaks
+    )
+  ));
+
+  return jsonb_build_object(
+    'deletedScores', deleted_scores,
+    'deletedTiebreaks', deleted_tiebreaks
+  );
+end $;
+revoke all on function public.reset_competition_results() from public;
+grant execute on function public.reset_competition_results() to authenticated;
 
 -- Un jurado solo puntúa la ronda/equipos activos, con valores 1..5 por criterio.
 -- Los totales y su identidad se obtienen del servidor; no se confía en el formulario.
