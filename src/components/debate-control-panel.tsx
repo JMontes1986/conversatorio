@@ -50,7 +50,7 @@ import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { normalizeExternalImageUrl, isMicrosoftCloudImage } from '@/lib/external-image';
+import { externalImageDisplayUrl, normalizeExternalImageUrl, isMicrosoftCloudImage } from '@/lib/external-image';
 import {
     DEFAULT_TOURNAMENT_FORMAT,
     type TournamentFormat,
@@ -1073,7 +1073,7 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
                     {imageUrl && (
                         <div className="rounded-lg border bg-muted/20 p-2">
                             <img
-                                src={normalizeExternalImageUrl(imageUrl).displayUrl}
+                                src={externalImageDisplayUrl(imageUrl)}
                                 alt="Vista previa de barra lateral"
                                 className="mx-auto max-h-40 max-w-full object-contain"
                                 referrerPolicy="no-referrer"
@@ -1693,7 +1693,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                      {tempImageInput && (
                                         <div className="mt-2 text-center">
                                             <img
-                                                src={normalizeExternalImageUrl(tempImageInput).displayUrl}
+                                                src={externalImageDisplayUrl(tempImageInput)}
                                                 alt="Vista previa de imagen temporal"
                                                 className="mx-auto max-h-32 max-w-full rounded-md border object-contain"
                                                 referrerPolicy="no-referrer"
