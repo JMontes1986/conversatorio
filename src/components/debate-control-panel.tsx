@@ -312,6 +312,36 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
         })));
     }, [debateRounds, tournamentFormat]);
 
+    const loadDrawMatchup = useCallback((roundName: string, matchupTeams: string[]) => {
+        setCurrentRound(roundName);
+        const selectedRound = debateRounds.find((round) => round.name === roundName);
+        const teamsPerRound = selectedRound
+            ? formatForPhase(tournamentFormat, selectedRound.phase).teamsPerRound
+            : matchupTeams.length;
+
+        const normalizedTeams = [
+            ...matchupTeams.map((name) => ({
+                id: nanoid(),
+                name,
+                isBye: false,
+            })),
+            ...Array.from(
+                { length: Math.max(0, teamsPerRound - matchupTeams.length) },
+                () => ({
+                    id: nanoid(),
+                    name: '',
+                    isBye: false,
+                }),
+            ),
+        ];
+
+        setTeams(normalizedTeams);
+        toast({
+            title: "Ronda cargada",
+            description: `${roundName}: ${matchupTeams.join(" · ")}`,
+        });
+    }, [debateRounds, tournamentFormat, toast]);
+
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
         const validTeams = teams.filter(t => t.name.trim() !== '' && !t.isBye);
@@ -586,26 +616,89 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                     )}
                 </form>
                 {drawState && drawState.phases.length > 0 && (
-                    <div className="mt-8 pt-6 border-t">
-                        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
-                            <History className="h-5 w-5" /> Historial de Configuración
-                        </h3>
-                        <div className="space-y-4">
-                            {drawState.phases.map(phase => (
-                                <div key={phase.name}>
-                                    <h4 className="font-medium text-muted-foreground">{phase.name}</h4>
-                                    <ul className="mt-2 space-y-1 text-sm list-disc pl-5">
-                                        {phase.matchups.map(matchup => {
-                                            const isScored = allScores.some(score => score.matchId.startsWith(matchup.roundName));
+                    <div className="mt-8 border-t pt-6">
+                        <div className="mb-5">
+                            <h3 className="flex items-center gap-2 text-xl font-semibold">
+                                <History className="h-5 w-5" />
+                                Rondas definidas por el sorteo
+                            </h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Revise aquí cómo quedaron organizados los equipos. Puede cargar una ronda directamente para evitar errores al configurar el debate activo.
+                            </p>
+                        </div>
+
+                        <div className="space-y-6">
+                            {drawState.phases.map((phase) => (
+                                <div key={phase.name} className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h4 className="font-semibold text-muted-foreground">{phase.name}</h4>
+                                        <Badge variant="outline">
+                                            {phase.matchups.length} {phase.matchups.length === 1 ? "ronda" : "rondas"}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="grid gap-3 lg:grid-cols-2">
+                                        {phase.matchups.map((matchup) => {
+                                            const isScored = allScores.some(
+                                                (score) => score.matchId.startsWith(matchup.roundName),
+                                            );
+                                            const isActive = currentRound === matchup.roundName;
+
                                             return (
-                                                <li key={matchup.roundName} className="flex items-center gap-2">
-                                                    {isScored && <CheckCircle className="h-4 w-4 text-green-500" />}
-                                                    <span className="font-semibold">{matchup.roundName}:</span>
-                                                    <span className="ml-2">{matchup.teams.join(' vs ')}</span>
-                                                </li>
+                                                <div
+                                                    key={matchup.roundName}
+                                                    className={cn(
+                                                        "rounded-lg border p-4 transition-colors",
+                                                        isActive
+                                                            ? "border-primary bg-primary/5"
+                                                            : "bg-background",
+                                                    )}
+                                                >
+                                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="font-semibold">{matchup.roundName}</span>
+                                                                {isActive && (
+                                                                    <Badge>Ronda seleccionada</Badge>
+                                                                )}
+                                                                {isScored && (
+                                                                    <Badge variant="secondary" className="gap-1">
+                                                                        <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                                                                        Puntaje registrado
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                {matchup.teams.map((teamName, index) => (
+                                                                    <div
+                                                                        key={`${matchup.roundName}-${teamName}`}
+                                                                        className="rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                                                                    >
+                                                                        <span className="mr-1 text-xs text-muted-foreground">
+                                                                            Equipo {index + 1}
+                                                                        </span>
+                                                                        <span className="font-medium">{teamName}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant={isActive ? "secondary" : "outline"}
+                                                            onClick={() => loadDrawMatchup(matchup.roundName, matchup.teams)}
+                                                            disabled={isSubmitting}
+                                                        >
+                                                            <Send className="mr-2 h-4 w-4" />
+                                                            {isActive ? "Volver a cargar" : "Cargar esta ronda"}
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
-                                    </ul>
+                                    </div>
                                 </div>
                             ))}
                         </div>
