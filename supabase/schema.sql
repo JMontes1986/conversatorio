@@ -298,6 +298,10 @@ begin
     )
   where id = 'competition';
 
+  update public.debate_state
+  set data = data || jsonb_build_object('publicTiebreak', null)
+  where id = 'current';
+
   insert into public.audit_logs(data) values (jsonb_build_object(
     'category', 'competition_reset',
     'action', 'competition_results_reset',
