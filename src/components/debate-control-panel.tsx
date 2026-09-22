@@ -201,6 +201,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     const [loadingRounds, setLoadingRounds] = useState(true);
     const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
     const [sealedTiebreakRounds, setSealedTiebreakRounds] = useState<Set<string>>(new Set());
+    const [sealedTiebreakResults, setSealedTiebreakResults] = useState<Record<string, string[]>>({});
 
     useEffect(() => {
         setLoadingRounds(true);
@@ -226,11 +227,24 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
         const unsubscribeTiebreaks = onSnapshot(
             collection(db, "tiebreak"),
             (snapshot) => {
+                const sealedEntries = snapshot.docs
+                    .filter((entry) => entry.data().sealed === true)
+                    .map((entry) => ({
+                        roundName: String(entry.data().roundName || entry.id),
+                        selectedTeams: Array.isArray(entry.data().selectedTeams)
+                            ? entry.data().selectedTeams.map(String)
+                            : [],
+                    }));
+
                 setSealedTiebreakRounds(new Set(
-                    snapshot.docs
-                        .filter((entry) => entry.data().sealed === true)
-                        .map((entry) => String(entry.data().roundName || entry.id)),
+                    sealedEntries.map((entry) => entry.roundName),
                 ));
+
+                setSealedTiebreakResults(
+                    Object.fromEntries(
+                        sealedEntries.map((entry) => [entry.roundName, entry.selectedTeams]),
+                    ),
+                );
             },
             (error) => console.error("Error fetching sealed tiebreaks:", error),
         );
@@ -509,6 +523,58 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
 
     }, [debateRounds]);
 
+
+    const getClassifiedTeamsForMatchup = (
+        roundName: string,
+        phaseName: string,
+        matchupTeams: string[],
+    ) => {
+        const sealedSelection = sealedTiebreakResults[roundName];
+        if (sealedSelection?.length) {
+            return sealedSelection.filter((teamName) => matchupTeams.includes(teamName));
+        }
+
+        const qualifiersPerRound = formatForPhase(tournamentFormat, phaseName).qualifiersPerRound;
+        const totals = new Map<string, number>();
+
+        allScores
+            .filter((score) => score.judgeId !== 'system' && score.matchId.split('-bye-')[0] === roundName)
+            .forEach((score) => {
+                score.teams.forEach((team) => {
+                    if (!matchupTeams.includes(team.name)) return;
+                    totals.set(team.name, (totals.get(team.name) || 0) + team.total);
+                });
+            });
+
+        if (totals.size === 0) {
+            const byeWinner = allScores.find(
+                (score) => score.judgeId === 'system'
+                    && score.matchId.startsWith(`${roundName}-bye-`)
+                    && score.teams.some((team) => matchupTeams.includes(team.name)),
+            );
+            return byeWinner?.teams
+                .filter((team) => team.total > 0 && matchupTeams.includes(team.name))
+                .map((team) => team.name)
+                .slice(0, qualifiersPerRound) || [];
+        }
+
+        const ranking = Array.from(totals.entries())
+            .map(([teamName, total]) => ({ teamName, total }))
+            .sort((a, b) => b.total - a.total || a.teamName.localeCompare(b.teamName, 'es'));
+
+        if (ranking.length < qualifiersPerRound) return [];
+
+        const cutoff = ranking[qualifiersPerRound - 1];
+        const next = ranking[qualifiersPerRound];
+        if (cutoff && next && cutoff.total === next.total) {
+            return [];
+        }
+
+        return ranking
+            .slice(0, qualifiersPerRound)
+            .map((entry) => entry.teamName);
+    };
+
     const isByeRound = teams.some(t => t.isBye);
 
     return (
@@ -644,6 +710,11 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                                                 (score) => score.matchId.startsWith(matchup.roundName),
                                             );
                                             const isActive = currentRound === matchup.roundName;
+                                            const classifiedTeams = getClassifiedTeamsForMatchup(
+                                                matchup.roundName,
+                                                phase.name,
+                                                matchup.teams,
+                                            );
 
                                             return (
                                                 <div
@@ -671,18 +742,57 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                                                             </div>
 
                                                             <div className="mt-3 flex flex-wrap gap-2">
-                                                                {matchup.teams.map((teamName, index) => (
-                                                                    <div
-                                                                        key={`${matchup.roundName}-${teamName}`}
-                                                                        className="rounded-md border bg-muted/40 px-3 py-2 text-sm"
-                                                                    >
-                                                                        <span className="mr-1 text-xs text-muted-foreground">
-                                                                            Equipo {index + 1}
-                                                                        </span>
-                                                                        <span className="font-medium">{teamName}</span>
-                                                                    </div>
-                                                                ))}
+                                                                {matchup.teams.map((teamName, index) => {
+                                                                    const isClassified = classifiedTeams.includes(teamName);
+                                                                    return (
+                                                                        <div
+                                                                            key={`${matchup.roundName}-${teamName}`}
+                                                                            className={cn(
+                                                                                "rounded-md border px-3 py-2 text-sm",
+                                                                                isClassified
+                                                                                    ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
+                                                                                    : "bg-muted/40",
+                                                                            )}
+                                                                        >
+                                                                            <span className="mr-1 text-xs text-muted-foreground">
+                                                                                Equipo {index + 1}
+                                                                            </span>
+                                                                            <span className="font-medium">{teamName}</span>
+                                                                            {isClassified && (
+                                                                                <Badge className="ml-2 bg-emerald-600 hover:bg-emerald-600">
+                                                                                    <Crown className="mr-1 h-3 w-3" />
+                                                                                    Clasificado
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
+
+                                                            {isScored && (
+                                                                <div className="mt-3 text-sm">
+                                                                    {classifiedTeams.length > 0 ? (
+                                                                        <div className="flex flex-wrap items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                                                                            <Crown className="h-4 w-4" />
+                                                                            <span className="font-semibold">
+                                                                                Pasa a la siguiente fase:
+                                                                            </span>
+                                                                            {classifiedTeams.map((teamName) => (
+                                                                                <Badge key={teamName} variant="secondary">
+                                                                                    {teamName}
+                                                                                </Badge>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                                                                            <AlertTriangle className="h-4 w-4" />
+                                                                            <span>
+                                                                                Clasificación pendiente de resolver.
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         <Button
