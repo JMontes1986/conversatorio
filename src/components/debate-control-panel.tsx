@@ -52,6 +52,7 @@ import { useModeratorAuth } from '@/context/moderator-auth-context';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { normalizeExternalImageUrl, isMicrosoftCloudImage } from '@/lib/external-image';
+import { isMicrosoftVideoSource, normalizeVideoSource, serializeVideoSource } from '@/lib/external-video';
 import { ExternalImage } from '@/components/external-image';
 import {
     DEFAULT_TOURNAMENT_FORMAT,
@@ -1443,9 +1444,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
 
         try {
+            const normalizedVideo = normalizeVideoSource(videoValue);
+            const videoUrl = serializeVideoSource(normalizedVideo);
+
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: videoValue,
+                videoUrl,
                 question: "",
                 questionId: "",
                 temporaryImageUrl: "",
@@ -1454,7 +1458,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Video enviado a pantalla (asociado a pregunta: "${question.text.substring(0, 30)}...")`, userContext);
 
-            toast({ title: "Video Enviado", description: "El video es ahora visible." });
+            toast({
+                title: "Video Enviado",
+                description: isMicrosoftVideoSource(videoValue)
+                    ? "El enlace de OneDrive/SharePoint se convirtió a reproducción directa."
+                    : "El video es ahora visible."
+            });
         } catch (error) {
              console.error("Error setting video: ", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
@@ -1556,9 +1565,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
         setIsSendingTempMessage(true);
         try {
+            const normalizedVideo = normalizeVideoSource(tempVideoInput);
+            const videoUrl = serializeVideoSource(normalizedVideo);
+
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: tempVideoInput,
+                videoUrl,
                 question: "",
                 questionId: "",
                 temporaryImageUrl: "",
@@ -1567,7 +1579,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Video temporal enviado.`, userContext);
             
-            toast({ title: "Video Temporal Enviado" });
+            toast({
+                title: "Video Temporal Enviado",
+                description: isMicrosoftVideoSource(tempVideoInput)
+                    ? "El enlace de OneDrive/SharePoint se convirtió a reproducción directa."
+                    : undefined,
+            });
         } catch (error) {
             console.error("Error sending temporary video:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
@@ -1653,12 +1670,20 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
 
     const handleSaveVideoLink = async (questionId: string) => {
         setSavingVideoId(questionId);
-        const urlToSave = videoInputs[questionId] || "";
+        const rawVideoValue = videoInputs[questionId] || "";
 
         try {
+            const normalizedVideo = normalizeVideoSource(rawVideoValue);
+            const urlToSave = serializeVideoSource(normalizedVideo);
             const questionRef = doc(db, "questions", questionId);
             await updateDoc(questionRef, { videoUrl: urlToSave });
-            toast({ title: "Video Guardado", description: "El video se ha asociado a la pregunta." });
+            setVideoInputs((prev: any) => ({ ...prev, [questionId]: urlToSave }));
+            toast({
+                title: "Video Guardado",
+                description: isMicrosoftVideoSource(rawVideoValue)
+                    ? "El vínculo de OneDrive/SharePoint quedó convertido a reproducción directa."
+                    : "El video se ha asociado a la pregunta."
+            });
         } catch (error) {
             console.error("Error saving video link:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el video." });
