@@ -196,6 +196,7 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
     const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
+    const [sealedTiebreakRounds, setSealedTiebreakRounds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         setLoadingRounds(true);
@@ -218,9 +219,22 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             (error) => console.error("Error fetching tournament format:", error),
         );
 
+        const unsubscribeTiebreaks = onSnapshot(
+            collection(db, "tiebreak"),
+            (snapshot) => {
+                setSealedTiebreakRounds(new Set(
+                    snapshot.docs
+                        .filter((entry) => entry.data().sealed === true)
+                        .map((entry) => String(entry.data().roundName || entry.id)),
+                ));
+            },
+            (error) => console.error("Error fetching sealed tiebreaks:", error),
+        );
+
         return () => {
             unsubscribeRounds();
             unsubscribeSettings();
+            unsubscribeTiebreaks();
         };
     }, []);
     
@@ -233,51 +247,53 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
 
         allScores.forEach(score => {
             if (score.judgeId === 'system') return;
-            
+
             const roundName = score.matchId.split('-bye-')[0];
-            if (!roundTotals[roundName]) {
-                roundTotals[roundName] = {};
-            }
+            if (!roundTotals[roundName]) roundTotals[roundName] = {};
             score.teams.forEach(team => {
-                if (!roundTotals[roundName][team.name]) {
-                    roundTotals[roundName][team.name] = 0;
-                }
-                roundTotals[roundName][team.name] += team.total;
+                roundTotals[roundName][team.name] = (roundTotals[roundName][team.name] || 0) + team.total;
             });
         });
-        
+
         const sortedRoundNames = Object.keys(roundTotals).sort();
 
         for (const roundName of sortedRoundNames) {
-            const totals = roundTotals[roundName];
-            const scores = Object.values(totals);
-            
-            const scoreCounts = scores.reduce((acc, score) => {
-                acc[score] = (acc[score] || 0) + 1;
-                return acc;
-            }, {} as Record<number, number>);
+            if (sealedTiebreakRounds.has(roundName)) continue;
 
-            const tiedScore = Object.keys(scoreCounts).find(score => scoreCounts[parseInt(score)] > 1);
+            const round = debateRounds.find((candidate) => candidate.name === roundName);
+            if (!round) continue;
 
-            if (tiedScore) {
-                const tiedValue = parseInt(tiedScore);
-                const teamsInTie = Object.keys(totals).filter(team => totals[team] === tiedValue);
-                
-                const tieBreakerExists = allScores.some(s => s.matchId === roundName && s.judgeId === 'system');
+            const qualifiersPerRound = formatForPhase(tournamentFormat, round.phase).qualifiersPerRound;
+            const ranking = Object.entries(roundTotals[roundName])
+                .map(([team, score]) => ({ team, score }))
+                .sort((a, b) => b.score - a.score || a.team.localeCompare(b.team, 'es'));
 
-                if (!tieBreakerExists && teamsInTie.length > 1) {
-                    return {
-                        roundName: roundName,
-                        team1: teamsInTie[0],
-                        team2: teamsInTie[1],
-                        score: tiedValue,
-                    };
-                }
+            if (ranking.length <= qualifiersPerRound) continue;
+
+            const cutoff = ranking[qualifiersPerRound - 1];
+            const next = ranking[qualifiersPerRound];
+            if (!cutoff || !next || cutoff.score !== next.score) continue;
+
+            const tiedScore = cutoff.score;
+            const teamsAbove = ranking.filter((entry) => entry.score > tiedScore);
+            const teamsInTie = ranking
+                .filter((entry) => entry.score === tiedScore)
+                .map((entry) => entry.team);
+            const slotsAvailable = qualifiersPerRound - teamsAbove.length;
+
+            if (slotsAvailable > 0 && teamsInTie.length > slotsAvailable) {
+                return {
+                    roundName,
+                    teams: teamsInTie,
+                    score: tiedScore,
+                    qualifiersPerRound,
+                    slotsAvailable,
+                };
             }
         }
 
         return null;
-    }, [allScores]);
+    }, [allScores, debateRounds, sealedTiebreakRounds, tournamentFormat]);
 
 
     const handleRoundChange = useCallback((roundName: string) => {
@@ -482,8 +498,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                         <CardContent>
                             <TieBreaker
                                 roundName={unresolvedTieInfo.roundName}
-                                team1={unresolvedTieInfo.team1}
-                                team2={unresolvedTieInfo.team2}
+                                teams={unresolvedTieInfo.teams}
+                                slotsAvailable={unresolvedTieInfo.slotsAvailable}
                             />
                         </CardContent>
                     </Card>
