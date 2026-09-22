@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { collection, doc, onSnapshot } from "@/lib/documents";
+import { collection, doc, onSnapshot, setDoc } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import { TieBreaker } from "@/components/tie-breaker";
 import {
@@ -14,6 +14,8 @@ import {
 } from "@/lib/tournament-format";
 import { detectUnresolvedTiebreaks } from "@/lib/tiebreak-detection";
 import type { SealedTiebreak } from "@/lib/tiebreak-integrity";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 type ScoreData = {
   id: string;
@@ -36,8 +38,15 @@ export function TiebreakManagementTab({
   allScores: ScoreData[];
   allRounds: RoundData[];
 }) {
+  const { toast } = useToast();
   const [format, setFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
   const [sealed, setSealed] = useState<Array<SealedTiebreak & { id: string }>>([]);
+  const [publicTiebreak, setPublicTiebreak] = useState<{
+    active?: boolean;
+    status?: "ready" | "resolved";
+    roundName?: string;
+  } | null>(null);
+  const [closingRound, setClosingRound] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribeSettings = onSnapshot(
@@ -61,9 +70,23 @@ export function TiebreakManagementTab({
       (error) => console.error("Error loading tiebreaks:", error),
     );
 
+    const unsubscribeDebateState = onSnapshot(
+      doc(db, "debateState", "current"),
+      (snapshot) => {
+        const data = snapshot.exists() ? snapshot.data() : {};
+        setPublicTiebreak((data.publicTiebreak || null) as {
+          active?: boolean;
+          status?: "ready" | "resolved";
+          roundName?: string;
+        } | null);
+      },
+      (error) => console.error("Error loading public tiebreak state:", error),
+    );
+
     return () => {
       unsubscribeSettings();
       unsubscribeTiebreaks();
+      unsubscribeDebateState();
     };
   }, []);
 
@@ -76,6 +99,49 @@ export function TiebreakManagementTab({
     () => detectUnresolvedTiebreaks(allScores, allRounds, format, sealedRoundNames),
     [allScores, allRounds, format, sealedRoundNames],
   );
+
+  const closeResolvedTiebreak = async (roundName: string) => {
+    if (
+      !publicTiebreak?.active
+      || publicTiebreak.status !== "resolved"
+      || publicTiebreak.roundName !== roundName
+    ) {
+      toast({
+        title: "Ya no está visible",
+        description: "Ese desempate ya fue retirado de la pantalla pública.",
+      });
+      return;
+    }
+
+    setClosingRound(roundName);
+    try {
+      await setDoc(
+        doc(db, "debateState", "current"),
+        {
+          publicTiebreak: {
+            ...publicTiebreak,
+            active: false,
+            closedAt: Date.now(),
+          },
+        },
+        { merge: true },
+      );
+
+      toast({
+        title: "Ventana de desempate cerrada",
+        description: "La pantalla de Debate volvió al contenido normal. El hash y el resultado sellado permanecen guardados.",
+      });
+    } catch (error) {
+      console.error("Error closing public tiebreak:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo cerrar",
+        description: "No se pudo retirar el desempate de la pantalla pública.",
+      });
+    } finally {
+      setClosingRound(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -136,14 +202,42 @@ export function TiebreakManagementTab({
                         Clasifica: {entry.selectedTeams.join(", ")}
                       </p>
                     </div>
-                    <Badge variant="outline" className="gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      SHA-256
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {publicTiebreak?.active
+                        && publicTiebreak.status === "resolved"
+                        && publicTiebreak.roundName === entry.roundName && (
+                          <Badge variant="secondary" className="gap-1">
+                            <Eye className="h-3.5 w-3.5" />
+                            Visible en Debate
+                          </Badge>
+                        )}
+                      <Badge variant="outline" className="gap-1">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        SHA-256
+                      </Badge>
+                    </div>
                   </div>
                   <code className="mt-3 block break-all rounded bg-muted px-3 py-2 text-[11px]">
                     {entry.integrity.hash}
                   </code>
+
+                  {publicTiebreak?.active
+                    && publicTiebreak.status === "resolved"
+                    && publicTiebreak.roundName === entry.roundName && (
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => closeResolvedTiebreak(entry.roundName)}
+                          disabled={closingRound === entry.roundName}
+                        >
+                          {closingRound === entry.roundName
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            : <EyeOff className="mr-2 h-4 w-4" />}
+                          Cerrar en Debate
+                        </Button>
+                      </div>
+                    )}
                 </div>
               ))}
           </CardContent>
