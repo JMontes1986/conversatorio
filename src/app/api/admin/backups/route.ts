@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import {
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Acceso reservado al administrador.' }, { status: 403 });
     }
 
-    const backup = await createCompetitionBackup(auth.supabase, 'before_reset');
+    const backup = await createCompetitionBackup(auth.supabase, 'manual');
     return NextResponse.json({ backup }, { status: 201 });
   } catch (cause) {
     console.error('Manual backup failed:', cause);
@@ -157,7 +158,7 @@ export async function PUT(request: Request) {
     }
 
     await auth.supabase.from('audit_logs').insert({
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       data: {
         category: 'competition_restore',
         action: 'encrypted_backup_restored',
