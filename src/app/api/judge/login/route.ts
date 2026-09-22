@@ -100,6 +100,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'La cuenta del jurado está inactiva.' }, { status: 403 });
     }
 
+    if (judge.data?.passwordConfigured !== true) {
+      await writeAudit('judge_login_failed', identifier, request, {
+        reason: 'password_migration_required',
+        subjectId: profile.subject_id,
+        subjectName: profile.display_name,
+      });
+      return NextResponse.json({
+        error: 'El administrador debe asignar una nueva contraseña a este jurado.',
+      }, { status: 403 });
+    }
+
     await writeAudit('judge_login_success', identifier, request, {
       subjectId: profile.subject_id,
       subjectName: profile.display_name,
