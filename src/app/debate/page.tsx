@@ -10,6 +10,7 @@ import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
+import { normalizeExternalImageUrl } from '@/lib/external-image';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
@@ -183,7 +184,12 @@ export default function DebatePage() {
 
                  {showImage ? (
                      <div className="w-full h-full flex items-center justify-center">
-                        <Image src={temporaryImageUrl!} alt="Imagen temporal" width={600} height={400} className="object-contain rounded-lg max-w-full max-h-full" />
+                        <img
+                          src={normalizeExternalImageUrl(temporaryImageUrl!).displayUrl}
+                          alt="Imagen temporal"
+                          className="max-h-full max-w-full rounded-lg object-contain"
+                          referrerPolicy="no-referrer"
+                        />
                     </div>
                 ) : showVideo ? (
                     <div className="w-full h-full flex items-center justify-center">
@@ -213,13 +219,17 @@ export default function DebatePage() {
                              </Link>
                         </>
                     ) : (
-                         <div className="relative w-full h-full">
-                            <Image
-                                src={sidebarImageUrl || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}
+                         <div className="relative flex h-full w-full items-center justify-center">
+                            {sidebarImageUrl ? (
+                              <img
+                                src={normalizeExternalImageUrl(sidebarImageUrl).displayUrl}
                                 alt="Imagen de barra lateral"
-                                fill
-                                className="object-contain"
-                            />
+                                className="max-h-full max-w-full object-contain"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="text-sm text-muted-foreground">Sin imagen de barra lateral</span>
+                            )}
                         </div>
                     )}
                  </div>
