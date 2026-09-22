@@ -909,7 +909,7 @@ function AdminDashboard() {
                     </CardContent>
                 </Card>
 
-                <FinalResultCard scores={scores} resultsPublished={true} loading={loading} />
+                <FinalResultCard scores={scores} rounds={allRounds} resultsPublished={true} loading={loading} />
                 
                 <TournamentBracket />
             </div>
