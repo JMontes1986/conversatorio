@@ -21,6 +21,7 @@ import { Switch } from './ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
+import { CompetitionBackupManager } from '@/components/competition-backup-manager';
 
 
 const SETTINGS_DOC_ID = "competition";
@@ -170,9 +171,10 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
             if (!response.ok) throw new Error(result.error || "No se pudieron reiniciar los resultados.");
 
             toast({
-                title: "Resultados Reiniciados",
-                description: `Se eliminaron ${result.deletedScores ?? 0} puntuaciones y ${result.deletedTiebreaks ?? 0} desempates sellados. La publicación de resultados volvió a quedar desactivada.`
+                title: "Resultados Reiniciados con Backup",
+                description: `Se creó una copia cifrada antes del reinicio. SHA-256: ${result.backup?.hash || "ver historial de versiones"}. Se eliminaron ${result.deletedScores ?? 0} puntuaciones y ${result.deletedTiebreaks ?? 0} desempates sellados.`
             });
+            window.dispatchEvent(new Event("competition-version-changed"));
         } catch (error) {
             console.error("Error resetting scores:", error);
             toast({
@@ -382,7 +384,7 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Esta acción eliminará todas las puntuaciones y los desempates sellados de la competencia actual, y ocultará nuevamente los resultados publicados. Úsela únicamente para iniciar un nuevo conversatorio. No podrá recuperar estos datos.
+                                        Antes de eliminar las puntuaciones y los desempates, el sistema creará y verificará automáticamente una copia de seguridad cifrada. Después podrá restaurarla desde “Versiones y Copias de Seguridad”.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -456,6 +458,8 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                     </div>
                 </CardContent>
             </Card>
+
+            <CompetitionBackupManager />
         </div>
     );
 }
