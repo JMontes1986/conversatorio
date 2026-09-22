@@ -5,7 +5,7 @@ import { gzipSync, gunzipSync } from "node:zlib";
 
 type SupabaseAdmin = any;
 
-export type BackupReason = "before_reset" | "before_restore";
+export type BackupReason = "before_reset" | "before_restore" | "manual";
 
 export type SnapshotRow = {
   id: string;
@@ -401,7 +401,7 @@ export async function restoreCompetitionSnapshot(
 }
 
 export function backupReasonLabel(reason: BackupReason) {
-  return reason === "before_restore"
-    ? "Antes de restaurar una versión"
-    : "Antes de reiniciar resultados";
+  if (reason === "before_restore") return "Antes de restaurar una versión";
+  if (reason === "manual") return "Backup manual";
+  return "Antes de reiniciar resultados";
 }
