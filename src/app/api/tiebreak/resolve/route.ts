@@ -263,6 +263,7 @@ export async function POST(request: Request) {
               selectedTeams: resolved.selectedTeams,
               integrityHash: integrity.hash,
               resolvedAt: Date.now(),
+              sealedRecord: record,
             },
           },
         },
