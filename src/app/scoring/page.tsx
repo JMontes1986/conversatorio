@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -80,6 +80,7 @@ function ScoringPanel() {
   const [loadingRubric, setLoadingRubric] = useState(true);
   const [roundOutcomes, setRoundOutcomes] = useState<Record<string, RoundOutcome>>({});
   const [loadingOutcomes, setLoadingOutcomes] = useState(false);
+  const hydratedDraftKey = useRef<string | null>(null);
 
   useEffect(() => {
     const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -208,6 +209,59 @@ function ScoringPanel() {
       };
   }, [judge?.id, debateState.currentRound, pastScores]);
   
+  useEffect(() => {
+      if (!judge?.id || !debateState.currentRound || debateState.currentRound === 'N/A') return;
+
+      const key = `conversatorio:score-draft:${judge.id}:${debateState.currentRound}`;
+      if (hydratedDraftKey.current === key) return;
+
+      hydratedDraftKey.current = key;
+      try {
+          const stored = window.localStorage.getItem(key);
+          if (!stored) return;
+
+          const parsed = JSON.parse(stored) as {
+              teams?: string[];
+              scores?: Record<string, Record<string, number>>;
+          };
+          const currentTeams = debateState.teams.map((team) => team.name).sort();
+          const storedTeams = [...(parsed.teams || [])].sort();
+
+          if (
+              JSON.stringify(currentTeams) === JSON.stringify(storedTeams)
+              && parsed.scores
+          ) {
+              setScores(parsed.scores);
+              toast({
+                  title: "Borrador recuperado",
+                  description: "Se restauraron las calificaciones guardadas en este dispositivo.",
+              });
+          }
+      } catch (error) {
+          console.error("Error restoring score draft:", error);
+      }
+  }, [judge?.id, debateState.currentRound, debateState.teams, toast]);
+
+  useEffect(() => {
+      if (!judge?.id || !debateState.currentRound || debateState.currentRound === 'N/A') return;
+      const key = `conversatorio:score-draft:${judge.id}:${debateState.currentRound}`;
+
+      const hasAnyScore = Object.values(scores).some((criterionScores) =>
+          Object.keys(criterionScores || {}).length > 0,
+      );
+      if (!hasAnyScore) return;
+
+      try {
+          window.localStorage.setItem(key, JSON.stringify({
+              teams: debateState.teams.map((team) => team.name),
+              scores,
+              savedAt: Date.now(),
+          }));
+      } catch (error) {
+          console.error("Error saving score draft:", error);
+      }
+  }, [scores, judge?.id, debateState.currentRound, debateState.teams]);
+
   const hasAlreadyScoredCurrentRound = useMemo(() => {
     if (!judge || !debateState.currentRound || pastScores.length === 0) {
         return false;
@@ -291,6 +345,13 @@ function ScoringPanel() {
             title: "Puntuación Enviada",
             description: "Sus calificaciones han sido registradas exitosamente.",
         });
+        if (judge?.id && debateState.currentRound) {
+            try {
+                window.localStorage.removeItem(
+                    `conversatorio:score-draft:${judge.id}:${debateState.currentRound}`,
+                );
+            } catch {}
+        }
         const resetScores: Record<string, Record<string, number>> = {};
         debateState.teams.forEach(team => {
             resetScores[team.name] = {};
