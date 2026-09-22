@@ -44,6 +44,7 @@ import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
 import { TieBreaker } from './tie-breaker';
+import { TiebreakManagementTab } from './tiebreak-management-tab';
 import { logActivity } from '@/lib/audit-log';
 import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
@@ -1546,11 +1547,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     </CardContent>
                 </Card>
                 <Tabs defaultValue="round-config" className="w-full">
-                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-6 h-auto sm:h-10">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-7 h-auto sm:h-10">
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
                         <TabsTrigger value="scoring-status"><ClipboardCheck className="mr-2 h-4 w-4"/>Puntuaciones</TabsTrigger>
+                        <TabsTrigger value="tiebreaks"><Dices className="mr-2 h-4 w-4"/>Empates</TabsTrigger>
                         <TabsTrigger value="messages"><Send className="mr-2 h-4 w-4"/>Mensajes</TabsTrigger>
                         <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
@@ -1583,6 +1585,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     </TabsContent>
                      <TabsContent value="scoring-status">
                         <ScoringStatusTracker allRounds={debateRounds} allJudges={allJudges} allScores={allScores} />
+                    </TabsContent>
+                    <TabsContent value="tiebreaks">
+                        <TiebreakManagementTab allScores={allScores} allRounds={debateRounds} />
                     </TabsContent>
                     <TabsContent value="messages">
                         <Card>
