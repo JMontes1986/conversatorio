@@ -1,0 +1,102 @@
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
+import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+
+function serverClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Falta configurar Supabase en el servidor.');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+async function authorizeAdmin(request: Request) {
+  const token = request.headers.get('authorization')?.replace(/^Bearer /, '');
+  if (!token) return null;
+
+  const supabase = serverClient();
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role,display_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profileError || profile?.role !== 'admin') return null;
+  return { supabase, user, profile };
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await authorizeAdmin(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Acceso reservado al administrador.' }, { status: 403 });
+    }
+
+    const { supabase, user, profile } = auth;
+
+    const [{ count: scoreCount, error: scoreCountError }, { count: tiebreakCount, error: tiebreakCountError }] = await Promise.all([
+      supabase.from('scores').select('id', { count: 'exact', head: true }),
+      supabase.from('tiebreak').select('id', { count: 'exact', head: true }),
+    ]);
+    if (scoreCountError) throw scoreCountError;
+    if (tiebreakCountError) throw tiebreakCountError;
+
+    // El service role solo se usa dentro de esta ruta protegida. Permite limpiar
+    // registros sellados durante un reinicio explícito sin exponer esa capacidad al cliente.
+    const deleteTiebreaks = await supabase.from('tiebreak').delete().neq('id', '__never__');
+    if (deleteTiebreaks.error) throw deleteTiebreaks.error;
+
+    const deleteScores = await supabase.from('scores').delete().neq('id', '__never__');
+    if (deleteScores.error) throw deleteScores.error;
+
+    const { data: settingsRow, error: settingsReadError } = await supabase
+      .from('settings')
+      .select('data')
+      .eq('id', 'competition')
+      .maybeSingle();
+    if (settingsReadError) throw settingsReadError;
+
+    const settingsUpdate = await supabase
+      .from('settings')
+      .update({
+        data: {
+          ...(settingsRow?.data || {}),
+          groupStageResultsPublished: false,
+          semifinalsResultsPublished: false,
+          finalsResultsPublished: false,
+        },
+      })
+      .eq('id', 'competition');
+    if (settingsUpdate.error) throw settingsUpdate.error;
+
+    await supabase.from('audit_logs').insert({
+      id: randomUUID(),
+      data: {
+        category: 'competition_reset',
+        action: 'competition_results_reset',
+        actorRole: 'admin',
+        actorId: user.id,
+        subjectName: profile.display_name,
+        details: {
+          deletedScores: scoreCount || 0,
+          deletedTiebreaks: tiebreakCount || 0,
+        },
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      deletedScores: scoreCount || 0,
+      deletedTiebreaks: tiebreakCount || 0,
+    });
+  } catch (cause) {
+    console.error('Competition results reset failed:', cause);
+    return NextResponse.json({
+      error: 'No se pudieron reiniciar los resultados. Revisa la configuración de Supabase del servidor.',
+    }, { status: 500 });
+  }
+}
