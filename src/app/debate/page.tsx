@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+import { PublicTiebreakDisplay } from '@/components/public-tiebreak-display';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -23,6 +24,7 @@ interface StudentQuestionOverlay {
 }
 
 interface DebateState {
+  currentRound?: string;
   question: string;
   questionId: string;
   videoUrl: string;
@@ -132,6 +134,8 @@ export default function DebatePage() {
 
   return (
     <div className="relative flex flex-col min-h-screen bg-secondary text-foreground p-4 md:p-8">
+        <PublicTiebreakDisplay roundName={debateState.currentRound} />
+
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
