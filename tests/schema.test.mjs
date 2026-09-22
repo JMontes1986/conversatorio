@@ -141,5 +141,13 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     await as('authenticated', admin);
     await write([{ table: 'scores', id: 'score-1', operation: 'delete' }]);
     assert.equal(await count('scores'), 0);
+
+    const resetResult = (await pg.query('select reset_competition_results() as result')).rows[0].result;
+    assert.equal(resetResult.deletedTiebreaks, 1);
+    assert.equal(await count('tiebreak'), 0);
+    const resetSettings = (await pg.query("select data from settings where id='competition'")).rows[0].data;
+    assert.equal(resetSettings.groupStageResultsPublished, false);
+    assert.equal(resetSettings.semifinalsResultsPublished, false);
+    assert.equal(resetSettings.finalsResultsPublished, false);
   } finally { await pg.close(); }
 });
