@@ -80,6 +80,7 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({ url }) => {
         controls
         autoPlay
         playsInline
+        preload="metadata"
         className="h-full w-full rounded-lg bg-black object-contain"
         onError={() => setFailed(true)}
       >
