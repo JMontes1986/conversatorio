@@ -47,6 +47,8 @@ export function ExternalImage({
       alt={alt}
       className={className}
       referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );
