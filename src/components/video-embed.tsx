@@ -1,67 +1,90 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo, useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import { normalizeVideoSource } from "@/lib/external-video";
 
 interface VideoEmbedProps {
   url: string;
 }
 
-const getYouTubeId = (url: string): string | null => {
-  try {
-    const urlObj = new URL(url);
-    if (urlObj.hostname === 'youtu.be') {
-      return urlObj.pathname.slice(1);
-    }
-    if (urlObj.hostname.includes('youtube.com')) {
-      const videoId = urlObj.searchParams.get('v');
-      if (videoId) return videoId;
-    }
-  } catch (error) {
-    // Not a valid URL, probably not a youtube link
-  }
-  return null;
-};
-
-const isIframeString = (str: string): boolean => {
-    return str.trim().startsWith('<iframe');
-}
-
-
 export const VideoEmbed: React.FC<VideoEmbedProps> = ({ url }) => {
-  const youTubeId = getYouTubeId(url);
+  const [failed, setFailed] = useState(false);
 
-  if (youTubeId) {
+  const source = useMemo(() => {
+    try {
+      return normalizeVideoSource(url);
+    } catch {
+      return null;
+    }
+  }, [url]);
+
+  if (!source) {
+    return (
+      <div className="flex min-h-[300px] w-full items-center justify-center rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+        <div>
+          <AlertTriangle className="mx-auto mb-2 h-6 w-6" />
+          <p>No se pudo interpretar el enlace o código de video.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (source.kind === "youtube") {
     return (
       <div className="aspect-video w-full">
         <iframe
-          src={`https://www.youtube.com/embed/${youTubeId}?autoplay=1`}
+          src={`https://www.youtube.com/embed/${source.id}?autoplay=1`}
           title="YouTube video player"
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
-          className="w-full h-full rounded-lg"
-        ></iframe>
+          className="h-full w-full rounded-lg"
+        />
       </div>
     );
   }
-  
-  if (isIframeString(url)) {
+
+  if (source.kind === "iframe") {
     return (
-         <div className="aspect-video w-full" dangerouslySetInnerHTML={{ __html: url }} />
-    )
+      <div className="aspect-video w-full">
+        <iframe
+          src={source.url}
+          title="Video embebido"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowFullScreen
+          className="h-full w-full rounded-lg border-0"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
   }
 
-  // Use a standard video tag for direct media links, including Supabase Storage.
+  if (failed) {
+    return (
+      <div className="flex min-h-[300px] w-full items-center justify-center rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+        <div>
+          <AlertTriangle className="mx-auto mb-2 h-6 w-6" />
+          <p>
+            No se pudo reproducir el video. Si está en OneDrive/SharePoint, asegúrese de compartirlo para acceso público mediante vínculo.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="aspect-video w-full">
-        <video
-            src={url}
-            controls
-            autoPlay
-            className="w-full h-full rounded-lg bg-black"
-        >
-            Tu navegador no soporta el tag de video.
-        </video>
+      <video
+        src={source.url}
+        controls
+        autoPlay
+        playsInline
+        className="h-full w-full rounded-lg bg-black object-contain"
+        onError={() => setFailed(true)}
+      >
+        Tu navegador no soporta la reproducción de video.
+      </video>
     </div>
   );
 };
