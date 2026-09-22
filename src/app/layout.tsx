@@ -9,6 +9,7 @@ import { inter, spaceGrotesk } from './fonts';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
+import { NetworkResilience } from '@/components/network-resilience';
 
 export const metadata: Metadata = {
   title: 'Conversatorio Colgemelli - Plataforma de Debate',
@@ -36,6 +37,7 @@ export default function RootLayout({
                 {children}
               </main>
               <Footer />
+              <NetworkResilience />
               <Toaster />
             </ModeratorProvider>
           </JudgeProvider>
