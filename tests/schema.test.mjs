@@ -33,7 +33,7 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
         ('${admin}','admin',null,'Admin','admin@example.com'),
         ('${judge}','judge','judge-1','Jurado Uno','123'),
         ('${moderator}','moderator','mod-1','Moderador','moderador');
-      insert into public.judges(id,data) values ('judge-1','{"name":"Jurado Uno","cedula":"123","token":"private-token","status":"active"}');
+      insert into public.judges(id,data) values ('judge-1','{"name":"Jurado Uno","cedula":"123","status":"active","passwordConfigured":true}');
       insert into public.moderators(id,data) values ('mod-1','{"username":"moderador","token":"private-token","status":"active"}');
     `);
     async function as(role, id = '') {
@@ -75,6 +75,7 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     assert.equal(saved.teams[0].total, 4);
     assert.equal(saved.judgeName, 'Jurado Uno');
     assert.equal(saved.judgeCedula, undefined);
+    assert.equal(Number((await pg.query("select count(*) as n from audit_logs where data->>'action'='judge_score_submitted'")).rows[0].n), 1);
     await assert.rejects(write([{ table: 'scores', id: 'duplicate', operation: 'insert', data: validScore }]), /unique constraint/);
     await as('anon');
     assert.equal(await count('scores'), 0);
