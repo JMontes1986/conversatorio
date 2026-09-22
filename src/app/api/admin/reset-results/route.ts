@@ -38,6 +38,24 @@ export async function POST(request: Request) {
 
     const { supabase, user, profile } = auth;
 
+    // Si el schema actualizado ya está instalado, usamos la operación SQL atómica,
+    // que es la única autorizada para retirar desempates sellados.
+    const rpcReset = await supabase.rpc('reset_competition_results');
+    if (!rpcReset.error) {
+      return NextResponse.json({
+        ok: true,
+        deletedScores: rpcReset.data?.deletedScores ?? 0,
+        deletedTiebreaks: rpcReset.data?.deletedTiebreaks ?? 0,
+        mode: 'database',
+      });
+    }
+
+    // Compatibilidad temporal con bases que aún no tienen la RPC instalada.
+    // Solo hacemos fallback cuando PostgREST indica que la función no existe.
+    const missingRpc = rpcReset.error.code === 'PGRST202'
+      || /reset_competition_results/i.test(rpcReset.error.message || '');
+    if (!missingRpc) throw rpcReset.error;
+
     const [{ count: scoreCount, error: scoreCountError }, { count: tiebreakCount, error: tiebreakCountError }] = await Promise.all([
       supabase.from('scores').select('id', { count: 'exact', head: true }),
       supabase.from('tiebreak').select('id', { count: 'exact', head: true }),
@@ -92,6 +110,7 @@ export async function POST(request: Request) {
       ok: true,
       deletedScores: scoreCount || 0,
       deletedTiebreaks: tiebreakCount || 0,
+      mode: 'compatibility',
     });
   } catch (cause) {
     console.error('Competition results reset failed:', cause);
