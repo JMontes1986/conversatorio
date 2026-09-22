@@ -9,7 +9,7 @@ import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
-import { externalImageDisplayUrl } from '@/lib/external-image';
+import { ExternalImage } from '@/components/external-image';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
@@ -183,11 +183,11 @@ export default function DebatePage() {
 
                  {showImage ? (
                      <div className="w-full h-full flex items-center justify-center">
-                        <img
-                          src={externalImageDisplayUrl(temporaryImageUrl!)}
+                        <ExternalImage
+                          src={temporaryImageUrl!}
                           alt="Imagen temporal"
                           className="max-h-full max-w-full rounded-lg object-contain"
-                          referrerPolicy="no-referrer"
+                          fallbackClassName="min-h-[300px]"
                         />
                     </div>
                 ) : showVideo ? (
@@ -220,11 +220,11 @@ export default function DebatePage() {
                     ) : (
                          <div className="relative flex h-full w-full items-center justify-center">
                             {sidebarImageUrl ? (
-                              <img
-                                src={externalImageDisplayUrl(sidebarImageUrl)}
+                              <ExternalImage
+                                src={sidebarImageUrl}
                                 alt="Imagen de barra lateral"
                                 className="max-h-full max-w-full object-contain"
-                                referrerPolicy="no-referrer"
+                                fallbackClassName="h-full"
                               />
                             ) : (
                               <span className="text-sm text-muted-foreground">Sin imagen de barra lateral</span>
