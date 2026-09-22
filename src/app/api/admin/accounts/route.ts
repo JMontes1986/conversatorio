@@ -90,13 +90,17 @@ export async function PATCH(request: Request) {
     const parsed = z.object({
       role: z.literal('judge'),
       id: z.string().min(1).max(200),
-      password: z.string().min(8).max(128),
+      password: z.string().min(8).max(128).optional(),
+      identifier: z.string().trim().min(1).max(100).optional(),
+    }).refine((value) => Boolean(value.password || value.identifier), {
+      message: 'Debe enviar una contraseña o una cédula nueva.',
     }).safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: 'La nueva contraseña debe tener entre 8 y 128 caracteres.' }, { status: 400 });
+      return NextResponse.json({ error: 'Debe indicar una cédula válida o una contraseña de 8 a 128 caracteres.' }, { status: 400 });
     }
 
     const { id, password } = parsed.data;
+    const identifier = parsed.data.identifier?.trim().toLowerCase();
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id,display_name,identifier')
@@ -106,30 +110,85 @@ export async function PATCH(request: Request) {
     if (profileError) throw profileError;
     if (!profile) return NextResponse.json({ error: 'Jurado no encontrado.' }, { status: 404 });
 
-    const updated = await supabase.auth.admin.updateUserById(profile.id, { password });
-    if (updated.error) throw updated.error;
+    const { data: judgeRecord, error: judgeReadError } = await supabase
+      .from('judges')
+      .select('data')
+      .eq('id', id)
+      .single();
+    if (judgeReadError) throw judgeReadError;
+
+    if (identifier && identifier !== profile.identifier?.trim().toLowerCase()) {
+      const { data: duplicate, error: duplicateError } = await supabase
+        .from('judges')
+        .select('id')
+        .eq('data->>cedula', identifier)
+        .neq('id', id)
+        .maybeSingle();
+      if (duplicateError) throw duplicateError;
+      if (duplicate) {
+        return NextResponse.json({ error: 'Ya existe otro jurado con esa cédula.' }, { status: 409 });
+      }
+
+      const newEmail = `${createHash('sha256').update(`judge:${identifier}`).digest('hex')}@participants.conversatorio.invalid`;
+      const authUpdate = await supabase.auth.admin.updateUserById(profile.id, {
+        email: newEmail,
+        email_confirm: true,
+      });
+      if (authUpdate.error) throw authUpdate.error;
+
+      const profileUpdate = await supabase
+        .from('profiles')
+        .update({ identifier })
+        .eq('id', profile.id);
+      if (profileUpdate.error) throw profileUpdate.error;
+    }
+
+    if (password) {
+      const passwordUpdate = await supabase.auth.admin.updateUserById(profile.id, { password });
+      if (passwordUpdate.error) throw passwordUpdate.error;
+    }
 
     const judgeUpdate = await supabase.from('judges').update({
       data: {
-        ...(await supabase.from('judges').select('data').eq('id', id).single()).data?.data,
-        passwordConfigured: true,
+        ...judgeRecord.data,
+        ...(identifier ? { cedula: identifier } : {}),
+        ...(password ? { passwordConfigured: true } : {}),
       },
     }).eq('id', id);
     if (judgeUpdate.error) throw judgeUpdate.error;
 
-    await supabase.from('audit_logs').insert({
-      id: randomUUID(),
-      data: {
-        category: 'judge_security',
-        action: 'judge_password_changed',
-        actorRole: 'admin',
-        subjectId: id,
-        subjectName: profile.display_name,
-        details: { identifier: profile.identifier },
-      },
-    });
+    if (identifier && identifier !== profile.identifier?.trim().toLowerCase()) {
+      await supabase.from('audit_logs').insert({
+        id: randomUUID(),
+        data: {
+          category: 'judge_security',
+          action: 'judge_identifier_changed',
+          actorRole: 'admin',
+          subjectId: id,
+          subjectName: profile.display_name,
+          details: {
+            previousIdentifier: profile.identifier,
+            identifier,
+          },
+        },
+      });
+    }
 
-    return NextResponse.json({ ok: true });
+    if (password) {
+      await supabase.from('audit_logs').insert({
+        id: randomUUID(),
+        data: {
+          category: 'judge_security',
+          action: 'judge_password_changed',
+          actorRole: 'admin',
+          subjectId: id,
+          subjectName: profile.display_name,
+          details: { identifier: identifier || profile.identifier },
+        },
+      });
+    }
+
+    return NextResponse.json({ ok: true, identifier: identifier || profile.identifier });
   } catch (cause) {
     console.error('Judge password update failed:', cause);
     return NextResponse.json({ error: 'No se pudo actualizar la contraseña del jurado.' }, { status: 500 });
