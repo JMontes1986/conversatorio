@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertTriangle, Lock, Eye, Trash2, ShieldQuestion, FileQuestion } from "lucide-react";
-import { db } from '@/lib/supabase';
+import { db, getSupabase } from '@/lib/supabase';
 import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where, deleteDoc, writeBatch, getDocs } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from './ui/switch';
@@ -157,20 +157,16 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
     const handleResetAllScores = async () => {
         setIsSubmitting(true);
         try {
-            const batch = writeBatch(db);
-            allScores.forEach(score => {
-                const scoreRef = doc(db, "scores", score.id);
-                batch.delete(scoreRef);
-            });
-            await batch.commit();
+            const { data, error } = await getSupabase().rpc('reset_competition_results');
+            if (error) throw error;
 
             toast({
                 title: "Resultados Reiniciados",
-                description: "Todas las puntuaciones han sido eliminadas."
+                description: `Se eliminaron ${data?.deletedScores ?? 0} puntuaciones y ${data?.deletedTiebreaks ?? 0} desempates sellados. La publicación de resultados volvió a quedar desactivada.`
             });
         } catch (error) {
             console.error("Error resetting scores:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudieron eliminar las puntuaciones." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudieron reiniciar los resultados del conversatorio." });
         } finally {
             setIsSubmitting(false);
         }
@@ -373,7 +369,7 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Esta acción eliminará todas las puntuaciones de los jurados de la base de datos. No podrá recuperar estos datos.
+                                        Esta acción eliminará todas las puntuaciones y los desempates sellados de la competencia actual, y ocultará nuevamente los resultados publicados. Úsela únicamente para iniciar un nuevo conversatorio. No podrá recuperar estos datos.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
