@@ -134,7 +134,7 @@ export default function DebatePage() {
 
   return (
     <div className="relative flex flex-col min-h-screen bg-secondary text-foreground p-4 md:p-8">
-        <PublicTiebreakDisplay roundName={debateState.currentRound} />
+        <PublicTiebreakDisplay />
 
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
