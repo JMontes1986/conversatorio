@@ -75,7 +75,9 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     assert.equal(saved.teams[0].total, 4);
     assert.equal(saved.judgeName, 'Jurado Uno');
     assert.equal(saved.judgeCedula, undefined);
+    await as('authenticated', admin);
     assert.equal(Number((await pg.query("select count(*) as n from audit_logs where data->>'action'='judge_score_submitted'")).rows[0].n), 1);
+    await as('authenticated', judge);
     await assert.rejects(write([{ table: 'scores', id: 'duplicate', operation: 'insert', data: validScore }]), /unique constraint/);
     await as('anon');
     assert.equal(await count('scores'), 0);
