@@ -23,7 +23,7 @@ type BackupMetadata = {
   id: string;
   createdAt: string;
   hash: string;
-  reason: "before_reset" | "before_restore";
+  reason: "before_reset" | "before_restore" | "manual";
   encryption: "AES-256-GCM";
   keyId: string;
   compressedBytes: number;
@@ -264,7 +264,11 @@ export function CompetitionBackupManager() {
                           <span className="font-semibold">{formatDate(backup.createdAt)}</span>
                           {isActive && <Badge className="bg-emerald-600">Versión activa</Badge>}
                           <Badge variant="outline">
-                            {backup.reason === "before_restore" ? "Antes de restaurar" : "Antes de reiniciar"}
+                            {backup.reason === "before_restore"
+  ? "Antes de restaurar"
+  : backup.reason === "manual"
+    ? "Backup manual"
+    : "Antes de reiniciar"}
                           </Badge>
                         </div>
 
