@@ -98,6 +98,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ record: existing.data, alreadySealed: true });
     }
 
+    const { data: debateState, error: debateStateError } = await supabase
+      .from('debate_state')
+      .select('data')
+      .eq('id', 'current')
+      .maybeSingle();
+    if (debateStateError) throw debateStateError;
+
+    const publicTiebreak = debateState?.data?.publicTiebreak;
+    if (
+      publicTiebreak?.active !== true
+      || publicTiebreak?.status !== 'ready'
+      || publicTiebreak?.roundName !== roundName
+    ) {
+      return NextResponse.json({
+        error: 'Primero debe enviar el desempate a la pantalla de Debate.',
+      }, { status: 409 });
+    }
+
     const { data: round, error: roundError } = await supabase
       .from('rounds')
       .select('data')
@@ -156,6 +174,20 @@ export async function POST(request: Request) {
         .sort((a, b) => a.id.localeCompare(b.id)),
       ranking,
     };
+    const publicTeams = Array.isArray(publicTiebreak?.teams)
+      ? [...publicTiebreak.teams].map(String).sort((a, b) => a.localeCompare(b, 'es'))
+      : [];
+    const expectedTeams = [...tiedTeams].sort((a, b) => a.localeCompare(b, 'es'));
+    if (
+      publicTeams.length !== expectedTeams.length
+      || publicTeams.some((team, index) => team !== expectedTeams[index])
+      || Number(publicTiebreak?.slotsAvailable) !== slotsAvailable
+    ) {
+      return NextResponse.json({
+        error: 'La información mostrada al público ya no coincide con el empate actual. Envíelo nuevamente a Debate.',
+      }, { status: 409 });
+    }
+
     const sourceHash = sha256(source);
     const resolved = resolveDice(tiedTeams, slotsAvailable);
     const nonce = randomBytes(32).toString('hex');
@@ -215,6 +247,23 @@ export async function POST(request: Request) {
             })),
             tiebreakSealHash: integrity.hash,
             createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
+          },
+        },
+        {
+          table: 'debate_state',
+          id: 'current',
+          operation: 'merge',
+          data: {
+            publicTiebreak: {
+              active: true,
+              status: 'resolved',
+              roundName,
+              teams: tiedTeams,
+              slotsAvailable,
+              selectedTeams: resolved.selectedTeams,
+              integrityHash: integrity.hash,
+              resolvedAt: Date.now(),
+            },
           },
         },
         {
