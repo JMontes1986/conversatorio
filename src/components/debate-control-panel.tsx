@@ -50,6 +50,7 @@ import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import { normalizeExternalImageUrl, isMicrosoftCloudImage } from '@/lib/external-image';
 import {
     DEFAULT_TOURNAMENT_FORMAT,
     type TournamentFormat,
@@ -1025,13 +1026,23 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            const normalized = normalizeExternalImageUrl(imageUrl);
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { sidebarImageUrl: imageUrl }, { merge: true });
+            await setDoc(docRef, {
+                sidebarImageUrl: normalized.displayUrl,
+                sidebarImageOriginalUrl: normalized.originalUrl,
+            }, { merge: true });
+            setImageUrl(normalized.originalUrl);
 
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Se actualizó la imagen de la barra lateral.`, userContext);
 
-            toast({ title: "Imagen Guardada" });
+            toast({
+                title: "Imagen Guardada",
+                description: isMicrosoftCloudImage(imageUrl)
+                    ? "Se configuró el enlace de OneDrive/SharePoint. El archivo debe estar compartido públicamente."
+                    : "La imagen quedó configurada."
+            });
         } catch (error) {
             console.error("Error saving image URL:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la URL de la imagen." });
@@ -1056,6 +1067,19 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
                         onChange={(e) => setImageUrl(e.target.value)}
                         disabled={isSaving}
                     />
+                    <p className="text-xs text-muted-foreground">
+                        Puede pegar un vínculo compartido de OneDrive o SharePoint. Para verlo en la pantalla pública, compártalo como “Cualquier persona con el vínculo puede ver”.
+                    </p>
+                    {imageUrl && (
+                        <div className="rounded-lg border bg-muted/20 p-2">
+                            <img
+                                src={normalizeExternalImageUrl(imageUrl).displayUrl}
+                                alt="Vista previa de barra lateral"
+                                className="mx-auto max-h-40 max-w-full object-contain"
+                                referrerPolicy="no-referrer"
+                            />
+                        </div>
+                    )}
                 </div>
                 <Button className="w-full" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
@@ -1355,9 +1379,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
         setIsSendingTempMessage(true);
         try {
+            const normalized = normalizeExternalImageUrl(tempImageInput);
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                temporaryImageUrl: tempImageInput,
+                temporaryImageUrl: normalized.displayUrl,
+                temporaryImageOriginalUrl: normalized.originalUrl,
                 question: "",
                 questionId: "",
                 videoUrl: "",
@@ -1666,7 +1692,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                      </div>
                                      {tempImageInput && (
                                         <div className="mt-2 text-center">
-                                            <Image src={tempImageInput} alt="Vista previa de imagen temporal" width={150} height={100} className="object-contain rounded-md mx-auto border" />
+                                            <img
+                                                src={normalizeExternalImageUrl(tempImageInput).displayUrl}
+                                                alt="Vista previa de imagen temporal"
+                                                className="mx-auto max-h-32 max-w-full rounded-md border object-contain"
+                                                referrerPolicy="no-referrer"
+                                            />
                                         </div>
                                      )}
                                      <div className="flex justify-end">
