@@ -135,6 +135,9 @@ function AdminDashboard() {
   const [newJudgeCedula, setNewJudgeCedula] = useState("");
   const [newJudgePassword, setNewJudgePassword] = useState("");
   const [judgePasswordDrafts, setJudgePasswordDrafts] = useState<Record<string, string>>({});
+  const [isJudgeEditDialogOpen, setIsJudgeEditDialogOpen] = useState(false);
+  const [selectedJudge, setSelectedJudge] = useState<JudgeData | null>(null);
+  const [editJudgeCedula, setEditJudgeCedula] = useState("");
   const [isSubmittingJudge, setIsSubmittingJudge] = useState(false);
   
   const [newModeratorUsername, setNewModeratorUsername] = useState("");
@@ -247,6 +250,43 @@ function AdminDashboard() {
     } catch (error) {
       console.error("Error deleting moderator:", error);
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el moderador." });
+    }
+  };
+
+  const openJudgeEditDialog = (judge: JudgeData) => {
+    setSelectedJudge(judge);
+    setEditJudgeCedula(judge.cedula || "");
+    setIsJudgeEditDialogOpen(true);
+  };
+
+  const handleSaveJudgeCedula = async () => {
+    if (!selectedJudge || !editJudgeCedula.trim()) {
+      toast({ variant: "destructive", title: "Cédula requerida", description: "Ingrese la cédula del jurado." });
+      return;
+    }
+    setIsSubmittingJudge(true);
+    try {
+      await manageAccount({
+        role: 'judge',
+        id: selectedJudge.id,
+        identifier: editJudgeCedula.trim(),
+      }, 'PATCH');
+      toast({
+        title: "Cédula actualizada",
+        description: `El acceso de ${selectedJudge.name} quedó asociado a la nueva cédula.`,
+      });
+      setIsJudgeEditDialogOpen(false);
+      setSelectedJudge(null);
+      setEditJudgeCedula("");
+    } catch (error) {
+      console.error("Error updating judge identifier:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo actualizar",
+        description: error instanceof Error ? error.message : "No se pudo cambiar la cédula del jurado.",
+      });
+    } finally {
+      setIsSubmittingJudge(false);
     }
   };
 
@@ -664,6 +704,10 @@ function AdminDashboard() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => openJudgeEditDialog(judge)}>
+                                                            <FilePen className="mr-2 h-4 w-4" />
+                                                            Editar cédula
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => handleToggleJudgeStatus(judge)}>
                                                             {judge.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
                                                             {judge.status === 'active' ? 'Desactivar' : 'Activar'}
@@ -883,8 +927,44 @@ function AdminDashboard() {
             setActiveView={setActiveView} 
         />
         <main className="flex-1 p-4 md:p-6 lg:p-8">
+            {renderContent()}
+
+            <Dialog open={isJudgeEditDialogOpen} onOpenChange={setIsJudgeEditDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Editar jurado</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="font-medium">{selectedJudge?.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                                La cédula será también el identificador que utilizará para iniciar sesión.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-judge-cedula">Cédula</Label>
+                            <Input
+                                id="edit-judge-cedula"
+                                value={editJudgeCedula}
+                                onChange={(event) => setEditJudgeCedula(event.target.value)}
+                                placeholder="Número de cédula"
+                                autoComplete="off"
+                            />
+                        </div>
+                        <Button
+                            type="button"
+                            className="w-full"
+                            onClick={handleSaveJudgeCedula}
+                            disabled={isSubmittingJudge || !editJudgeCedula.trim()}
+                        >
+                            {isSubmittingJudge && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Guardar cédula
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
-                    {renderContent()}
                     <DialogContent className="max-w-3xl">
                     <DialogHeader>
                         <DialogTitle>Editar Colegio</DialogTitle>
