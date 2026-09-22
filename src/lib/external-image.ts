@@ -75,3 +75,11 @@ export function isMicrosoftCloudImage(value: string) {
     return false;
   }
 }
+
+export function externalImageDisplayUrl(value: string) {
+  try {
+    return normalizeExternalImageUrl(value).displayUrl;
+  } catch {
+    return "";
+  }
+}
