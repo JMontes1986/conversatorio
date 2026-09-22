@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "@/lib/documents";
+import { collection, doc, onSnapshot, orderBy, query } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Dices, ShieldAlert, ShieldCheck, Trophy } from "lucide-react";
-import { type SealedTiebreak, verifyTiebreakSeal } from "@/lib/tiebreak-integrity";
+import {
+  phaseResultsArePublished,
+  type SealedTiebreak,
+  verifyTiebreakSeal,
+} from "@/lib/tiebreak-integrity";
 
 export function PublicTiebreakDisplay({ roundName }: { roundName?: string }) {
   const [records, setRecords] = useState<Array<SealedTiebreak & { id: string }>>([]);
+  const [settings, setSettings] = useState<Record<string, unknown>>({});
   const [integrity, setIntegrity] = useState<"checking" | "valid" | "invalid">("checking");
 
   useEffect(() => {
@@ -24,7 +29,15 @@ export function PublicTiebreakDisplay({ roundName }: { roundName?: string }) {
         setRecords([]);
       },
     );
-    return unsubscribe;
+    const unsubscribeSettings = onSnapshot(
+      doc(db, "settings", "competition"),
+      (snapshot) => setSettings(snapshot.exists() ? snapshot.data() : {}),
+      (error) => console.error("Error loading publication settings:", error),
+    );
+    return () => {
+      unsubscribe();
+      unsubscribeSettings();
+    };
   }, []);
 
   const activeRecord = useMemo(() => {
@@ -47,7 +60,7 @@ export function PublicTiebreakDisplay({ roundName }: { roundName?: string }) {
     };
   }, [activeRecord]);
 
-  if (!activeRecord) return null;
+  if (!activeRecord || !phaseResultsArePublished(activeRecord.phase, settings)) return null;
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/96 p-4 backdrop-blur-sm">
