@@ -22,6 +22,7 @@ import { JudgeAuth } from '@/components/auth/judge-auth';
 import { useJudgeAuth } from '@/context/judge-auth-context';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { judgeOutcomePollMs } from '@/lib/network-profile';
 
 interface RubricCriterion {
     id: string;
@@ -128,20 +129,18 @@ function ScoringPanel() {
       if (!judge?.id) return;
       
       setLoadingHistory(true);
-      // Simplified query to avoid composite index
       const scoresQuery = query(
           collection(db, "scores"),
+          where("judgeId", "==", judge.id),
           orderBy("createdAt", "desc")
       );
 
       const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
-          // Filter scores for the current judge on the client side
           const allScores = querySnapshot.docs
             .map(doc => ({
               id: doc.id,
               ...doc.data()
-            } as ScoreData))
-            .filter(score => score.judgeId === judge.id);
+            } as ScoreData));
           
           setPastScores(allScores);
           setLoadingHistory(false);
@@ -200,8 +199,8 @@ function ScoringPanel() {
 
       void fetchRoundOutcomes();
       intervalId = setInterval(() => {
-          void fetchRoundOutcomes();
-      }, 5000);
+          if (!document.hidden) void fetchRoundOutcomes();
+      }, judgeOutcomePollMs());
 
       return () => {
           cancelled = true;
