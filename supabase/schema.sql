@@ -226,7 +226,7 @@ end $$;
 -- Un desempate sellado es inmutable durante la competencia. La única excepción
 -- es el procedimiento administrativo de reinicio total de resultados.
 create or replace function private.protect_sealed_tiebreak() returns trigger
-language plpgsql set search_path = '' as $
+language plpgsql set search_path = '' as $body$
 begin
   if current_setting('app.conversatorio_admin_reset', true) = 'true'
      and private.app_role() = 'admin' then
@@ -240,7 +240,7 @@ begin
 
   if tg_op = 'DELETE' then return old; end if;
   return new;
-end $;
+end $body$;
 drop trigger if exists protect_sealed_tiebreak on public.tiebreak;
 create trigger protect_sealed_tiebreak
 before update or delete on public.tiebreak
@@ -249,7 +249,7 @@ for each row execute function private.protect_sealed_tiebreak();
 -- La puntuación técnica asociada a un desempate sellado tampoco se puede alterar o borrar
 -- fuera del procedimiento oficial de reinicio.
 create or replace function private.protect_tiebreak_score() returns trigger
-language plpgsql set search_path = '' as $
+language plpgsql set search_path = '' as $body$
 begin
   if current_setting('app.conversatorio_admin_reset', true) = 'true'
      and private.app_role() = 'admin' then
@@ -263,7 +263,7 @@ begin
 
   if tg_op = 'DELETE' then return old; end if;
   return new;
-end $;
+end $body$;
 drop trigger if exists protect_tiebreak_score on public.scores;
 create trigger protect_tiebreak_score
 before update or delete on public.scores
@@ -272,7 +272,7 @@ for each row execute function private.protect_tiebreak_score();
 -- Reinicio administrativo de resultados. Es la única operación de la aplicación que
 -- puede retirar desempates sellados para iniciar un nuevo conversatorio.
 create or replace function public.reset_competition_results() returns jsonb
-language plpgsql security definer set search_path = '' as $
+language plpgsql security definer set search_path = '' as $body$
 declare
   deleted_scores integer := 0;
   deleted_tiebreaks integer := 0;
@@ -312,7 +312,7 @@ begin
     'deletedScores', deleted_scores,
     'deletedTiebreaks', deleted_tiebreaks
   );
-end $;
+end $body$;
 revoke all on function public.reset_competition_results() from public;
 grant execute on function public.reset_competition_results() to authenticated;
 
