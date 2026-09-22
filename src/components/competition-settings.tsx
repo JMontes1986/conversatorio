@@ -157,16 +157,29 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
     const handleResetAllScores = async () => {
         setIsSubmitting(true);
         try {
-            const { data, error } = await getSupabase().rpc('reset_competition_results');
-            if (error) throw error;
+            const { data: { session } } = await getSupabase().auth.getSession();
+            if (!session) throw new Error("La sesión de administrador expiró.");
+
+            const response = await fetch('/api/admin/reset-results', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "No se pudieron reiniciar los resultados.");
 
             toast({
                 title: "Resultados Reiniciados",
-                description: `Se eliminaron ${data?.deletedScores ?? 0} puntuaciones y ${data?.deletedTiebreaks ?? 0} desempates sellados. La publicación de resultados volvió a quedar desactivada.`
+                description: `Se eliminaron ${result.deletedScores ?? 0} puntuaciones y ${result.deletedTiebreaks ?? 0} desempates sellados. La publicación de resultados volvió a quedar desactivada.`
             });
         } catch (error) {
             console.error("Error resetting scores:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudieron reiniciar los resultados del conversatorio." });
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: error instanceof Error ? error.message : "No se pudieron reiniciar los resultados del conversatorio."
+            });
         } finally {
             setIsSubmitting(false);
         }
