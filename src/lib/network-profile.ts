@@ -1,12 +1,17 @@
 export type NetworkProfile = {
   lowBandwidth: boolean;
+  highLatency: boolean;
   saveData: boolean;
   effectiveType: string | null;
+  downlinkMbps: number | null;
+  rttMs: number | null;
 };
 
 type NetworkInformationLike = {
   saveData?: boolean;
   effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
   addEventListener?: (type: string, listener: () => void) => void;
   removeEventListener?: (type: string, listener: () => void) => void;
 };
@@ -25,11 +30,25 @@ export function getNetworkProfile(): NetworkProfile {
   const info = connection();
   const effectiveType = info?.effectiveType || null;
   const saveData = info?.saveData === true;
+  const downlinkMbps = typeof info?.downlink === "number" ? info.downlink : null;
+  const rttMs = typeof info?.rtt === "number" ? info.rtt : null;
+
+  const highLatency = rttMs !== null && rttMs >= 300;
   const lowBandwidth = saveData
     || effectiveType === "slow-2g"
-    || effectiveType === "2g";
+    || effectiveType === "2g"
+    || effectiveType === "3g"
+    || (downlinkMbps !== null && downlinkMbps <= 5)
+    || highLatency;
 
-  return { lowBandwidth, saveData, effectiveType };
+  return {
+    lowBandwidth,
+    highLatency,
+    saveData,
+    effectiveType,
+    downlinkMbps,
+    rttMs,
+  };
 }
 
 export function subscribeToNetworkProfile(callback: (profile: NetworkProfile) => void) {
