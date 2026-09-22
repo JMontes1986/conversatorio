@@ -183,52 +183,63 @@ export async function POST(request: Request) {
     };
     const record = { ...sealBase, integrity };
 
-    const { error: insertError } = await supabase.from('tiebreak').insert({
-      id: roundName,
-      data: record,
-    });
-    if (insertError) throw insertError;
-
-    const systemTeams = ranking.map((entry) => ({
-      name: entry.team,
-      total: resolved.selectedTeams.includes(entry.team) ? 1 : 0,
+    const systemTeams = tiedTeams.map((team) => ({
+      name: team,
+      total: resolved.selectedTeams.includes(team) ? 1 : 0,
     }));
-    const { error: scoreInsertError } = await supabase.from('scores').insert({
-      id: randomUUID(),
-      data: {
-        matchId: roundName,
-        judgeId: 'system',
-        judgeName: 'Desempate público sellado',
-        teams: systemTeams,
-        fullScores: resolved.selectedTeams.map((team) => ({
-          name: team,
-          total: 1,
-          scores: { tiebreaker: 1 },
-          checksum: integrity.hash.slice(0, 12).toUpperCase(),
-        })),
-        tiebreakSealHash: integrity.hash,
-        createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
-      },
-    });
-    if (scoreInsertError) throw scoreInsertError;
+    const scoreId = randomUUID();
+    const auditId = randomUUID();
 
-    await supabase.from('audit_logs').insert({
-      id: randomUUID(),
-      data: {
-        category: 'tiebreak',
-        action: 'sealed_tiebreak_created',
-        actorRole: profile.role,
-        actorId: user.id,
-        subjectName: roundName,
-        details: {
-          phase,
-          teams: tiedTeams,
-          selectedTeams: resolved.selectedTeams,
-          hash: integrity.hash,
-          sourceHash,
+    const { error: transactionError } = await supabase.rpc('write_documents', {
+      operations: [
+        {
+          table: 'tiebreak',
+          id: roundName,
+          operation: 'insert',
+          data: record,
         },
-      },
+        {
+          table: 'scores',
+          id: scoreId,
+          operation: 'insert',
+          data: {
+            matchId: roundName,
+            judgeId: 'system',
+            judgeName: 'Desempate público sellado',
+            teams: systemTeams,
+            fullScores: resolved.selectedTeams.map((team) => ({
+              name: team,
+              total: 1,
+              scores: { tiebreaker: 1 },
+              checksum: integrity.hash.slice(0, 12).toUpperCase(),
+            })),
+            tiebreakSealHash: integrity.hash,
+            createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
+          },
+        },
+        {
+          table: 'audit_logs',
+          id: auditId,
+          operation: 'insert',
+          data: {
+            category: 'tiebreak',
+            action: 'sealed_tiebreak_created',
+            actorRole: profile.role,
+            actorId: user.id,
+            subjectName: roundName,
+            details: {
+              phase,
+              teams: tiedTeams,
+              selectedTeams: resolved.selectedTeams,
+              hash: integrity.hash,
+              sourceHash,
+              scoreRecordId: scoreId,
+            },
+          },
+        },
+      ],
     });
+    if (transactionError) throw transactionError;
 
     return NextResponse.json({ record }, { status: 201 });
   } catch (cause) {
