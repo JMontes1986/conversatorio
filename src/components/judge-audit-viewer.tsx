@@ -40,6 +40,7 @@ function actionLabel(action: string) {
     case "judge_logout": return "Cierre de sesión";
     case "judge_score_submitted": return "Votación enviada";
     case "judge_password_changed": return "Contraseña cambiada";
+    case "judge_identifier_changed": return "Cédula actualizada";
     case "judge_account_created": return "Cuenta de jurado creada";
     default: return action;
   }
