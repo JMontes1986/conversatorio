@@ -1311,6 +1311,44 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const [tempImageInput, setTempImageInput] = useState("");
     const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
+
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem("conversatorio:debate-temporary-content");
+            if (!stored) return;
+
+            const parsed = JSON.parse(stored) as {
+                message?: string;
+                video?: string;
+                image?: string;
+                messageSize?: 'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl';
+            };
+
+            if (typeof parsed.message === "string") setTempMessageInput(parsed.message);
+            if (typeof parsed.video === "string") setTempVideoInput(parsed.video);
+            if (typeof parsed.image === "string") setTempImageInput(parsed.image);
+            if (parsed.messageSize) setTempMessageSize(parsed.messageSize);
+        } catch (error) {
+            console.error("Error restoring temporary debate content:", error);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(
+                "conversatorio:debate-temporary-content",
+                JSON.stringify({
+                    message: tempMessageInput,
+                    video: tempVideoInput,
+                    image: tempImageInput,
+                    messageSize: tempMessageSize,
+                    savedAt: Date.now(),
+                }),
+            );
+        } catch (error) {
+            console.error("Error saving temporary debate content:", error);
+        }
+    }, [tempMessageInput, tempVideoInput, tempImageInput, tempMessageSize]);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
