@@ -16,6 +16,7 @@ import {
   FileQuestion,
   Calendar,
   Network,
+  Projector,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,12 +52,14 @@ const authNavLinks = [
 
 export function Header() {
   const pathname = usePathname();
-  const { user: adminUser, logout: adminLogout } = useAuth();
+  const { user: appUser, profile, logout: appLogout } = useAuth();
   const { judge: judgeUser, logout: judgeLogout } = useJudgeAuth();
   const { moderator: moderatorUser, logout: moderatorLogout } = useModeratorAuth();
   const [isSurveyActive, setIsSurveyActive] = useState(false);
   
-  const isAuthenticated = adminUser || judgeUser || moderatorUser;
+  const isAdmin = profile?.role === 'admin';
+  const isProjection = profile?.role === 'projection';
+  const isAuthenticated = appUser || judgeUser || moderatorUser;
 
   useEffect(() => {
     const surveyConfigRef = doc(db, 'siteContent', 'survey');
@@ -69,7 +72,7 @@ export function Header() {
   }, []);
 
   const handleLogout = () => {
-    if (adminUser) adminLogout();
+    if (appUser) appLogout();
     if (judgeUser) judgeLogout();
     if (moderatorUser) moderatorLogout();
   };
@@ -81,13 +84,18 @@ export function Header() {
   ]
 
   const filteredNavLinks = navLinks.filter(link => {
-    if (link.admin && !adminUser) return false;
+    if (link.admin && !isAdmin) return false;
     if (link.judge && !judgeUser) return false;
     if (link.moderator && !moderatorUser) return false;
     
     if(link.href === '/scoring' && !judgeUser) return false;
 
-    return !link.admin && !link.judge && !link.moderator || adminUser || judgeUser || moderatorUser;
+    if (isProjection) {
+      return !link.admin && !link.judge && !link.moderator
+        && ["/programacion", "/bracket", "/scoreboard", "/draw", "/debate"].includes(link.href);
+    }
+
+    return !link.admin && !link.judge && !link.moderator || isAdmin || judgeUser || moderatorUser;
   }).filter(link => {
     if (link.href === '/scoring' && !judgeUser) return false;
     return true;
@@ -129,6 +137,12 @@ export function Header() {
                     className={cn("transition-colors hover:text-primary flex items-center", pathname === "/moderator/login" ? "text-primary" : "text-muted-foreground")}
                 >
                     <Gavel className="mr-2 h-4 w-4" /> Moderador
+                </Link>
+                <Link
+                    href="/projection/login"
+                    className={cn("transition-colors hover:text-primary flex items-center", pathname === "/projection/login" ? "text-primary" : "text-muted-foreground")}
+                >
+                    <Projector className="mr-2 h-4 w-4" /> Proyección
                 </Link>
                 <Link
                     href="/admin/login"
@@ -186,6 +200,11 @@ export function Header() {
                      <SheetClose asChild>
                        <Link href="/moderator/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
                           <Gavel className="h-5 w-5" /> Moderador
+                       </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                       <Link href="/projection/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-lg font-medium text-muted-foreground">
+                          <Projector className="h-5 w-5" /> Proyección
                        </Link>
                     </SheetClose>
                     <SheetClose asChild>
