@@ -2,10 +2,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { TimerAudio } from "@/lib/timer-audio";
+import { TimerAudio, getSharedTimerAudio } from "@/lib/timer-audio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Pause, RotateCcw, Bell, TimerIcon } from "lucide-react";
+import { Play, Pause, RotateCcw, Bell, BellRing, TimerIcon, Volume2 } from "lucide-react";
 import { db } from "@/lib/supabase";
 import { doc, onSnapshot, setDoc } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,8 @@ interface TimerProps {
 export function Timer({ initialTime, title, showControls = true, size = 'default' }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [serverState, setServerState] = useState<TimerState | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [visualAlarm, setVisualAlarm] = useState(false);
   const audio = useRef<TimerAudio | null>(null);
   const completedRun = useRef<number | null>(null);
   const lastAlarmId = useRef<string | null>(null);
@@ -37,13 +39,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   const { toast } = useToast();
 
   useEffect(() => {
-    const controller = new TimerAudio();
+    const controller = getSharedTimerAudio();
     audio.current = controller;
+    setAudioEnabled(controller.isEnabled());
 
-    // Browsers only allow future automatic audio after a user gesture.
-    // Any click/touch/key on the timer page primes the bell once.
     const unlock = () => {
-      void controller.enable();
+      void controller.enable().then((enabled) => {
+        setAudioEnabled(enabled);
+      });
     };
 
     window.addEventListener("pointerdown", unlock, { once: true });
@@ -54,7 +57,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
       window.removeEventListener("touchstart", unlock);
-      controller.dispose();
       audio.current = null;
     };
   }, []);
@@ -99,7 +101,11 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
             if (nextTimer.alarmId && nextTimer.alarmId !== lastAlarmId.current) {
                 lastAlarmId.current = nextTimer.alarmId;
-                audio.current?.ring();
+                const rang = audio.current?.ring() ?? false;
+                setVisualAlarm(true);
+                if (rang) {
+                  setTimeout(() => setVisualAlarm(false), 2500);
+                }
             }
         }
       }
@@ -122,7 +128,11 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                 if (showControls) {
                     const alarmId = `${serverState.lastUpdated}-${targetEnd}`;
                     lastAlarmId.current = alarmId;
-                    audio.current?.ring();
+                    const rang = audio.current?.ring() ?? false;
+                    setVisualAlarm(true);
+                    if (rang) {
+                      setTimeout(() => setVisualAlarm(false), 2500);
+                    }
 
                     void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
                         timer: {
@@ -152,14 +162,39 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   const playSound = async () => {
     const controller = audio.current;
-    if (controller && await controller.enable() && controller.ring()) {
+    const enabled = Boolean(controller && await controller.enable());
+    setAudioEnabled(enabled);
+
+    if (controller && enabled && controller.ring()) {
+        setVisualAlarm(false);
         return;
     }
 
     toast({
       title: "Audio no disponible",
-      description: "El navegador bloqueó el sonido. Haga clic en la página y vuelva a probar la campana.",
+      description: "El navegador bloqueó el sonido. Pulse “Activar sonido” y vuelva a probar.",
     });
+  };
+
+  const activateSound = async () => {
+    const controller = audio.current;
+    const enabled = Boolean(controller && await controller.enable());
+    setAudioEnabled(enabled);
+
+    if (enabled) {
+      controller?.ring();
+      setVisualAlarm(false);
+      toast({
+        title: "Sonido activado",
+        description: "La campana sonará automáticamente cuando el temporizador llegue a cero.",
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "No se pudo activar el sonido",
+        description: "Revise que la pestaña y el dispositivo no estén silenciados.",
+      });
+    }
   };
   
   const toggleTimer = async () => {
@@ -223,8 +258,8 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   if (size === 'small') {
       return (
-          <Card className="max-w-xs">
-              <CardContent className="p-2 flex items-center gap-3">
+          <Card className={visualAlarm ? "max-w-xs border-destructive ring-2 ring-destructive/50" : "max-w-xs"}>
+              <CardContent className="p-2 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 text-muted-foreground">
                         <TimerIcon className="h-5 w-5" />
                         <span className="text-sm font-medium">{title}</span>
@@ -242,17 +277,39 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                             </Button>
                         </div>
                      )}
-                     <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="h-8 w-8">
-                        <Bell className="h-4 w-4" />
-                    </Button>
+                     {showControls ? (
+                       <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="h-8 w-8">
+                          <Bell className="h-4 w-4" />
+                       </Button>
+                     ) : (
+                       <Button
+                         onClick={activateSound}
+                         variant={audioEnabled ? "outline" : "default"}
+                         size="sm"
+                         className="h-8 gap-1.5"
+                       >
+                         {audioEnabled ? <Volume2 className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
+                         {audioEnabled ? "Sonido activo" : "Activar sonido"}
+                       </Button>
+                     )}
+                     {visualAlarm && (
+                       <div className="w-full animate-pulse rounded-md bg-destructive px-3 py-2 text-center text-sm font-bold text-destructive-foreground">
+                         TIEMPO FINALIZADO
+                       </div>
+                     )}
               </CardContent>
           </Card>
       )
   }
 
   return (
-    <Card>
+    <Card className={visualAlarm ? "border-destructive ring-2 ring-destructive/50" : undefined}>
       <CardContent className="p-3 flex flex-col items-center justify-center space-y-2">
+        {visualAlarm && (
+          <div className="w-full animate-pulse rounded-md bg-destructive px-3 py-2 text-center text-sm font-bold text-destructive-foreground">
+            TIEMPO FINALIZADO
+          </div>
+        )}
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
         <div className="relative w-28 h-28 md:w-36 md:h-36">
           <svg className="w-full h-full" viewBox="0 0 100 100">
