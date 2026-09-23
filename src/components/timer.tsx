@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { TimerAudio, getSharedTimerAudio } from "@/lib/timer-audio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Pause, RotateCcw, Bell, BellRing, TimerIcon, Volume2 } from "lucide-react";
+import { Play, Pause, RotateCcw, Bell, BellRing, TimerIcon } from "lucide-react";
 import { db } from "@/lib/supabase";
 import { doc, onSnapshot, setDoc } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -25,9 +25,10 @@ interface TimerProps {
   title: string;
   showControls?: boolean;
   size?: 'default' | 'small';
+  enableAlarm?: boolean;
 }
 
-export function Timer({ initialTime, title, showControls = true, size = 'default' }: TimerProps) {
+export function Timer({ initialTime, title, showControls = true, size = 'default', enableAlarm = false }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [serverState, setServerState] = useState<TimerState | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -44,14 +45,17 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     setAudioEnabled(controller.isEnabled());
 
     const unlock = () => {
+      if (!showControls && !enableAlarm) return;
       void controller.enable().then((enabled) => {
         setAudioEnabled(enabled);
       });
     };
 
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, { once: true });
+    if (showControls || enableAlarm) {
+      window.addEventListener("pointerdown", unlock, { once: true });
+      window.addEventListener("keydown", unlock, { once: true });
+      window.addEventListener("touchstart", unlock, { once: true });
+    }
 
     return () => {
       window.removeEventListener("pointerdown", unlock);
@@ -59,7 +63,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       window.removeEventListener("touchstart", unlock);
       audio.current = null;
     };
-  }, []);
+  }, [showControls, enableAlarm]);
   
   useEffect(() => {
     let cancelled = false;
@@ -101,10 +105,13 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
             if (nextTimer.alarmId && nextTimer.alarmId !== lastAlarmId.current) {
                 lastAlarmId.current = nextTimer.alarmId;
-                const rang = audio.current?.ring() ?? false;
-                setVisualAlarm(true);
-                if (rang) {
-                  setTimeout(() => setVisualAlarm(false), 2500);
+
+                if (showControls || enableAlarm) {
+                  const rang = audio.current?.ring() ?? false;
+                  setVisualAlarm(true);
+                  if (rang) {
+                    setTimeout(() => setVisualAlarm(false), 2500);
+                  }
                 }
             }
         }
@@ -300,22 +307,24 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                             </Button>
                         </div>
                      )}
-                     {showControls ? (
-                       <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="h-8 w-8">
+                     {showControls && (
+                       <Button onClick={playSound} aria-label="Probar alarma" variant="outline" size="icon" className="h-8 w-8">
                           <Bell className="h-4 w-4" />
                        </Button>
-                     ) : (
+                     )}
+                     {enableAlarm && !showControls && (
                        <Button
                          onClick={activateSound}
-                         variant={audioEnabled ? "outline" : "default"}
-                         size="sm"
-                         className="h-8 gap-1.5"
+                         aria-label="Activar o probar alarma de proyección"
+                         title="Activar / probar alarma"
+                         variant="outline"
+                         size="icon"
+                         className="h-8 w-8"
                        >
-                         {audioEnabled ? <Volume2 className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
-                         {audioEnabled ? "Sonido activo" : "Activar sonido"}
+                         <BellRing className="h-4 w-4" />
                        </Button>
                      )}
-                     {visualAlarm && (
+                     {visualAlarm && (showControls || enableAlarm) && (
                        <div className="w-full animate-pulse rounded-md bg-destructive px-3 py-2 text-center text-sm font-bold text-destructive-foreground">
                          TIEMPO FINALIZADO
                        </div>
@@ -328,7 +337,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   return (
     <Card className={visualAlarm ? "border-destructive ring-2 ring-destructive/50" : undefined}>
       <CardContent className="p-3 flex flex-col items-center justify-center space-y-2">
-        {visualAlarm && (
+        {visualAlarm && (showControls || enableAlarm) && (
           <div className="w-full animate-pulse rounded-md bg-destructive px-3 py-2 text-center text-sm font-bold text-destructive-foreground">
             TIEMPO FINALIZADO
           </div>
