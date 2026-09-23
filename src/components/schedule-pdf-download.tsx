@@ -140,9 +140,26 @@ export function SchedulePdfDownload({ schedule }: { schedule: ScheduleData }) {
         let y = drawPageHeader(date, dayLabel);
 
         items.forEach((item, index) => {
-          const activityLines = pdf.splitTextToSize(item.activity || "Actividad sin descripción", 122);
-          const activityHeight = Math.max(10, activityLines.length * 5);
-          const cardHeight = Math.max(22, activityHeight + 10);
+          const isBreak = /receso|almuerzo|descanso/i.test(item.activity || "");
+
+          // Set the exact font BEFORE measuring/wrapping. This guarantees that
+          // every activity is wrapped with the same metrics used to render it.
+          const activityX = marginX + 47;
+          const activityRight = pageWidth - marginX - 8;
+          const activityWidth = activityRight - activityX;
+          const activityFontSize = isBreak ? 10.2 : 9.6;
+          const activityLineHeight = 4.8;
+
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(activityFontSize);
+          const activityLines = pdf.splitTextToSize(
+            (item.activity || "Actividad sin descripción").trim(),
+            activityWidth,
+          ) as string[];
+
+          const textBlockHeight = Math.max(activityLineHeight, activityLines.length * activityLineHeight);
+          const completedArea = item.completed ? 7 : 0;
+          const cardHeight = Math.max(24, textBlockHeight + 11 + completedArea);
 
           if (y + cardHeight > 276) {
             drawFooter(pageNumber);
@@ -150,8 +167,6 @@ export function SchedulePdfDownload({ schedule }: { schedule: ScheduleData }) {
             pageNumber += 1;
             y = drawPageHeader(date, `${dayLabel} · continuación`);
           }
-
-          const isBreak = /receso|almuerzo|descanso/i.test(item.activity || "");
 
           const cardFill: [number, number, number] = isBreak ? [252, 250, 235] : light;
           pdf.setFillColor(...cardFill);
@@ -161,45 +176,64 @@ export function SchedulePdfDownload({ schedule }: { schedule: ScheduleData }) {
           pdf.setFillColor(...timeFill);
           pdf.roundedRect(marginX, y, 39, cardHeight, 2.5, 2.5, "F");
 
+          // Time column
           const timeTextColor: [number, number, number] = isBreak ? dark : [255, 255, 255];
           pdf.setTextColor(...timeTextColor);
           pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(9.5);
+          pdf.setFontSize(9.2);
 
           const times = timeLabel(item.time, item.endTime).split("\n");
           const centerY = y + cardHeight / 2;
           if (times.length > 1) {
-            pdf.text(times[0], marginX + 19.5, centerY - 2.5, { align: "center" });
-            pdf.setFontSize(7);
+            pdf.text(times[0], marginX + 19.5, centerY - 3.4, { align: "center" });
+            pdf.setFontSize(6.5);
             pdf.setFont("helvetica", "normal");
-            pdf.text("a", marginX + 19.5, centerY + 0.5, { align: "center" });
+            pdf.text("a", marginX + 19.5, centerY + 0.3, { align: "center" });
             pdf.setFont("helvetica", "bold");
-            pdf.setFontSize(9.5);
-            pdf.text(times[1], marginX + 19.5, centerY + 5, { align: "center" });
+            pdf.setFontSize(9.2);
+            pdf.text(times[1], marginX + 19.5, centerY + 4.8, { align: "center" });
           } else {
             pdf.text(times[0] || "—", marginX + 19.5, centerY + 1, { align: "center" });
           }
 
+          // Activity text, vertically centered in its available area.
           pdf.setTextColor(...dark);
           pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(10.5);
-          pdf.text(activityLines, marginX + 47, y + 8);
+          pdf.setFontSize(activityFontSize);
+          const textAreaHeight = cardHeight - 8 - completedArea;
+          const textStartY = y + 4.5 + Math.max(
+            activityLineHeight,
+            (textAreaHeight - textBlockHeight) / 2 + activityLineHeight * 0.78,
+          );
+          pdf.text(activityLines, activityX, textStartY, {
+            maxWidth: activityWidth,
+            lineHeightFactor: 1.18,
+          });
 
+          // Discreet completion badge kept inside the card.
           if (item.completed) {
             const badgeText = "COMPLETADO";
             const badgeWidth = 27;
+            const badgeX = pageWidth - marginX - badgeWidth - 5;
+            const badgeY = y + cardHeight - 8.3;
             pdf.setFillColor(231, 247, 239);
-            pdf.roundedRect(pageWidth - marginX - badgeWidth - 3, y + cardHeight - 8.5, badgeWidth, 5.5, 2, 2, "F");
+            pdf.roundedRect(badgeX, badgeY, badgeWidth, 5.5, 2, 2, "F");
             pdf.setTextColor(...green);
             pdf.setFont("helvetica", "bold");
-            pdf.setFontSize(6.5);
-            pdf.text(badgeText, pageWidth - marginX - 3 - badgeWidth / 2, y + cardHeight - 4.7, { align: "center" });
+            pdf.setFontSize(6.3);
+            pdf.text(badgeText, badgeX + badgeWidth / 2, badgeY + 3.7, { align: "center" });
           }
 
+          // Activity sequence number remains within the upper-right safe margin.
           pdf.setTextColor(...gray);
           pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(6.8);
-          pdf.text(String(index + 1).padStart(2, "0"), pageWidth - marginX - 3, y + 5, { align: "right" });
+          pdf.setFontSize(6.6);
+          pdf.text(
+            String(index + 1).padStart(2, "0"),
+            pageWidth - marginX - 4,
+            y + 5.2,
+            { align: "right" },
+          );
 
           y += cardHeight + 3;
         });
