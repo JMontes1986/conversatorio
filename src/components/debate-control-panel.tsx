@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle, ClipboardCheck } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle, ClipboardCheck, Shuffle } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { uploadVideo } from "@/lib/uploads";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from '@/lib/documents';
@@ -1319,6 +1319,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const [currentRound, setCurrentRound] = useState('');
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [drawState, setDrawState] = useState<LiveDrawState | null>(null);
+    const [isPublicDrawActive, setIsPublicDrawActive] = useState(false);
 
     useEffect(() => {
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -1339,6 +1340,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     }));
                 }
                 setCurrentRound(data.currentRound || '');
+                setIsPublicDrawActive(data.publicDraw?.active === true);
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
@@ -1424,6 +1426,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 videoUrl: "", 
                 temporaryImageUrl: "",
                 questionSize: 'normal',
+                publicDraw: { active: false, hiddenAt: new Date().toISOString() },
             }, { merge: true });
             
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
@@ -1467,6 +1470,72 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         } catch (error) {
              console.error("Error setting video: ", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
+        }
+    };
+
+    const handlePublishDraw = async () => {
+        const groupPhase = drawState?.phases?.find((phase) => phase.name === "Fase de Grupos");
+        if (!groupPhase || groupPhase.matchups.length === 0) {
+            toast({
+                variant: "destructive",
+                title: "No hay sorteo para publicar",
+                description: "Realice primero el sorteo de la fase de grupos.",
+            });
+            return;
+        }
+
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, {
+                publicDraw: {
+                    active: true,
+                    publishedAt: new Date().toISOString(),
+                },
+                videoUrl: "",
+                temporaryImageUrl: "",
+                studentQuestionOverlay: null,
+            }, { merge: true });
+
+            const userContext = adminUser
+                ? { userId: adminUser.id, role: 'Admin' }
+                : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator' } : undefined);
+            await logActivity("Sorteo publicado en la pantalla de debate.", userContext);
+
+            toast({
+                title: "Sorteo enviado a Debate",
+                description: "El público ya puede ver las rondas sorteadas y el hash SHA-256.",
+            });
+        } catch (error) {
+            console.error("Error publishing draw:", error);
+            toast({
+                variant: "destructive",
+                title: "No se pudo publicar el sorteo",
+                description: "Revise la conexión e inténtelo nuevamente.",
+            });
+        }
+    };
+
+    const handleHideDraw = async () => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, {
+                publicDraw: {
+                    active: false,
+                    hiddenAt: new Date().toISOString(),
+                },
+            }, { merge: true });
+
+            toast({
+                title: "Sorteo ocultado",
+                description: "La pantalla de Debate volvió a su contenido normal.",
+            });
+        } catch (error) {
+            console.error("Error hiding draw:", error);
+            toast({
+                variant: "destructive",
+                title: "No se pudo ocultar el sorteo",
+                description: "Revise la conexión e inténtelo nuevamente.",
+            });
         }
     };
 
@@ -1802,12 +1871,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     </CardContent>
                 </Card>
                 <Tabs defaultValue="round-config" className="w-full">
-                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-7 h-auto sm:h-10">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-8 h-auto sm:h-10">
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
                         <TabsTrigger value="scoring-status"><ClipboardCheck className="mr-2 h-4 w-4"/>Puntuaciones</TabsTrigger>
                         <TabsTrigger value="tiebreaks"><Dices className="mr-2 h-4 w-4"/>Empates</TabsTrigger>
+                        <TabsTrigger value="public-draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
                         <TabsTrigger value="messages"><Send className="mr-2 h-4 w-4"/>Mensajes</TabsTrigger>
                         <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
@@ -1843,6 +1913,62 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     </TabsContent>
                     <TabsContent value="tiebreaks">
                         <TiebreakManagementTab allScores={allScores} allRounds={debateRounds} />
+                    </TabsContent>
+                    <TabsContent value="public-draw">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shuffle className="h-5 w-5" />
+                                    Sorteo Público
+                                </CardTitle>
+                                <CardDescription>
+                                    Publique en la pantalla de Debate el sorteo oficial ya generado. Se mostrará el mismo resultado usado por el bracket y su hash SHA-256.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {drawState?.phases?.find((phase) => phase.name === "Fase de Grupos")?.matchups?.length ? (
+                                    <>
+                                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                            {drawState.phases
+                                                .find((phase) => phase.name === "Fase de Grupos")!
+                                                .matchups.map((matchup) => (
+                                                    <div key={matchup.roundName} className="rounded-lg border p-3">
+                                                        <p className="font-semibold">{matchup.roundName}</p>
+                                                        <p className="mt-1 text-sm text-muted-foreground">
+                                                            {matchup.teams.join(" · ")}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <Button
+                                                type="button"
+                                                onClick={handlePublishDraw}
+                                                disabled={isPublicDrawActive}
+                                            >
+                                                <Send className="mr-2 h-4 w-4" />
+                                                {isPublicDrawActive ? "Sorteo visible en Debate" : "Enviar Sorteo a Debate"}
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleHideDraw}
+                                                disabled={!isPublicDrawActive}
+                                            >
+                                                <EyeOff className="mr-2 h-4 w-4" />
+                                                Ocultar Sorteo
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+                                        Aún no hay un sorteo generado. Realícelo primero desde la sección Sorteo.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                     <TabsContent value="messages">
                         <Card>
