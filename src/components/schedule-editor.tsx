@@ -170,7 +170,13 @@ export function ScheduleEditor() {
               Modifique el cronograma y controle la visibilidad pública de cada día.
             </CardDescription>
           </div>
-          <SchedulePdfDownload schedule={form.getValues()} />
+          <SchedulePdfDownload
+            schedule={{
+              ...form.getValues(),
+              day1Date: form.getValues("day1Date") || "Día 1",
+              day2Date: form.getValues("day2Date") || "Día 2",
+            }}
+          />
         </div>
       </CardHeader>
       <CardContent>
