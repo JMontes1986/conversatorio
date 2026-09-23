@@ -24,9 +24,10 @@ drop policy if exists profile_self on public.profiles;
 create policy profile_self on public.profiles for select to authenticated using (id = (select auth.uid()));
 
 -- Compatibilidad con instalaciones existentes: habilita el rol de Proyección.
+alter table public.profiles drop constraint if exists profiles_check;
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles
-  add constraint profiles_role_check
+  add constraint profiles_check
   check (role in ('admin', 'judge', 'moderator', 'projection'));
 
 do $$
