@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { ShieldAlert, ShieldCheck, Shuffle, Users } from "lucide-react";
-import { doc, onSnapshot } from "@/lib/documents";
+import { Button } from "@/components/ui/button";
+import { ShieldAlert, ShieldCheck, Shuffle, Users, XCircle } from "lucide-react";
+import { doc, onSnapshot, setDoc } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import {
   type DrawIntegrity,
@@ -26,7 +27,7 @@ type DebatePublicDraw = {
   publishedAt?: string;
 };
 
-export function PublicDrawDisplay() {
+export function PublicDrawDisplay({ canControl = false }: { canControl?: boolean }) {
   const [active, setActive] = useState(false);
   const [drawState, setDrawState] = useState<DrawState | null>(null);
   const [integrityStatus, setIntegrityStatus] = useState<"checking" | "valid" | "invalid" | "none">("none");
@@ -85,12 +86,43 @@ export function PublicDrawDisplay() {
     };
   }, [active, groupMatchups, drawState?.integrity]);
 
+  const closePublicDraw = async () => {
+    if (!canControl) return;
+
+    try {
+      await setDoc(
+        doc(db, "debateState", "current"),
+        {
+          publicDraw: {
+            active: false,
+            hiddenAt: new Date().toISOString(),
+          },
+        },
+        { merge: true },
+      );
+    } catch (error) {
+      console.error("Error closing public draw:", error);
+    }
+  };
+
   if (!active) return null;
 
   return (
     <div className="absolute inset-0 z-[25] flex items-center justify-center overflow-auto bg-background/95 p-4 backdrop-blur-sm">
       <div className="my-auto w-full max-w-6xl space-y-6 rounded-2xl border bg-background p-6 shadow-2xl md:p-10">
-        <div className="text-center">
+        <div className="relative text-center">
+          {canControl && drawState?.status === "finished" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={closePublicDraw}
+              className="absolute right-0 top-0 gap-2"
+            >
+              <XCircle className="h-4 w-4" />
+              Cerrar sorteo y continuar
+            </Button>
+          )}
           <div className="mb-3 flex items-center justify-center gap-3">
             <Shuffle className="h-8 w-8 text-primary" />
             <h2 className="font-headline text-3xl font-bold md:text-5xl">Sorteo Público</h2>
@@ -168,6 +200,15 @@ export function PublicDrawDisplay() {
               </code>
               <Badge variant="outline">{drawState.integrity.algorithm}</Badge>
             </div>
+          </div>
+        )}
+
+        {canControl && drawState?.status === "finished" && (
+          <div className="flex justify-center pt-1">
+            <Button type="button" onClick={closePublicDraw} size="lg" className="gap-2">
+              <XCircle className="h-5 w-5" />
+              Cerrar sorteo y continuar debate
+            </Button>
           </div>
         )}
       </div>
