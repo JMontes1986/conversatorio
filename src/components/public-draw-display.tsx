@@ -1,246 +1,163 @@
-
-
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import { Loader2, Swords, Users, Dices, Crown, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Shuffle, Users } from "lucide-react";
 import { doc, onSnapshot } from "@/lib/documents";
 import { db } from "@/lib/supabase";
-import { type DrawIntegrity, normalizeDrawMatchups, verifyGroupDraw } from "@/lib/draw-integrity";
+import {
+  type DrawIntegrity,
+  type DrawMatchup,
+  normalizeDrawMatchups,
+  verifyGroupDraw,
+} from "@/lib/draw-integrity";
 
-const DRAW_STATE_DOC_ID = "liveDraw";
-const TIEBREAK_DOC_ID = "current";
-
-type Matchup = {
-    roundName: string;
-    teams: string[];
-}
-type Phase = {
-    name: string;
-    matchups: Matchup[];
-}
 type DrawState = {
-    phases: Phase[];
-    integrity?: DrawIntegrity;
-}
-type TiebreakState = {
-    isActive: boolean;
-    roundName: string;
-    team1: string;
-    team2: string;
-    results: { team1: number, team2: number } | null;
-    winner: string | null;
-    isRolling: boolean;
-}
-
-const Dice = ({ value }: { value: number }) => {
-  const dots = [];
-  const dotPositions: { [key: number]: number[][] } = {
-    1: [[4]],
-    2: [[0, 8], [2, 6]],
-    3: [[0, 4, 8], [2, 4, 6]],
-    4: [[0, 2, 6, 8]],
-    5: [[0, 2, 4, 6, 8]],
-    6: [[0, 3, 6, 2, 5, 8]],
-  };
-  // Ensure value is within bounds
-  const validValue = Math.max(1, Math.min(6, value || 1));
-  const positions = dotPositions[validValue][Math.floor(Math.random() * dotPositions[validValue].length)];
-  for (let i = 0; i < 9; i++) {
-    dots.push(
-      <div
-        key={i}
-        className={cn(
-          'w-4 h-4 rounded-full',
-          positions.includes(i) ? 'bg-foreground' : 'bg-transparent'
-        )}
-      />
-    );
-  }
-  return <div className="w-16 h-16 border-2 rounded-lg p-2 grid grid-cols-3 gap-1">{dots}</div>;
+  phases?: Array<{
+    name: string;
+    matchups: DrawMatchup[];
+  }>;
+  integrity?: DrawIntegrity | null;
 };
 
+type DebatePublicDraw = {
+  active?: boolean;
+  publishedAt?: string;
+};
 
 export function PublicDrawDisplay() {
+  const [active, setActive] = useState(false);
   const [drawState, setDrawState] = useState<DrawState | null>(null);
-  const [tiebreakState, setTiebreakState] = useState<TiebreakState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [integrityStatus, setIntegrityStatus] = useState<"none" | "checking" | "valid" | "invalid">("none");
+  const [integrityStatus, setIntegrityStatus] = useState<"checking" | "valid" | "invalid" | "none">("none");
 
   useEffect(() => {
-    setLoading(true);
-    const drawStateRef = doc(db, "drawState", DRAW_STATE_DOC_ID);
-    const tiebreakRef = doc(db, "tiebreak", TIEBREAK_DOC_ID);
-    
-    const unsubscribeDraw = onSnapshot(drawStateRef, (docSnap) => {
-        if (docSnap.exists()) {
-            setDrawState(docSnap.data() as DrawState);
-        }
-        setLoading(false);
-    });
+    const unsubscribeDebate = onSnapshot(
+      doc(db, "debateState", "current"),
+      (snapshot) => {
+        const data = snapshot.exists() ? snapshot.data() : {};
+        const publicDraw = (data.publicDraw || null) as DebatePublicDraw | null;
+        setActive(publicDraw?.active === true);
+      },
+      (error) => {
+        console.error("Error loading public draw state:", error);
+        setActive(false);
+      },
+    );
 
-    const unsubscribeTiebreak = onSnapshot(tiebreakRef, (docSnap) => {
-        if (docSnap.exists()) {
-            setTiebreakState(docSnap.data() as TiebreakState);
-        } else {
-            setTiebreakState(null);
-        }
-    });
+    const unsubscribeDraw = onSnapshot(
+      doc(db, "drawState", "liveDraw"),
+      (snapshot) => {
+        setDrawState(snapshot.exists() ? (snapshot.data() as DrawState) : null);
+      },
+      (error) => {
+        console.error("Error loading draw result:", error);
+        setDrawState(null);
+      },
+    );
 
     return () => {
-        unsubscribeDraw();
-        unsubscribeTiebreak();
+      unsubscribeDebate();
+      unsubscribeDraw();
     };
   }, []);
 
+  const groupMatchups = useMemo(() => {
+    const phase = drawState?.phases?.find((item) => item.name === "Fase de Grupos");
+    return normalizeDrawMatchups(phase?.matchups || []);
+  }, [drawState]);
+
   useEffect(() => {
     let cancelled = false;
-    const groupPhase = drawState?.phases?.find((phase) => phase.name === "Fase de Grupos");
-    const matchups = normalizeDrawMatchups(groupPhase?.matchups);
-    if (matchups.length === 0 || !drawState?.integrity) {
-      setIntegrityStatus("none");
+
+    if (!active || groupMatchups.length === 0 || !drawState?.integrity) {
+      setIntegrityStatus(drawState?.integrity ? "checking" : "none");
       return;
     }
 
     setIntegrityStatus("checking");
-    void verifyGroupDraw(matchups, drawState.integrity).then((isValid) => {
-      if (!cancelled) setIntegrityStatus(isValid ? "valid" : "invalid");
+    void verifyGroupDraw(groupMatchups, drawState.integrity).then((valid) => {
+      if (!cancelled) setIntegrityStatus(valid ? "valid" : "invalid");
     });
+
     return () => {
       cancelled = true;
     };
-  }, [drawState]);
+  }, [active, groupMatchups, drawState?.integrity]);
 
-  const TiebreakModal = () => {
-      if (!tiebreakState || !tiebreakState.isActive) return null;
-
-      return (
-        <Dialog open={true}>
-            <DialogContent className="max-w-xl">
-                <DialogHeader>
-                    <DialogTitle className="font-headline text-2xl text-center">
-                        ¡Desempate en Vivo!
-                    </DialogTitle>
-                </DialogHeader>
-                <div className="text-center">
-                    <p className="text-muted-foreground">Resolviendo empate en la ronda:</p>
-                    <p className="font-bold text-lg mb-4">{tiebreakState.roundName}</p>
-
-                     <div className="grid grid-cols-2 gap-4 items-center">
-                        <div className={cn("p-4 rounded-lg transition-colors", tiebreakState.winner === tiebreakState.team1 && 'bg-green-100 dark:bg-green-900/50')}>
-                            <p className="font-bold text-xl">{tiebreakState.team1}</p>
-                            {tiebreakState.isRolling && <Dices className="h-16 w-16 mx-auto my-4 animate-spin" />}
-                            {tiebreakState.results && <div className="flex justify-center my-4"><Dice value={tiebreakState.results.team1} /></div>}
-                        </div>
-                        <div className={cn("p-4 rounded-lg transition-colors", tiebreakState.winner === tiebreakState.team2 && 'bg-green-100 dark:bg-green-900/50')}>
-                            <p className="font-bold text-xl">{tiebreakState.team2}</p>
-                            {tiebreakState.isRolling && <Dices className="h-16 w-16 mx-auto my-4 animate-spin" />}
-                            {tiebreakState.results && <div className="flex justify-center my-4"><Dice value={tiebreakState.results.team2} /></div>}
-                        </div>
-                    </div>
-
-                    {tiebreakState.results && !tiebreakState.winner && (
-                         <p className='font-bold text-xl text-amber-600 mt-4'>¡Otro Empate! Volviendo a lanzar...</p>
-                    )}
-
-                    {tiebreakState.winner && (
-                        <div className="mt-6">
-                            <p className="text-xl font-bold flex items-center justify-center gap-2">
-                                <Crown className="h-6 w-6 text-amber-500"/>
-                                Ganador: <span className="text-green-600 dark:text-green-400">{tiebreakState.winner}</span>
-                            </p>
-                        </div>
-                    )}
-                </div>
-            </DialogContent>
-        </Dialog>
-      )
-  }
-
-  const CurrentDraw = () => {
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center min-h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin" />
-                <p className="ml-4">Cargando llaves del torneo...</p>
-            </div>
-        );
-    }
-
-    if (!drawState || !drawState.phases || drawState.phases.length === 0) {
-        return (
-            <div className="flex justify-center items-center min-h-[400px] bg-secondary/50 rounded-lg">
-                <p className="text-muted-foreground text-center px-4">
-                    El sorteo o las llaves del torneo no han sido configurados o iniciados aún.
-                </p>
-            </div>
-        );
-    }
-    
-    return (
-        <div className="space-y-8">
-            {drawState.phases.map(phase => (
-                 <Card key={phase.name}>
-                    <CardHeader>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <CardTitle className="font-headline text-xl md:text-2xl flex items-center gap-3">
-                                <Users className="h-6 w-6 text-primary"/>
-                                {phase.name}
-                            </CardTitle>
-                            {phase.name === "Fase de Grupos" && drawState.integrity && (
-                                <Badge variant={integrityStatus === "invalid" ? "destructive" : "secondary"} className="w-fit">
-                                    {integrityStatus === "invalid" ? <ShieldAlert className="mr-1 h-4 w-4" /> : <ShieldCheck className="mr-1 h-4 w-4" />}
-                                    {integrityStatus === "checking" ? "Verificando hash" : integrityStatus === "valid" ? "Sorteo verificado" : "Integridad inválida"}
-                                </Badge>
-                            )}
-                        </div>
-                        {phase.name === "Fase de Grupos" && drawState.integrity && (
-                            <p className="break-all font-mono text-xs text-muted-foreground" title="Hash SHA-256 del sorteo">
-                                SHA-256: {drawState.integrity.hash}
-                            </p>
-                        )}
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {phase.matchups.map(matchup => (
-                             <Card key={matchup.roundName} className="bg-background">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base text-center font-semibold">{matchup.roundName}</CardTitle>
-                                </CardHeader>
-                                <CardContent className="flex items-center justify-center p-4">
-                                   {matchup.teams.length > 1 ? (
-                                        <div className="flex items-center gap-3 text-sm font-medium text-center">
-                                            <span>{matchup.teams[0]}</span>
-                                            <Swords className="h-5 w-5 text-muted-foreground shrink-0"/>
-                                            <span>{matchup.teams[1]}</span>
-                                        </div>
-                                   ) : (
-                                        <div className="text-sm font-medium">{matchup.teams[0] || 'Equipo pendiente'}</div>
-                                   )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </CardContent>
-                </Card>
-            ))}
-        </div>
-    )
-  }
+  if (!active) return null;
 
   return (
-    <div className="w-full max-w-6xl mx-auto">
-        <div className="space-y-1 mb-8 text-center">
-            <h1 className="font-headline text-3xl md:text-4xl font-bold">Llaves del Torneo</h1>
-            <p className="text-muted-foreground mt-2">
-                Enfrentamientos actuales y futuros del conversatorio.
-            </p>
+    <div className="absolute inset-0 z-[25] flex items-center justify-center overflow-auto bg-background/95 p-4 backdrop-blur-sm">
+      <div className="my-auto w-full max-w-6xl space-y-6 rounded-2xl border bg-background p-6 shadow-2xl md:p-10">
+        <div className="text-center">
+          <div className="mb-3 flex items-center justify-center gap-3">
+            <Shuffle className="h-8 w-8 text-primary" />
+            <h2 className="font-headline text-3xl font-bold md:text-5xl">Sorteo Público</h2>
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Distribución oficial de equipos para la fase de grupos
+          </p>
         </div>
-        
-        <TiebreakModal />
-        <CurrentDraw />
+
+        {groupMatchups.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {groupMatchups.map((matchup) => (
+              <div key={matchup.roundName} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                <div className="bg-primary px-4 py-3 text-primary-foreground">
+                  <p className="text-xs font-semibold uppercase tracking-widest">Ronda</p>
+                  <p className="text-xl font-bold">{matchup.roundName}</p>
+                </div>
+                <div className="divide-y">
+                  {matchup.teams.map((team, index) => (
+                    <div key={`${matchup.roundName}-${team}`} className="flex items-center gap-3 px-4 py-4">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
+                        {index + 1}
+                      </div>
+                      <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="text-lg font-semibold">{team}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+            El sorteo todavía no tiene resultados para mostrar.
+          </div>
+        )}
+
+        {drawState?.integrity && (
+          <div className={
+            integrityStatus === "invalid"
+              ? "rounded-xl border border-destructive bg-destructive/10 p-5"
+              : "rounded-xl border border-emerald-300 bg-emerald-50 p-5 dark:bg-emerald-950/20"
+          }>
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className={
+                integrityStatus === "invalid"
+                  ? "flex items-center gap-2 font-semibold text-destructive"
+                  : "flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-400"
+              }>
+                {integrityStatus === "invalid"
+                  ? <ShieldAlert className="h-5 w-5" />
+                  : <ShieldCheck className="h-5 w-5" />}
+                <span>
+                  {integrityStatus === "checking"
+                    ? "Verificando integridad SHA-256..."
+                    : integrityStatus === "valid"
+                      ? "Sorteo SHA-256 verificado"
+                      : "La verificación de integridad falló"}
+                </span>
+              </div>
+              <code className="max-w-full break-all rounded bg-background/70 px-3 py-2 text-[11px]">
+                {drawState.integrity.hash}
+              </code>
+              <Badge variant="outline">{drawState.integrity.algorithm}</Badge>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
