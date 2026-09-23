@@ -770,14 +770,14 @@ function AdminDashboard() {
                     </Card>
                      <Card className="mt-6">
                         <CardHeader>
-                            <CardTitle>Crear Administrador</CardTitle>
-                            <CardDescription>Añada un nuevo usuario con permisos de administrador.</CardDescription>
+                            <CardTitle>Crear Administrador / Proyección</CardTitle>
+                            <CardDescription>Cree una cuenta administrativa o el perfil del equipo de proyección.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Button asChild className="w-full">
                                 <Link href="/admin/crear-usuario">
                                     <UserPlus className="mr-2 h-4 w-4" />
-                                    Crear Nuevo Administrador
+                                    Crear Usuario de Organización
                                 </Link>
                             </Button>
                         </CardContent>
