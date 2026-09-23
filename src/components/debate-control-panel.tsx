@@ -54,6 +54,7 @@ import Image from 'next/image';
 import { normalizeExternalImageUrl, isMicrosoftCloudImage } from '@/lib/external-image';
 import { isMicrosoftVideoSource, normalizeVideoSource, serializeVideoSource } from '@/lib/external-video';
 import { ExternalImage } from '@/components/external-image';
+import { RoundDurationStopwatch } from "@/components/round-duration-stopwatch";
 import {
     DEFAULT_TOURNAMENT_FORMAT,
     type TournamentFormat,
@@ -1927,8 +1928,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                         </div>
                     </CardContent>
                 </Card>
-                <Tabs defaultValue="round-config" className="w-full">
+                <Tabs defaultValue="display-settings" className="w-full">
                     <TabsList className="grid w-full grid-cols-1 sm:grid-cols-8 h-auto sm:h-10">
+                        <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
@@ -1936,7 +1938,6 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                         <TabsTrigger value="tiebreaks"><Dices className="mr-2 h-4 w-4"/>Empates</TabsTrigger>
                         <TabsTrigger value="public-draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
                         <TabsTrigger value="messages"><Send className="mr-2 h-4 w-4"/>Mensajes</TabsTrigger>
-                        <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
                     <TabsContent value="round-config">
                         <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} drawState={drawState} />
@@ -2122,7 +2123,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                         </Card>
                     </TabsContent>
                     <TabsContent value="display-settings">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-6">
+                            <RoundDurationStopwatch />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Control de Pantalla</CardTitle>
@@ -2162,6 +2165,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 </CardContent>
                             </Card>
                             <SidebarImageSetter initialUrl={sidebarImageUrl} />
+                            </div>
                         </div>
                     </TabsContent>
                 </Tabs>
