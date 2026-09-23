@@ -2111,7 +2111,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                 <div>
-                                        <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
+                                        <Timer initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
                                         <div className="mt-2 grid grid-cols-2 gap-2">
                                             <div className='col-span-2 grid grid-cols-3 gap-2'>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(120)}>2 min</Button>
