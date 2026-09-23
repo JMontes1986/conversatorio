@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
+import { SchedulePdfDownload } from "@/components/schedule-pdf-download";
 
 const scheduleItemSchema = z.object({
   id: z.string(),
@@ -162,10 +163,15 @@ export function ScheduleEditor() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Editor de Programación del Evento</CardTitle>
-        <CardDescription>
-        Modifique el cronograma y controle la visibilidad pública de cada día.
-        </CardDescription>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle>Editor de Programación del Evento</CardTitle>
+            <CardDescription>
+              Modifique el cronograma y controle la visibilidad pública de cada día.
+            </CardDescription>
+          </div>
+          <SchedulePdfDownload schedule={form.getValues()} />
+        </div>
       </CardHeader>
       <CardContent>
         <Form {...form}>
