@@ -18,6 +18,7 @@ type DrawState = {
     matchups: DrawMatchup[];
   }>;
   integrity?: DrawIntegrity | null;
+  status?: "waiting" | "drawing" | "finished";
 };
 
 type DebatePublicDraw = {
@@ -95,7 +96,11 @@ export function PublicDrawDisplay() {
             <h2 className="font-headline text-3xl font-bold md:text-5xl">Sorteo Público</h2>
           </div>
           <p className="text-lg text-muted-foreground">
-            Distribución oficial de equipos para la fase de grupos
+            {drawState?.status === "waiting"
+              ? "Pantalla lista. El sorteo comenzará en breve."
+              : drawState?.status === "drawing"
+                ? "Sorteo en vivo · los equipos aparecerán progresivamente"
+                : "Distribución oficial de equipos para la fase de grupos"}
           </p>
         </div>
 
@@ -122,12 +127,20 @@ export function PublicDrawDisplay() {
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-            El sorteo todavía no tiene resultados para mostrar.
+          <div className="rounded-xl border border-dashed p-8 text-center">
+            <Shuffle className="mx-auto mb-3 h-10 w-10 animate-pulse text-primary" />
+            <p className="text-xl font-semibold">
+              {drawState?.status === "drawing" ? "Sorteando equipos..." : "Sorteo listo para iniciar"}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {drawState?.status === "drawing"
+                ? "Mantenga esta pantalla visible: las rondas aparecerán automáticamente."
+                : "Cuando el administrador pulse “Iniciar Sorteo”, los resultados se mostrarán aquí en tiempo real."}
+            </p>
           </div>
         )}
 
-        {drawState?.integrity && (
+        {drawState?.status === "finished" && drawState?.integrity && (
           <div className={
             integrityStatus === "invalid"
               ? "rounded-xl border border-destructive bg-destructive/10 p-5"
