@@ -31,7 +31,6 @@ interface TimerProps {
 export function Timer({ initialTime, title, showControls = true, size = 'default', enableAlarm = false }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [serverState, setServerState] = useState<TimerState | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(false);
   const [visualAlarm, setVisualAlarm] = useState(false);
   const audio = useRef<TimerAudio | null>(null);
   const completedRun = useRef<number | null>(null);
@@ -42,13 +41,9 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   useEffect(() => {
     const controller = getSharedTimerAudio();
     audio.current = controller;
-    setAudioEnabled(controller.isEnabled());
-
     const unlock = () => {
       if (!showControls && !enableAlarm) return;
-      void controller.enable().then((enabled) => {
-        setAudioEnabled(enabled);
-      });
+      void controller.enable();
     };
 
     if (showControls || enableAlarm) {
@@ -170,7 +165,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   const playSound = async () => {
     const controller = audio.current;
     const enabled = Boolean(controller && await controller.enable());
-    setAudioEnabled(enabled);
 
     if (controller && enabled && controller.ring()) {
         setVisualAlarm(false);
@@ -179,21 +173,20 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
     toast({
       title: "Audio no disponible",
-      description: "El navegador bloqueó el sonido. Pulse “Activar sonido” y vuelva a probar.",
+      description: "El navegador bloqueó la campana. Revise el volumen del dispositivo y vuelva a probar.",
     });
   };
 
   const activateSound = async () => {
     const controller = audio.current;
     const enabled = Boolean(controller && await controller.enable());
-    setAudioEnabled(enabled);
 
     if (enabled) {
       controller?.ring();
       setVisualAlarm(false);
       toast({
-        title: "Sonido activado",
-        description: "La campana sonará automáticamente cuando el temporizador llegue a cero.",
+        title: "Campana lista",
+        description: "La alarma de proyección quedó preparada.",
       });
     } else {
       toast({
