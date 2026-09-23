@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { PublicTiebreakDisplay } from '@/components/public-tiebreak-display';
+import { PublicDrawDisplay } from '@/components/public-draw-display';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -135,6 +136,7 @@ export default function DebatePage() {
   return (
     <div className="relative flex flex-col min-h-screen bg-secondary text-foreground p-4 md:p-8">
         <PublicTiebreakDisplay />
+        <PublicDrawDisplay />
 
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
