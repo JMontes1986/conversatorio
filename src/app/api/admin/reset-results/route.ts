@@ -139,7 +139,10 @@ export async function POST(request: Request) {
       .update({
         data: {
           ...(debateStateRow?.data || {}),
+          currentRound: '',
+          teams: [],
           publicTiebreak: null,
+          publicDraw: null,
         },
       })
       .eq('id', 'current');
