@@ -22,6 +22,10 @@ export class TimerAudio {
     }
   }
 
+  isEnabled(): boolean {
+    return !this.disposed && this.context?.state === 'running';
+  }
+
   /**
    * Ring with a short, bright three-strike bell.
    * Requires the AudioContext to have been enabled by a prior user gesture.
@@ -102,4 +106,13 @@ export class TimerAudio {
     this.context = null;
     if (context && context.state !== 'closed') void context.close().catch(() => {});
   }
+}
+
+let sharedTimerAudio: TimerAudio | null = null;
+
+export function getSharedTimerAudio(): TimerAudio {
+  if (!sharedTimerAudio) {
+    sharedTimerAudio = new TimerAudio();
+  }
+  return sharedTimerAudio;
 }
