@@ -16,6 +16,8 @@ interface TimerState {
   duration: number;
   lastUpdated: number;
   isActive: boolean;
+  endsAt?: number;
+  alarmId?: string;
 }
 
 interface TimerProps {
@@ -30,6 +32,8 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   const [serverState, setServerState] = useState<TimerState | null>(null);
   const audio = useRef<TimerAudio | null>(null);
   const completedRun = useRef<number | null>(null);
+  const lastAlarmId = useRef<string | null>(null);
+  const serverOffsetMs = useRef(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,12 +60,47 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   }, []);
   
   useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const syncClock = async () => {
+      const started = Date.now();
+      try {
+        const response = await fetch(`/api/time?t=${started}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as { now?: number };
+        const finished = Date.now();
+        if (cancelled || typeof data.now !== "number") return;
+
+        const midpoint = started + (finished - started) / 2;
+        serverOffsetMs.current = data.now - midpoint;
+      } catch {
+        // Keep the last known offset. Timer still works if the time probe is unavailable.
+      }
+    };
+
+    void syncClock();
+    timer = setInterval(() => { void syncClock(); }, 30_000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         if (data.timer) {
-            setServerState(data.timer as TimerState);
+            const nextTimer = data.timer as TimerState;
+            setServerState(nextTimer);
+
+            if (nextTimer.alarmId && nextTimer.alarmId !== lastAlarmId.current) {
+                lastAlarmId.current = nextTimer.alarmId;
+                audio.current?.ring();
+            }
         }
       }
     });
@@ -71,19 +110,28 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   useEffect(() => {
     const tick = () => {
         if (serverState && serverState.isActive) {
-            const elapsed = Math.floor((Date.now() - serverState.lastUpdated) / 1000);
-            const newTime = Math.max(0, serverState.duration - elapsed);
+            const now = Date.now() + serverOffsetMs.current;
+            const targetEnd = serverState.endsAt
+                ?? (serverState.lastUpdated + serverState.duration * 1000);
+            const newTime = Math.max(0, Math.ceil((targetEnd - now) / 1000));
             setTimeRemaining(newTime);
 
             if (newTime <= 0 && completedRun.current !== serverState.lastUpdated) {
                 completedRun.current = serverState.lastUpdated;
-                audio.current?.ring();
 
-                // Only the controlling timer writes the stop state.
-                // Public Debate timers still ring but do not race to update Supabase.
                 if (showControls) {
+                    const alarmId = `${serverState.lastUpdated}-${targetEnd}`;
+                    lastAlarmId.current = alarmId;
+                    audio.current?.ring();
+
                     void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
-                        timer: { isActive: false, duration: 0, lastUpdated: Date.now() },
+                        timer: {
+                            isActive: false,
+                            duration: 0,
+                            lastUpdated: now,
+                            endsAt: targetEnd,
+                            alarmId,
+                        },
                     }, { merge: true }).catch(error => console.error("Error stopping expired timer:", error));
                 }
             }
@@ -123,11 +171,16 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
     try {
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+        const now = Date.now() + serverOffsetMs.current;
+        const duration = timeRemaining > 0 ? timeRemaining : initialTime;
+
         await setDoc(docRef, { 
             timer: { 
                 isActive: newIsActive,
-                duration: timeRemaining > 0 ? timeRemaining : initialTime,
-                lastUpdated: Date.now()
+                duration,
+                lastUpdated: now,
+                endsAt: newIsActive ? now + duration * 1000 : undefined,
+                alarmId: null,
             } 
         }, { merge: true });
     } catch (error) {
@@ -139,11 +192,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     if (showControls) {
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            const now = Date.now() + serverOffsetMs.current;
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
                     duration: initialTime,
-                    lastUpdated: Date.now()
+                    lastUpdated: now,
+                    endsAt: null,
+                    alarmId: null,
                 } 
             }, { merge: true });
             setTimeRemaining(initialTime);
