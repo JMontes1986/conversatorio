@@ -8,7 +8,7 @@ grant usage on schema private to anon, authenticated, service_role;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('admin', 'judge', 'moderator')),
+  role text not null check (role in ('admin', 'judge', 'moderator', 'projection')),
   subject_id text,
   display_name text not null,
   identifier text,
@@ -22,6 +22,12 @@ grant select on public.profiles to authenticated;
 grant all on public.profiles to service_role;
 drop policy if exists profile_self on public.profiles;
 create policy profile_self on public.profiles for select to authenticated using (id = (select auth.uid()));
+
+-- Compatibilidad con instalaciones existentes: habilita el rol de Proyección.
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles
+  add constraint profiles_role_check
+  check (role in ('admin', 'judge', 'moderator', 'projection'));
 
 do $$
 declare t text;
