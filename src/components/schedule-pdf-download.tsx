@@ -21,18 +21,29 @@ type ScheduleData = {
   day2Published?: boolean;
 };
 
-const BRAND_IMAGE = "data:image/jpeg;base64,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";
+function formatTime(value?: string) {
+  if (!value) return "";
+  const [h, m] = value.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return value;
+  const suffix = h >= 12 ? "p. m." : "a. m.";
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, "0")} ${suffix}`;
+}
 
 function timeLabel(start?: string, end?: string) {
   if (!start) return "";
-  const format = (value: string) => {
-    const [h, m] = value.split(":").map(Number);
-    if (Number.isNaN(h) || Number.isNaN(m)) return value;
-    const suffix = h >= 12 ? "p. m." : "a. m.";
-    const hour = h % 12 || 12;
-    return `${hour}:${String(m).padStart(2, "0")} ${suffix}`;
-  };
-  return end ? `${format(start)} - ${format(end)}` : format(start);
+  return end ? `${formatTime(start)}\n${formatTime(end)}` : formatTime(start);
+}
+
+async function imageToDataUrl(src: string) {
+  const response = await fetch(src, { cache: "force-cache" });
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 export function SchedulePdfDownload({ schedule }: { schedule: ScheduleData }) {
@@ -40,59 +51,179 @@ export function SchedulePdfDownload({ schedule }: { schedule: ScheduleData }) {
 
   const handleDownload = async () => {
     setGenerating(true);
+
     try {
-      const [{ jsPDF }, autoTableModule] = await Promise.all([
+      const [{ jsPDF }, iconData] = await Promise.all([
         import("jspdf"),
-        import("jspdf-autotable"),
+        imageToDataUrl("/conversatorio-icon.png"),
       ]);
-      const autoTable = autoTableModule.default;
-      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-      const drawHeader = (title: string) => {
-        pdf.setFillColor(239, 255, 0);
-        pdf.rect(0, 0, 210, 38, "F");
-        pdf.addImage(BRAND_IMAGE, "JPEG", 65, 5, 80, 29);
-        pdf.setTextColor(10, 20, 55);
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(18);
-        pdf.text("CONVERSATORIO INTERNO 2026", 105, 46, { align: "center" });
-        pdf.setFontSize(11);
+      const pdf = new jsPDF({
+        unit: "mm",
+        format: "a4",
+        orientation: "portrait",
+        compress: true,
+      });
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const marginX = 16;
+      const contentWidth = pageWidth - marginX * 2;
+
+      const navy: [number, number, number] = [8, 19, 55];
+      const blue: [number, number, number] = [66, 86, 190];
+      const lime: [number, number, number] = [220, 238, 35];
+      const light: [number, number, number] = [247, 248, 251];
+      const gray: [number, number, number] = [104, 116, 137];
+      const dark: [number, number, number] = [20, 28, 45];
+      const green: [number, number, number] = [25, 135, 84];
+
+      const drawFooter = (pageNumber: number) => {
+        pdf.setDrawColor(226, 230, 238);
+        pdf.line(marginX, 283, pageWidth - marginX, 283);
+
         pdf.setFont("helvetica", "normal");
-        pdf.text(title, 105, 53, { align: "center" });
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(...gray);
+        pdf.text("Colegio Franciscano Agustín Gemelli · Conversatorio Interno 2026", marginX, 289);
+        pdf.text(`Página ${pageNumber}`, pageWidth - marginX, 289, { align: "right" });
       };
 
-      const addDay = (date: string, items: ScheduleItem[], newPage: boolean) => {
-        if (newPage) pdf.addPage();
-        drawHeader(date);
-        autoTable(pdf, {
-          startY: 60,
-          head: [["Hora", "Actividad"]],
-          body: items.map((item) => [
-            timeLabel(item.time, item.endTime),
-            item.completed ? `✓ ${item.activity}` : item.activity,
-          ]),
-          theme: "grid",
-          styles: { fontSize: 10, cellPadding: 3.2, valign: "middle" },
-          headStyles: { fillColor: [9, 23, 64], textColor: [255, 255, 255], fontStyle: "bold" },
-          columnStyles: { 0: { cellWidth: 42 }, 1: { cellWidth: 138 } },
-          margin: { left: 15, right: 15 },
-          didDrawPage: () => {
-            pdf.setFontSize(8);
-            pdf.setTextColor(90, 90, 90);
-            pdf.text("Conversatorio Colgemelli · Programación oficial", 105, 290, { align: "center" });
-          },
+      let pageNumber = 1;
+
+      const drawPageHeader = (date: string, dayLabel: string) => {
+        pdf.setFillColor(...navy);
+        pdf.rect(0, 0, pageWidth, 42, "F");
+
+        pdf.setFillColor(...lime);
+        pdf.rect(0, 42, pageWidth, 2.5, "F");
+
+        pdf.addImage(iconData, "PNG", 16, 8, 23, 23);
+
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("COLEGIO FRANCISCANO AGUSTÍN GEMELLI", 45, 13);
+
+        pdf.setFontSize(20);
+        pdf.text("CONVERSATORIO INTERNO 2026", 45, 23);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9.5);
+        pdf.text("Programación oficial del evento", 45, 31);
+
+        pdf.setTextColor(...dark);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.text(dayLabel.toUpperCase(), marginX, 57);
+
+        pdf.setFontSize(17);
+        pdf.text(date || dayLabel, marginX, 66);
+
+        pdf.setDrawColor(220, 225, 234);
+        pdf.line(marginX, 72, pageWidth - marginX, 72);
+
+        return 80;
+      };
+
+      const drawDay = (
+        date: string,
+        dayLabel: string,
+        items: ScheduleItem[],
+        forceNewPage: boolean,
+      ) => {
+        if (forceNewPage) {
+          pdf.addPage();
+          pageNumber += 1;
+        }
+
+        let y = drawPageHeader(date, dayLabel);
+
+        items.forEach((item, index) => {
+          const activityLines = pdf.splitTextToSize(item.activity || "Actividad sin descripción", 122);
+          const activityHeight = Math.max(10, activityLines.length * 5);
+          const cardHeight = Math.max(22, activityHeight + 10);
+
+          if (y + cardHeight > 276) {
+            drawFooter(pageNumber);
+            pdf.addPage();
+            pageNumber += 1;
+            y = drawPageHeader(date, `${dayLabel} · continuación`);
+          }
+
+          const isBreak = /receso|almuerzo|descanso/i.test(item.activity || "");
+
+          pdf.setFillColor(...(isBreak ? [252, 250, 235] as [number, number, number] : light));
+          pdf.roundedRect(marginX, y, contentWidth, cardHeight, 2.5, 2.5, "F");
+
+          pdf.setFillColor(...(isBreak ? lime : blue));
+          pdf.roundedRect(marginX, y, 39, cardHeight, 2.5, 2.5, "F");
+
+          pdf.setTextColor(...(isBreak ? dark : [255, 255, 255]));
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(9.5);
+
+          const times = timeLabel(item.time, item.endTime).split("\n");
+          const centerY = y + cardHeight / 2;
+          if (times.length > 1) {
+            pdf.text(times[0], marginX + 19.5, centerY - 2.5, { align: "center" });
+            pdf.setFontSize(7);
+            pdf.setFont("helvetica", "normal");
+            pdf.text("a", marginX + 19.5, centerY + 0.5, { align: "center" });
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(9.5);
+            pdf.text(times[1], marginX + 19.5, centerY + 5, { align: "center" });
+          } else {
+            pdf.text(times[0] || "—", marginX + 19.5, centerY + 1, { align: "center" });
+          }
+
+          pdf.setTextColor(...dark);
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(10.5);
+          pdf.text(activityLines, marginX + 47, y + 8);
+
+          if (item.completed) {
+            const badgeText = "COMPLETADO";
+            const badgeWidth = 27;
+            pdf.setFillColor(231, 247, 239);
+            pdf.roundedRect(pageWidth - marginX - badgeWidth - 3, y + cardHeight - 8.5, badgeWidth, 5.5, 2, 2, "F");
+            pdf.setTextColor(...green);
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(6.5);
+            pdf.text(badgeText, pageWidth - marginX - 3 - badgeWidth / 2, y + cardHeight - 4.7, { align: "center" });
+          }
+
+          pdf.setTextColor(...gray);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6.8);
+          pdf.text(String(index + 1).padStart(2, "0"), pageWidth - marginX - 3, y + 5, { align: "right" });
+
+          y += cardHeight + 3;
         });
+
+        drawFooter(pageNumber);
       };
 
-      let pageAdded = false;
-      if (schedule.day1Published) {
-        addDay(schedule.day1Date || "Día 1", schedule.day1 || [], pageAdded);
-        pageAdded = true;
+      const publishedDays = [
+        schedule.day1Published
+          ? { date: schedule.day1Date || "Día 1", label: "Día 1", items: schedule.day1 || [] }
+          : null,
+        schedule.day2Published
+          ? { date: schedule.day2Date || "Día 2", label: "Día 2", items: schedule.day2 || [] }
+          : null,
+      ].filter(Boolean) as Array<{ date: string; label: string; items: ScheduleItem[] }>;
+
+      if (publishedDays.length === 0) {
+        publishedDays.push({
+          date: schedule.day1Date || "Programación",
+          label: "Programación",
+          items: schedule.day1 || [],
+        });
       }
-      if (schedule.day2Published) {
-        addDay(schedule.day2Date || "Día 2", schedule.day2 || [], pageAdded);
-        pageAdded = true;
-      }
+
+      publishedDays.forEach((day, index) => {
+        drawDay(day.date, day.label, day.items, index > 0);
+      });
 
       pdf.save("programacion-conversatorio-interno-2026.pdf");
     } finally {
