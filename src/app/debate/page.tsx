@@ -43,6 +43,7 @@ interface DebateState {
 export default function DebatePage() {
   const { profile } = useAuth();
   const canControl = profile?.role === 'admin' || profile?.role === 'moderator';
+  const isProjection = profile?.role === 'projection';
   const [debateState, setDebateState] = useState<DebateState | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -239,6 +240,7 @@ export default function DebatePage() {
                         initialTime={timer?.duration || 300}
                         title="Tiempo Restante"
                         showControls={false}
+                        enableAlarm={isProjection}
                         size="small"
                     />
                 </div>
@@ -265,6 +267,7 @@ export default function DebatePage() {
                         initialTime={timer?.duration || 300}
                         title="Tiempo Restante"
                         showControls={false}
+                        enableAlarm={isProjection}
                         size="small"
                     />
                 </div>
