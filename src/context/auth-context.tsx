@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           if (!disposed && request === generation) {
             setProfile(previous => JSON.stringify(previous) === JSON.stringify(nextProfile) ? previous : nextProfile);
-            setUser(nextProfile?.role === 'admin' ? session?.user ?? null : null);
+            setUser(nextProfile?.role === 'admin' || nextProfile?.role === 'projection' ? session?.user ?? null : null);
             setError('');
           }
         } catch (cause) {
