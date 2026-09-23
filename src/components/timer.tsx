@@ -82,7 +82,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     };
 
     void syncClock();
-    timer = setInterval(() => { void syncClock(); }, 30_000);
+    timer = setInterval(() => { void syncClock(); }, 15_000);
 
     return () => {
       cancelled = true;
@@ -154,7 +154,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     // Initial tick to sync immediately
     tick();
 
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(tick, 200);
     return () => clearInterval(interval);
 
   }, [serverState, showControls]);
@@ -208,13 +208,26 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
         const now = Date.now() + serverOffsetMs.current;
         const duration = timeRemaining > 0 ? timeRemaining : initialTime;
+        const nextTimerState: TimerState = {
+            isActive: newIsActive,
+            duration,
+            lastUpdated: now,
+            endsAt: newIsActive ? now + duration * 1000 : undefined,
+            alarmId: undefined,
+        };
+
+        // El equipo de control cambia inmediatamente; Debate usa el mismo endsAt
+        // cuando recibe el estado, por lo que ambos convergen al mismo segundo.
+        setServerState(nextTimerState);
+        setTimeRemaining(duration);
+        completedRun.current = null;
 
         await setDoc(docRef, { 
-            timer: { 
-                isActive: newIsActive,
-                duration,
-                lastUpdated: now,
-                endsAt: newIsActive ? now + duration * 1000 : undefined,
+            timer: {
+                isActive: nextTimerState.isActive,
+                duration: nextTimerState.duration,
+                lastUpdated: nextTimerState.lastUpdated,
+                endsAt: nextTimerState.endsAt ?? null,
                 alarmId: null,
             } 
         }, { merge: true });
@@ -228,6 +241,17 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             const now = Date.now() + serverOffsetMs.current;
+            const nextTimerState: TimerState = {
+                isActive: false,
+                duration: initialTime,
+                lastUpdated: now,
+                endsAt: undefined,
+                alarmId: undefined,
+            };
+            setServerState(nextTimerState);
+            setTimeRemaining(initialTime);
+            completedRun.current = null;
+
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
@@ -237,7 +261,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     alarmId: null,
                 } 
             }, { merge: true });
-            setTimeRemaining(initialTime);
         } catch (error) {
             console.error("Error resetting timer state in Supabase:", error);
         }
