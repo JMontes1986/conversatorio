@@ -728,6 +728,7 @@ export function TournamentBracket() {
                         key={match.id}
                         match={match}
                         isLastStage={stageIndex === stages.length - 1}
+                        teamMembers={teamMembers}
                       />
                     ))}
                   </div>
