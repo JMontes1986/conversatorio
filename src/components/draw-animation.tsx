@@ -48,6 +48,7 @@ type LiveDrawState = {
     phases: Phase[];
     integrity?: DrawIntegrity;
     tournamentFormat?: TournamentFormat;
+    status?: "waiting" | "drawing" | "finished";
 }
 
 type IntegrityStatus = "none" | "checking" | "valid" | "invalid";
@@ -114,10 +115,13 @@ export function DrawAnimation() {
             if (groupPhase && groupPhase.matchups.length > 0) {
                 setAssignedTeams(normalizeDrawMatchups(groupPhase.matchups));
                 setIntegrity(data.integrity ?? null);
-                setIsFinished(true); // Mark as finished if there's a saved state
+                setIsFinished(
+                  data.status === "finished"
+                  || (!data.status && Boolean(data.integrity))
+                );
             } else {
                 setAssignedTeams([]);
-                setIntegrity(null);
+                setIntegrity(data.integrity ?? null);
                 setIsFinished(false);
             }
         } else {
@@ -279,6 +283,21 @@ export function DrawAnimation() {
 
       const shuffledTeams = secureShuffle(allTeams);
       const matchups: DrawMatchup[] = [];
+
+      // Publish an empty live state first so /debate can show the draw starting
+      // before any team is revealed.
+      await setDoc(
+        doc(db, "drawState", DRAW_STATE_DOC_ID),
+        {
+          tournamentFormat,
+          status: "drawing",
+          phases: [{
+            name: "Fase de Grupos",
+            matchups: [],
+          }],
+          integrity: null,
+        },
+      );
       const teamsPerRound = groupFormat.teamsPerRound;
 
       for (let i = 0; i < roundsForDraw.length; i++) {
@@ -289,15 +308,31 @@ export function DrawAnimation() {
           }
       }
 
-      // Reveal each matchup before publishing the exact same data to the bracket.
+      // Reveal each matchup progressively to both the admin and the public Debate screen.
+      const revealedMatchups: DrawMatchup[] = [];
       for (let i = 0; i < matchups.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setAssignedTeams(current => [...current, matchups[i]]);
+        await new Promise(resolve => setTimeout(resolve, 900));
+        revealedMatchups.push(matchups[i]);
+        setAssignedTeams([...revealedMatchups]);
+
+        await setDoc(
+          doc(db, "drawState", DRAW_STATE_DOC_ID),
+          {
+            tournamentFormat,
+            status: "drawing",
+            phases: [{
+              name: "Fase de Grupos",
+              matchups: [...revealedMatchups],
+            }],
+            integrity: null,
+          },
+        );
       }
 
       const sealedIntegrity = await sealGroupDraw(matchups);
       const drawState: LiveDrawState = {
         tournamentFormat,
+        status: "finished",
         phases: [{
             name: "Fase de Grupos",
             matchups: matchups
@@ -335,17 +370,32 @@ export function DrawAnimation() {
   };
   
   const publishDrawToDebate = async () => {
-    if (!isFinished || assignedTeams.length === 0 || !integrity || integrityStatus === "invalid") {
+    if (allTeams.length === 0) {
       toast({
         variant: "destructive",
-        title: "Sorteo no disponible",
-        description: "Complete y verifique primero el sorteo antes de publicarlo.",
+        title: "No hay equipos para mostrar",
+        description: "Debe existir al menos un equipo verificado antes de proyectar el sorteo.",
       });
       return;
     }
 
     setIsPublishingDraw(true);
     try {
+      if (!isFinished) {
+        await setDoc(
+          doc(db, "drawState", DRAW_STATE_DOC_ID),
+          {
+            tournamentFormat,
+            status: "waiting",
+            phases: [{
+              name: "Fase de Grupos",
+              matchups: [],
+            }],
+            integrity: null,
+          },
+        );
+      }
+
       await setDoc(
         doc(db, "debateState", DEBATE_STATE_DOC_ID),
         {
@@ -361,7 +411,9 @@ export function DrawAnimation() {
       );
       toast({
         title: "Sorteo enviado a Debate",
-        description: "El público ya puede ver las rondas sorteadas y el hash SHA-256.",
+        description: isFinished
+          ? "El público ya puede ver el sorteo terminado y su hash SHA-256."
+          : "La pantalla pública está lista. Ahora puede iniciar el sorteo y todos lo verán en vivo.",
       });
     } catch (error) {
       console.error("Error publishing draw:", error);
@@ -543,10 +595,34 @@ export function DrawAnimation() {
                     Observe cómo los equipos son asignados aleatoriamente a sus rondas iniciales.
                 </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  onClick={publishDrawToDebate}
+                  disabled={isPublishingDraw || isPublicDrawActive || loading || allTeams.length === 0 || isDrawing}
+                  variant={isPublicDrawActive ? "secondary" : "outline"}
+                >
+                  {isPublishingDraw
+                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    : <Send className="mr-2 h-4 w-4" />}
+                  {isPublicDrawActive ? "Pantalla visible en Debate" : "Enviar pantalla a Debate"}
+                </Button>
+
+                {isPublicDrawActive && (
+                  <Button
+                    onClick={hideDrawFromDebate}
+                    disabled={isPublishingDraw || isDrawing}
+                    variant="outline"
+                  >
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Ocultar
+                  </Button>
+                )}
+
                 <Button onClick={startDraw} disabled={isDrawing || loading || allTeams.length === 0}>
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Shuffle className="mr-2 h-4 w-4" />}
-                    {loading ? "Cargando..." : isFinished ? "Volver a Sortear" : "Iniciar Sorteo"}
+                    {isDrawing || loading
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+                      : <Shuffle className="mr-2 h-4 w-4" />}
+                    {loading ? "Cargando..." : isDrawing ? "Sorteando..." : isFinished ? "Volver a Sortear" : "Iniciar Sorteo"}
                 </Button>
             </div>
         </div>
@@ -608,38 +684,10 @@ export function DrawAnimation() {
                 <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{integrity.hash}</p>
               </div>
             )}
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button
-                onClick={publishDrawToDebate}
-                disabled={
-                  isPublishingDraw
-                  || isPublicDrawActive
-                  || !drawMatchesCurrentSetup
-                  || integrityStatus === "invalid"
-                }
-                size="lg"
-              >
-                {isPublishingDraw
-                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  : <Send className="mr-2 h-4 w-4" />}
-                {isPublicDrawActive ? "Visible en Debate" : "Enviar Sorteo a Debate"}
-              </Button>
-
-              <Button
-                onClick={hideDrawFromDebate}
-                disabled={isPublishingDraw || !isPublicDrawActive}
-                size="lg"
-                variant="outline"
-              >
-                <EyeOff className="mr-2 h-4 w-4" />
-                Ocultar Sorteo
-              </Button>
-
-              <Button onClick={handleIntegrity} disabled={isCheckingIntegrity} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                  {isCheckingIntegrity ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                  {isCheckingIntegrity ? "Verificando..." : integrity ? "Verificar Integridad" : "Sellar Sorteo Actual"}
-              </Button>
-            </div>
+            <Button onClick={handleIntegrity} disabled={isCheckingIntegrity} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                {isCheckingIntegrity ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                {isCheckingIntegrity ? "Verificando..." : integrity ? "Verificar Integridad" : "Sellar Sorteo Actual"}
+            </Button>
         </div>
       )}
     </div>
