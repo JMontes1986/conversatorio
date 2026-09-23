@@ -214,13 +214,33 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
         setIsSubmitting(true);
         try {
             await deleteDoc(doc(db, "drawState", DRAW_STATE_DOC_ID));
+
+            // El jurado no lee drawState directamente: toma la ronda y equipos activos
+            // desde debateState/current. Al reiniciar el sorteo debemos limpiar también
+            // ese estado para no dejar equipos de una competencia anterior.
+            await setDoc(
+                doc(db, "debateState", "current"),
+                {
+                    currentRound: "",
+                    teams: [],
+                    bracketTeamOrder: [],
+                    bracketTeams: [],
+                    bracketManualAccepted: false,
+                    bracketManualAcceptedAt: null,
+                    bracketAutomaticRandomizedAt: null,
+                    bracketConfigurationUpdatedAt: null,
+                    publicDraw: null,
+                },
+                { merge: true },
+            );
+
             toast({
                 title: "Sorteo Reiniciado",
-                description: "El estado del sorteo en vivo ha sido eliminado."
+                description: "Se eliminaron el sorteo, la ronda activa y los equipos pendientes de los jurados."
             });
         } catch (error) {
             console.error("Error resetting draw:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo reiniciar el sorteo." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo reiniciar completamente el sorteo." });
         } finally {
             setIsSubmitting(false);
         }
