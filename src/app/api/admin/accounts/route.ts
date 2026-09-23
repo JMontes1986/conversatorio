@@ -6,6 +6,7 @@ import { z } from 'zod';
 export const runtime = 'nodejs';
 const accountSchema = z.discriminatedUnion('role', [
   z.object({ role: z.literal('admin'), email: z.string().email(), password: z.string().min(8).max(128) }),
+  z.object({ role: z.literal('projection'), email: z.string().email(), password: z.string().min(8).max(128) }),
   z.object({
     role: z.literal('judge'),
     name: z.string().trim().min(1).max(200),
@@ -35,20 +36,28 @@ export async function POST(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Datos no válidos. La contraseña de administrador debe tener al menos 8 caracteres.' }, { status: 400 });
     const input = parsed.data;
     const id = randomUUID();
-    const credential = input.role === 'admin'
+    const credential = input.role === 'admin' || input.role === 'projection'
       ? input.password
       : input.role === 'judge'
         ? input.password
         : randomBytes(18).toString('base64url');
-    const identifier = input.role === 'admin' ? input.email.trim().toLowerCase() : input.identifier.trim().toLowerCase();
-    const email = input.role === 'admin' ? identifier : `${createHash('sha256').update(`${input.role}:${identifier}`).digest('hex')}@participants.conversatorio.invalid`;
-    const name = input.role === 'judge' ? input.name : identifier;
+    const identifier = input.role === 'admin' || input.role === 'projection'
+      ? input.email.trim().toLowerCase()
+      : input.identifier.trim().toLowerCase();
+    const email = input.role === 'admin' || input.role === 'projection'
+      ? identifier
+      : `${createHash('sha256').update(`${input.role}:${identifier}`).digest('hex')}@participants.conversatorio.invalid`;
+    const name = input.role === 'judge'
+      ? input.name
+      : input.role === 'projection'
+        ? 'Proyección'
+        : identifier;
     const { data: { user }, error } = await supabase.auth.admin.createUser({ email, password: credential, email_confirm: true });
     if (error || !user) return NextResponse.json({ error: 'No se pudo crear la cuenta. Comprueba que el correo, cédula o usuario no esté registrado.' }, { status: 400 });
     const table = input.role === 'judge' ? 'judges' : 'moderators';
     let inserted = false;
     try {
-      if (input.role !== 'admin') {
+      if (input.role !== 'admin' && input.role !== 'projection') {
         const data = input.role === 'judge'
           ? { name, cedula: identifier, status: 'active', passwordConfigured: true }
           : { username: identifier, token: credential, status: 'active' };
@@ -56,7 +65,13 @@ export async function POST(request: Request) {
         if (result.error) throw result.error;
         inserted = true;
       }
-      const result = await supabase.from('profiles').insert({ id: user.id, role: input.role, subject_id: input.role === 'admin' ? null : id, display_name: name, identifier });
+      const result = await supabase.from('profiles').insert({
+        id: user.id,
+        role: input.role,
+        subject_id: input.role === 'admin' || input.role === 'projection' ? null : id,
+        display_name: name,
+        identifier,
+      });
       if (result.error) throw result.error;
     } catch (cause) {
       if (inserted) await supabase.from(table).delete().eq('id', id);
