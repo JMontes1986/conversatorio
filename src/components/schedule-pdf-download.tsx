@@ -153,13 +153,16 @@ export function SchedulePdfDownload({ schedule }: { schedule: ScheduleData }) {
 
           const isBreak = /receso|almuerzo|descanso/i.test(item.activity || "");
 
-          pdf.setFillColor(...(isBreak ? [252, 250, 235] as [number, number, number] : light));
+          const cardFill: [number, number, number] = isBreak ? [252, 250, 235] : light;
+          pdf.setFillColor(...cardFill);
           pdf.roundedRect(marginX, y, contentWidth, cardHeight, 2.5, 2.5, "F");
 
-          pdf.setFillColor(...(isBreak ? lime : blue));
+          const timeFill: [number, number, number] = isBreak ? lime : blue;
+          pdf.setFillColor(...timeFill);
           pdf.roundedRect(marginX, y, 39, cardHeight, 2.5, 2.5, "F");
 
-          pdf.setTextColor(...(isBreak ? dark : [255, 255, 255]));
+          const timeTextColor: [number, number, number] = isBreak ? dark : [255, 255, 255];
+          pdf.setTextColor(...timeTextColor);
           pdf.setFont("helvetica", "bold");
           pdf.setFontSize(9.5);
 
