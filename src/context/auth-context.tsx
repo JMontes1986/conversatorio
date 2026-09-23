@@ -27,9 +27,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (sessionError) throw sessionError;
           let nextProfile: Profile | null = null;
           if (session) {
-            const { data, error: profileError } = await supabase.rpc('current_profile');
-            if (profileError) throw profileError;
-            nextProfile = data;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            try {
+              const response = await fetch('/api/auth/profile', {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${session.access_token}` },
+                cache: 'no-store',
+                signal: controller.signal,
+              });
+
+              if (response.status === 401 || response.status === 404) {
+                nextProfile = null;
+              } else if (!response.ok) {
+                throw new Error('No se pudo verificar temporalmente el perfil.');
+              } else {
+                const result = await response.json();
+                nextProfile = result.profile ?? null;
+              }
+            } finally {
+              clearTimeout(timeout);
+            }
           }
           if (!disposed && request === generation) {
             setProfile(previous => JSON.stringify(previous) === JSON.stringify(nextProfile) ? previous : nextProfile);
@@ -38,7 +56,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (cause) {
           if (!disposed && request === generation) {
-            setProfile(null); setUser(null);
             setError(cause instanceof Error ? cause.message : 'No se pudo verificar la sesión.');
           }
         } finally { if (!disposed && request === generation) setLoading(false); }
