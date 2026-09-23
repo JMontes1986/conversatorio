@@ -1,6 +1,6 @@
 import { getSupabase } from './supabase';
 
-export type AppRole = 'admin' | 'judge' | 'moderator';
+export type AppRole = 'admin' | 'judge' | 'moderator' | 'projection';
 export type Profile = { id: string; role: AppRole; subject_id: string | null; display_name: string; identifier: string | null };
 
 export async function participantEmail(role: 'judge' | 'moderator', identifier: string) {
