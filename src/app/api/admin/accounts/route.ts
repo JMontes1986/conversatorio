@@ -52,8 +52,78 @@ export async function POST(request: Request) {
       : input.role === 'projection'
         ? 'Proyección'
         : identifier;
-    const { data: { user }, error } = await supabase.auth.admin.createUser({ email, password: credential, email_confirm: true });
-    if (error || !user) return NextResponse.json({ error: 'No se pudo crear la cuenta. Comprueba que el correo, cédula o usuario no esté registrado.' }, { status: 400 });
+    let user = null as Awaited<ReturnType<typeof supabase.auth.admin.createUser>>['data']['user'];
+    let reusedExistingAuthUser = false;
+
+    const created = await supabase.auth.admin.createUser({
+      email,
+      password: credential,
+      email_confirm: true,
+    });
+
+    if (created.error || !created.data.user) {
+      // Para cuentas por correo (Admin/Proyección), un intento anterior puede haber
+      // dejado el usuario creado en Auth pero sin fila en public.profiles.
+      if (input.role === 'admin' || input.role === 'projection') {
+        let page = 1;
+        let existingAuthUser = null as typeof created.data.user;
+
+        while (!existingAuthUser && page <= 10) {
+          const listed = await supabase.auth.admin.listUsers({ page, perPage: 100 });
+          if (listed.error) break;
+          existingAuthUser = listed.data.users.find(
+            candidate => candidate.email?.trim().toLowerCase() === email,
+          ) ?? null;
+          if (listed.data.users.length < 100) break;
+          page += 1;
+        }
+
+        if (existingAuthUser) {
+          const { data: existingProfile, error: existingProfileError } = await supabase
+            .from('profiles')
+            .select('id,role')
+            .eq('id', existingAuthUser.id)
+            .maybeSingle();
+
+          if (existingProfileError) throw existingProfileError;
+
+          if (existingProfile) {
+            return NextResponse.json({
+              error: existingProfile.role === input.role
+                ? 'Esta cuenta ya existe con ese perfil.'
+                : `El correo ya pertenece a una cuenta con perfil ${existingProfile.role}.`,
+              code: 'account_exists',
+            }, { status: 409 });
+          }
+
+          const updated = await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+            password: credential,
+            email_confirm: true,
+          });
+          if (updated.error || !updated.data.user) {
+            console.error('Existing Auth user reconciliation failed:', updated.error);
+            return NextResponse.json({
+              error: 'El correo existe en Supabase Auth, pero no fue posible recuperar la cuenta.',
+              code: 'auth_reconcile_failed',
+            }, { status: 409 });
+          }
+
+          user = updated.data.user;
+          reusedExistingAuthUser = true;
+        }
+      }
+
+      if (!user) {
+        console.error('Supabase Auth create user failed:', created.error);
+        return NextResponse.json({
+          error: created.error?.message || 'No se pudo crear la cuenta.',
+          code: created.error?.code || 'auth_create_failed',
+        }, { status: 400 });
+      }
+    } else {
+      user = created.data.user;
+    }
+
     const table = input.role === 'judge' ? 'judges' : 'moderators';
     let inserted = false;
     try {
@@ -75,7 +145,9 @@ export async function POST(request: Request) {
       if (result.error) throw result.error;
     } catch (cause) {
       if (inserted) await supabase.from(table).delete().eq('id', id);
-      await supabase.auth.admin.deleteUser(user.id);
+      if (!reusedExistingAuthUser) {
+        await supabase.auth.admin.deleteUser(user.id);
+      }
       throw cause;
     }
     if (input.role === 'judge') {
@@ -94,7 +166,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ id, role: input.role }, { status: 201 });
   } catch (cause) {
     console.error('Account creation failed:', cause);
-    return NextResponse.json({ error: 'No se pudo crear la cuenta. Revisa el schema y las variables de Supabase del servidor.' }, { status: 500 });
+    return NextResponse.json({ error: 'No se pudo crear la cuenta. Revisa la configuración de Supabase o el estado previo del usuario.' }, { status: 500 });
   }
 }
 export async function PATCH(request: Request) {
