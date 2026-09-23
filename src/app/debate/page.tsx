@@ -236,7 +236,6 @@ export default function DebatePage() {
                  </div>
                  <div className="bg-background rounded-lg shadow-2xl p-4 flex-shrink-0">
                    <Timer
-                        key={timer?.lastUpdated || 0}
                         initialTime={timer?.duration || 300}
                         title="Tiempo Restante"
                         showControls={false}
@@ -263,7 +262,6 @@ export default function DebatePage() {
                 )}
                  <div className="fixed bottom-4 right-4 z-20">
                    <Timer
-                        key={`fs-${timer?.lastUpdated || 0}`}
                         initialTime={timer?.duration || 300}
                         title="Tiempo Restante"
                         showControls={false}
