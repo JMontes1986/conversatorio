@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shuffle, ShieldCheck, ShieldAlert, Loader2, Users } from "lucide-react";
+import { Shuffle, ShieldCheck, ShieldAlert, Loader2, Users, Send, EyeOff } from "lucide-react";
 import { addDoc, collection, onSnapshot, query, where, doc, setDoc, orderBy, serverTimestamp, writeBatch } from "@/lib/documents";
 import { db } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -78,6 +78,8 @@ export function DrawAnimation() {
   const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("none");
   
   const [assignedTeams, setAssignedTeams] = useState<DrawMatchup[]>([]);
+  const [isPublicDrawActive, setIsPublicDrawActive] = useState(false);
+  const [isPublishingDraw, setIsPublishingDraw] = useState(false);
 
 
  useEffect(() => {
@@ -133,6 +135,21 @@ export function DrawAnimation() {
       unsubSettings();
       unsubDrawState();
     };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, "debateState", DEBATE_STATE_DOC_ID),
+      (snapshot) => {
+        const data = snapshot.exists() ? snapshot.data() : {};
+        setIsPublicDrawActive(data.publicDraw?.active === true);
+      },
+      (error) => {
+        console.error("Error loading public draw state:", error);
+      },
+    );
+
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -317,6 +334,76 @@ export function DrawAnimation() {
     }
   };
   
+  const publishDrawToDebate = async () => {
+    if (!isFinished || assignedTeams.length === 0 || !integrity || integrityStatus === "invalid") {
+      toast({
+        variant: "destructive",
+        title: "Sorteo no disponible",
+        description: "Complete y verifique primero el sorteo antes de publicarlo.",
+      });
+      return;
+    }
+
+    setIsPublishingDraw(true);
+    try {
+      await setDoc(
+        doc(db, "debateState", DEBATE_STATE_DOC_ID),
+        {
+          publicDraw: {
+            active: true,
+            publishedAt: new Date().toISOString(),
+          },
+          videoUrl: "",
+          temporaryImageUrl: "",
+          studentQuestionOverlay: null,
+        },
+        { merge: true },
+      );
+      toast({
+        title: "Sorteo enviado a Debate",
+        description: "El público ya puede ver las rondas sorteadas y el hash SHA-256.",
+      });
+    } catch (error) {
+      console.error("Error publishing draw:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo publicar",
+        description: "Revise la conexión e inténtelo nuevamente.",
+      });
+    } finally {
+      setIsPublishingDraw(false);
+    }
+  };
+
+  const hideDrawFromDebate = async () => {
+    setIsPublishingDraw(true);
+    try {
+      await setDoc(
+        doc(db, "debateState", DEBATE_STATE_DOC_ID),
+        {
+          publicDraw: {
+            active: false,
+            hiddenAt: new Date().toISOString(),
+          },
+        },
+        { merge: true },
+      );
+      toast({
+        title: "Sorteo ocultado",
+        description: "La pantalla de Debate volvió al contenido normal.",
+      });
+    } catch (error) {
+      console.error("Error hiding draw:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo ocultar",
+        description: "Revise la conexión e inténtelo nuevamente.",
+      });
+    } finally {
+      setIsPublishingDraw(false);
+    }
+  };
+
   const handleIntegrity = async () => {
     if (assignedTeams.length === 0) return;
     setIsCheckingIntegrity(true);
@@ -521,10 +608,38 @@ export function DrawAnimation() {
                 <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{integrity.hash}</p>
               </div>
             )}
-             <Button onClick={handleIntegrity} disabled={isCheckingIntegrity} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                {isCheckingIntegrity ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                {isCheckingIntegrity ? "Verificando..." : integrity ? "Verificar Integridad" : "Sellar Sorteo Actual"}
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                onClick={publishDrawToDebate}
+                disabled={
+                  isPublishingDraw
+                  || isPublicDrawActive
+                  || !drawMatchesCurrentSetup
+                  || integrityStatus === "invalid"
+                }
+                size="lg"
+              >
+                {isPublishingDraw
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <Send className="mr-2 h-4 w-4" />}
+                {isPublicDrawActive ? "Visible en Debate" : "Enviar Sorteo a Debate"}
+              </Button>
+
+              <Button
+                onClick={hideDrawFromDebate}
+                disabled={isPublishingDraw || !isPublicDrawActive}
+                size="lg"
+                variant="outline"
+              >
+                <EyeOff className="mr-2 h-4 w-4" />
+                Ocultar Sorteo
+              </Button>
+
+              <Button onClick={handleIntegrity} disabled={isCheckingIntegrity} size="lg" variant="secondary" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                  {isCheckingIntegrity ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                  {isCheckingIntegrity ? "Verificando..." : integrity ? "Verificar Integridad" : "Sellar Sorteo Actual"}
+              </Button>
+            </div>
         </div>
       )}
     </div>
