@@ -1425,23 +1425,42 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     
 
     const updateTimer = async (newDuration: number) => {
+        const now = Date.now();
+
+        // Cambio inmediato en el panel: no esperamos a Supabase para reflejar el nuevo tiempo.
+        setMainTimer(prev => ({
+            ...prev,
+            duration: newDuration,
+            isActive: false,
+            lastUpdated: now,
+        }));
+
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            const currentDoc = await getDoc(docRef);
-            const currentTimerState = currentDoc.data()?.timer || {};
 
             await setDoc(docRef, { 
                 timer: { 
-                    ...currentTimerState,
+                    isActive: false,
                     duration: newDuration,
-                    lastUpdated: Date.now() 
+                    lastUpdated: now,
+                    endsAt: null,
+                    alarmId: null,
                 } 
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
-            await logActivity(`Temporizador actualizado a ${Math.floor(newDuration/60)}m ${newDuration%60}s.`, userContext);
+            const userContext = adminUser
+                ? { userId: adminUser.id, role: 'Admin' }
+                : (moderator
+                    ? { userId: moderator.id, username: moderator.username, role: 'Moderator' }
+                    : undefined);
 
-             toast({
+            // Auditoría en segundo plano para no retrasar la interfaz.
+            void logActivity(
+                `Temporizador actualizado a ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,
+                userContext,
+            ).catch(error => console.error("Error logging timer update:", error));
+
+            toast({
                 title: "Temporizador Actualizado",
                 description: `El tiempo se ha establecido en ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,
             });
@@ -1449,8 +1468,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             console.error("Error updating timer: ", error);
             toast({
                 variant: "destructive",
-                title: "Error",
-                description: "No se pudo actualizar el temporizador.",
+                title: "Error de sincronización",
+                description: "El tiempo cambió en este equipo, pero no pudo sincronizarse con Debate. Inténtelo nuevamente.",
             });
         }
     };
@@ -2113,10 +2132,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 <div>
                                         <Timer initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
                                         <div className="mt-2 grid grid-cols-2 gap-2">
-                                            <div className='col-span-2 grid grid-cols-3 gap-2'>
+                                            <div className='col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2'>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(120)}>2 min</Button>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(60)}>1 min</Button>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(30)}>30 seg</Button>
+                                                <Button variant="outline" size="sm" onClick={() => updateTimer(15)}>15 seg</Button>
                                             </div>
                                             <div className="col-span-2">
                                                  <TimerSettings />
