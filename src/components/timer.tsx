@@ -35,7 +35,24 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   useEffect(() => {
     const controller = new TimerAudio();
     audio.current = controller;
-    return () => { controller.dispose(); audio.current = null; };
+
+    // Browsers only allow future automatic audio after a user gesture.
+    // Any click/touch/key on the timer page primes the bell once.
+    const unlock = () => {
+      void controller.enable();
+    };
+
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      controller.dispose();
+      audio.current = null;
+    };
   }, []);
   
   useEffect(() => {
@@ -58,12 +75,17 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             const newTime = Math.max(0, serverState.duration - elapsed);
             setTimeRemaining(newTime);
 
-            if (newTime <= 0 && showControls && completedRun.current !== serverState.lastUpdated) {
+            if (newTime <= 0 && completedRun.current !== serverState.lastUpdated) {
                 completedRun.current = serverState.lastUpdated;
                 audio.current?.ring();
-                void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
-                    timer: { isActive: false, duration: 0, lastUpdated: Date.now() },
-                }, { merge: true }).catch(error => console.error("Error stopping expired timer:", error));
+
+                // Only the controlling timer writes the stop state.
+                // Public Debate timers still ring but do not race to update Supabase.
+                if (showControls) {
+                    void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
+                        timer: { isActive: false, duration: 0, lastUpdated: Date.now() },
+                    }, { merge: true }).catch(error => console.error("Error stopping expired timer:", error));
+                }
             }
         } else if (serverState) {
             completedRun.current = null;
@@ -82,11 +104,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   const playSound = async () => {
     const controller = audio.current;
-    if (controller && await controller.enable()) {
-        controller.ring();
-    } else {
-        toast({ title: "Audio no disponible", description: "No se pudo activar el sonido. El temporizador seguirá funcionando." });
+    if (controller && await controller.enable() && controller.ring()) {
+        return;
     }
+
+    toast({
+      title: "Audio no disponible",
+      description: "El navegador bloqueó el sonido. Haga clic en la página y vuelva a probar la campana.",
+    });
   };
   
   const toggleTimer = async () => {
