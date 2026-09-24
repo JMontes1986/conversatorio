@@ -14,6 +14,7 @@ const DEBATE_STATE_DOC_ID = "current";
 
 interface TimerState {
   duration: number;
+  configuredDuration?: number;
   lastUpdated: number;
   isActive: boolean;
   endsAt?: number;
@@ -140,6 +141,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                         timer: {
                             isActive: false,
                             duration: 0,
+                            configuredDuration: serverState.configuredDuration ?? initialTime,
                             lastUpdated: now,
                             endsAt: targetEnd,
                             alarmId,
@@ -207,10 +209,12 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     try {
         const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
         const now = Date.now() + serverOffsetMs.current;
-        const duration = timeRemaining > 0 ? timeRemaining : initialTime;
+        const configuredDuration = serverState?.configuredDuration ?? initialTime;
+        const duration = timeRemaining > 0 ? timeRemaining : configuredDuration;
         const nextTimerState: TimerState = {
             isActive: newIsActive,
             duration,
+            configuredDuration,
             lastUpdated: now,
             endsAt: newIsActive ? now + duration * 1000 : undefined,
             alarmId: undefined,
@@ -226,6 +230,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             timer: {
                 isActive: nextTimerState.isActive,
                 duration: nextTimerState.duration,
+                configuredDuration: nextTimerState.configuredDuration,
                 lastUpdated: nextTimerState.lastUpdated,
                 endsAt: nextTimerState.endsAt ?? null,
                 alarmId: null,
@@ -241,21 +246,24 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             const now = Date.now() + serverOffsetMs.current;
+            const resetDuration = serverState?.configuredDuration ?? initialTime;
             const nextTimerState: TimerState = {
                 isActive: false,
-                duration: initialTime,
+                duration: resetDuration,
+                configuredDuration: resetDuration,
                 lastUpdated: now,
                 endsAt: undefined,
                 alarmId: undefined,
             };
             setServerState(nextTimerState);
-            setTimeRemaining(initialTime);
+            setTimeRemaining(resetDuration);
             completedRun.current = null;
 
             await setDoc(docRef, { 
                 timer: { 
                     isActive: false, 
-                    duration: initialTime,
+                    duration: resetDuration,
+                    configuredDuration: resetDuration,
                     lastUpdated: now,
                     endsAt: null,
                     alarmId: null,
