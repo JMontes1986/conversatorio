@@ -1300,7 +1300,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const { toast } = useToast();
     const { user: adminUser } = useAuth();
     const { moderator } = useModeratorAuth();
-    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
+    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, configuredDuration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [previewImageUrl, setPreviewImageUrl] = useState("");
@@ -1374,7 +1374,16 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
-                        duration: data.timer.duration,
+                        duration: typeof data.timer.configuredDuration === "number"
+                            ? data.timer.configuredDuration
+                            : data.timer.duration > 0
+                                ? data.timer.duration
+                                : prev.configuredDuration,
+                        configuredDuration: typeof data.timer.configuredDuration === "number"
+                            ? data.timer.configuredDuration
+                            : data.timer.duration > 0
+                                ? data.timer.duration
+                                : prev.configuredDuration,
                         isActive: data.timer.isActive || false
                     }));
                 }
@@ -1432,6 +1441,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         setMainTimer(prev => ({
             ...prev,
             duration: newDuration,
+            configuredDuration: newDuration,
             isActive: false,
             lastUpdated: now,
         }));
@@ -1443,6 +1453,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 timer: { 
                     isActive: false,
                     duration: newDuration,
+                    configuredDuration: newDuration,
                     lastUpdated: now,
                     endsAt: null,
                     alarmId: null,
