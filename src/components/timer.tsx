@@ -105,7 +105,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                   const rang = audio.current?.ring() ?? false;
                   setVisualAlarm(true);
                   if (rang) {
-                    setTimeout(() => setVisualAlarm(false), 2500);
+                    window.setTimeout(() => setVisualAlarm(false), 2500);
                   }
                 }
             }
@@ -113,7 +113,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [showControls, enableAlarm]);
 
   useEffect(() => {
     const tick = () => {
@@ -159,7 +159,7 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     const interval = setInterval(tick, 200);
     return () => clearInterval(interval);
 
-  }, [serverState, showControls]);
+  }, [serverState, showControls, enableAlarm]);
   
 
   const playSound = async () => {
@@ -378,9 +378,23 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     </Button>
                 </>
             )}
-            <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="w-10 h-10">
-                <Bell className="h-4 w-4" />
-            </Button>
+            {showControls && (
+              <Button onClick={playSound} aria-label="Probar alarma" variant="outline" size="icon" className="w-10 h-10">
+                  <Bell className="h-4 w-4" />
+              </Button>
+            )}
+            {enableAlarm && !showControls && (
+              <Button
+                onClick={activateSound}
+                aria-label="Probar campana de proyección"
+                title="Probar campana"
+                variant="outline"
+                size="icon"
+                className="w-10 h-10"
+              >
+                  <BellRing className="h-4 w-4" />
+              </Button>
+            )}
         </div>
       </CardContent>
     </Card>
