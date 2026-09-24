@@ -114,10 +114,13 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                 lastAlarmId.current = nextTimer.alarmId;
 
                 if (showControls || enableAlarm) {
-                  const rang = audio.current?.ring() ?? false;
-                  setVisualAlarm(true);
-                  if (rang) {
-                    window.setTimeout(() => setVisualAlarm(false), 2500);
+                  const runAlarmId = `${nextTimer.lastUpdated}-${nextTimer.endsAt ?? ""}`;
+                  if (lastAlarmId.current !== nextTimer.alarmId && lastAlarmId.current !== runAlarmId) {
+                    const rang = audio.current?.ring() ?? false;
+                    setVisualAlarm(true);
+                    if (rang) {
+                      window.setTimeout(() => setVisualAlarm(false), 2500);
+                    }
                   }
                 }
             }
@@ -139,14 +142,19 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             if (newTime <= 0 && completedRun.current !== serverState.lastUpdated) {
                 completedRun.current = serverState.lastUpdated;
 
-                if (showControls) {
-                    const alarmId = `${serverState.lastUpdated}-${targetEnd}`;
-                    lastAlarmId.current = alarmId;
+                if (showControls || enableAlarm) {
+                    const localAlarmId = `${serverState.lastUpdated}-${targetEnd}`;
+                    lastAlarmId.current = localAlarmId;
                     const rang = audio.current?.ring() ?? false;
                     setVisualAlarm(true);
                     if (rang) {
-                      setTimeout(() => setVisualAlarm(false), 2500);
+                      window.setTimeout(() => setVisualAlarm(false), 2500);
                     }
+                }
+
+                if (showControls) {
+                    const alarmId = `${serverState.lastUpdated}-${targetEnd}`;
+                    lastAlarmId.current = alarmId;
 
                     void queueTimerWrite({
                         isActive: false,
