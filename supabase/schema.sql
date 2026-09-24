@@ -8,7 +8,7 @@ grant usage on schema private to anon, authenticated, service_role;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('admin', 'judge', 'moderator')),
+  role text not null check (role in ('admin', 'judge', 'moderator', 'projection')),
   subject_id text,
   display_name text not null,
   identifier text,
@@ -22,6 +22,13 @@ grant select on public.profiles to authenticated;
 grant all on public.profiles to service_role;
 drop policy if exists profile_self on public.profiles;
 create policy profile_self on public.profiles for select to authenticated using (id = (select auth.uid()));
+
+-- Compatibilidad con instalaciones existentes: habilita el rol de Proyección.
+alter table public.profiles drop constraint if exists profiles_check;
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles
+  add constraint profiles_check
+  check (role in ('admin', 'judge', 'moderator', 'projection'));
 
 do $$
 declare t text;
@@ -43,6 +50,15 @@ begin
 end $$;
 
 create unique index if not exists judges_cedula_unique on public.judges ((lower(data->>'cedula')));
+
+-- Migración de seguridad: los antiguos tokens de jurado dejan de almacenarse y deben reemplazarse
+-- por una contraseña administrada desde el panel. El hash real lo gestiona Supabase Auth.
+update public.judges
+set data = (data - 'token') || jsonb_build_object('passwordConfigured', false)
+where data ? 'token';
+update public.judges
+set data = data || jsonb_build_object('passwordConfigured', false)
+where not (data ? 'passwordConfigured');
 create unique index if not exists moderators_username_unique on public.moderators ((lower(data->>'username')));
 create unique index if not exists scores_judge_match_unique on public.scores ((data->>'judgeId'), (data->>'matchId'))
   where data->>'judgeId' <> 'system';
@@ -55,7 +71,12 @@ create or replace function private.app_role() returns text
 language sql stable security definer set search_path = '' as $$
   select p.role from public.profiles p where p.id = auth.uid() and (
     p.role = 'admin'
-    or (p.role = 'judge' and exists (select 1 from public.judges j where j.id = p.subject_id and j.data->>'status' = 'active'))
+    or (p.role = 'judge' and exists (
+      select 1 from public.judges j
+      where j.id = p.subject_id
+        and j.data->>'status' = 'active'
+        and j.data->>'passwordConfigured' = 'true'
+    ))
     or (p.role = 'moderator' and exists (select 1 from public.moderators m where m.id = p.subject_id and m.data->>'status' = 'active'))
   );
 $$;
@@ -90,22 +111,47 @@ do $$
 declare t text;
 begin
   foreach t in array array['schools','judges','moderators','scores','rounds','rubric','questions',
-    'student_questions','survey_responses','site_content','settings','debate_state','draw_state','tiebreak'] loop
+    'student_questions','survey_responses','site_content','settings','debate_state','draw_state'] loop
     execute format('drop policy if exists admin_all on public.%I', t);
     execute format('create policy admin_all on public.%I for all to authenticated
       using ((select private.app_role()) = ''admin'') with check ((select private.app_role()) = ''admin'')', t);
   end loop;
-  foreach t in array array['questions','debate_state','draw_state','tiebreak','student_questions'] loop
+  foreach t in array array['questions','debate_state','draw_state','student_questions'] loop
     execute format('drop policy if exists moderator_manage on public.%I', t);
     execute format('create policy moderator_manage on public.%I for all to authenticated
       using ((select private.app_role()) = ''moderator'') with check ((select private.app_role()) = ''moderator'')', t);
   end loop;
-  foreach t in array array['rounds','rubric','site_content','settings','debate_state','draw_state','tiebreak'] loop
+  foreach t in array array['rounds','rubric','site_content','settings','debate_state','draw_state'] loop
     execute format('grant select on public.%I to anon', t);
     execute format('drop policy if exists public_read on public.%I', t);
     execute format('create policy public_read on public.%I for select to anon, authenticated using (true)', t);
   end loop;
 end $$;
+
+-- Desempates sellados: lectura para organización; lectura pública solo cuando la fase fue publicada.
+grant select on public.tiebreak to anon, authenticated;
+drop policy if exists admin_all on public.tiebreak;
+drop policy if exists moderator_manage on public.tiebreak;
+drop policy if exists public_read on public.tiebreak;
+drop policy if exists tiebreak_organizer_read on public.tiebreak;
+create policy tiebreak_organizer_read on public.tiebreak for select to authenticated
+  using ((select private.app_role()) in ('admin','moderator'));
+drop policy if exists published_tiebreak on public.tiebreak;
+create policy published_tiebreak on public.tiebreak for select to anon, authenticated using (
+  exists (
+    select 1
+    from public.rounds r
+    join public.settings s on s.id = 'competition'
+    where r.data->>'name' = tiebreak.data->>'roundName'
+      and case r.data->>'phase'
+        when 'Fase de Grupos' then s.data->>'groupStageResultsPublished' = 'true'
+        when 'Fase de semifinal' then s.data->>'semifinalsResultsPublished' = 'true'
+        when 'Fase de semifinales' then s.data->>'semifinalsResultsPublished' = 'true'
+        when 'Fase de Finales' then s.data->>'finalsResultsPublished' = 'true'
+        when 'FINAL' then s.data->>'finalsResultsPublished' = 'true'
+        else false end
+  )
+);
 
 drop policy if exists moderator_schools on public.schools;
 create policy moderator_schools on public.schools for select to authenticated using ((select private.app_role()) = 'moderator');
@@ -184,6 +230,103 @@ begin
   end loop;
 end $$;
 
+-- Un desempate sellado es inmutable durante la competencia. La única excepción
+-- es el procedimiento administrativo de reinicio total de resultados.
+create or replace function private.protect_sealed_tiebreak() returns trigger
+language plpgsql set search_path = '' as $body$
+begin
+  if current_setting('app.conversatorio_admin_reset', true) = 'true'
+     and private.app_role() = 'admin' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
+
+  if old.data->>'sealed' = 'true' then
+    raise exception 'El desempate está sellado y no puede modificarse ni eliminarse.';
+  end if;
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $body$;
+drop trigger if exists protect_sealed_tiebreak on public.tiebreak;
+create trigger protect_sealed_tiebreak
+before update or delete on public.tiebreak
+for each row execute function private.protect_sealed_tiebreak();
+
+-- La puntuación técnica asociada a un desempate sellado tampoco se puede alterar o borrar
+-- fuera del procedimiento oficial de reinicio.
+create or replace function private.protect_tiebreak_score() returns trigger
+language plpgsql set search_path = '' as $body$
+begin
+  if current_setting('app.conversatorio_admin_reset', true) = 'true'
+     and private.app_role() = 'admin' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
+
+  if old.data ? 'tiebreakSealHash' then
+    raise exception 'La puntuación de desempate está sellada y es inmutable.';
+  end if;
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $body$;
+drop trigger if exists protect_tiebreak_score on public.scores;
+create trigger protect_tiebreak_score
+before update or delete on public.scores
+for each row execute function private.protect_tiebreak_score();
+
+-- Reinicio administrativo de resultados. Es la única operación de la aplicación que
+-- puede retirar desempates sellados para iniciar un nuevo conversatorio.
+create or replace function public.reset_competition_results() returns jsonb
+language plpgsql security definer set search_path = '' as $body$
+declare
+  deleted_scores integer := 0;
+  deleted_tiebreaks integer := 0;
+begin
+  if private.app_role() is distinct from 'admin' then
+    raise exception 'Acceso reservado al administrador.';
+  end if;
+
+  perform set_config('app.conversatorio_admin_reset', 'true', true);
+
+  delete from public.tiebreak;
+  get diagnostics deleted_tiebreaks = row_count;
+
+  delete from public.scores;
+  get diagnostics deleted_scores = row_count;
+
+  update public.settings
+  set data = data
+    || jsonb_build_object(
+      'groupStageResultsPublished', false,
+      'semifinalsResultsPublished', false,
+      'finalsResultsPublished', false
+    )
+  where id = 'competition';
+
+  update public.debate_state
+  set data = data || jsonb_build_object('publicTiebreak', null)
+  where id = 'current';
+
+  insert into public.audit_logs(data) values (jsonb_build_object(
+    'category', 'competition_reset',
+    'action', 'competition_results_reset',
+    'actorRole', 'admin',
+    'details', jsonb_build_object(
+      'deletedScores', deleted_scores,
+      'deletedTiebreaks', deleted_tiebreaks
+    )
+  ));
+
+  return jsonb_build_object(
+    'deletedScores', deleted_scores,
+    'deletedTiebreaks', deleted_tiebreaks
+  );
+end $body$;
+revoke all on function public.reset_competition_results() from public;
+grant execute on function public.reset_competition_results() to authenticated;
+
 -- Un jurado solo puntúa la ronda/equipos activos, con valores 1..5 por criterio.
 -- Los totales y su identidad se obtienen del servidor; no se confía en el formulario.
 create or replace function private.validate_judge_score() returns trigger
@@ -224,6 +367,21 @@ begin
     'teams', totals, 'fullScores', details,
     'createdAt', jsonb_build_object('seconds', floor(extract(epoch from now())), 'nanoseconds', 0));
   new.created_at := now();
+
+  insert into public.audit_logs(data) values (jsonb_build_object(
+    'category', 'judge_action',
+    'action', 'judge_score_submitted',
+    'actorRole', 'judge',
+    'subjectId', private.subject_id(),
+    'subjectName', (select display_name from public.profiles where id = auth.uid()),
+    'identifier', (select identifier from public.profiles where id = auth.uid()),
+    'details', jsonb_build_object(
+      'round', state->>'currentRound',
+      'teams', totals,
+      'scoreRecordId', new.id
+    )
+  ));
+
   return new;
 end $$;
 drop trigger if exists validate_judge_score on public.scores;

@@ -137,7 +137,7 @@ export default function ScoreboardPage() {
                  <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Resultados Fase de Finales</CardTitle>
-                        <CardDescription>Resultado de la Ronda 8.</CardDescription>
+                        <CardDescription>Resultado de la ronda final configurada.</CardDescription>
                     </CardHeader>
                     <CardContent>
                        <KnockoutStageResults 
@@ -150,7 +150,12 @@ export default function ScoreboardPage() {
                     </CardContent>
                 </Card>
 
-                <FinalResultCard scores={allScores} resultsPublished={publishedResults.finals} loading={loading} />
+                <FinalResultCard
+                    scores={allScores}
+                    rounds={allRounds}
+                    resultsPublished={publishedResults.finals}
+                    loading={loading}
+                />
                 
                 <TournamentBracket />
 

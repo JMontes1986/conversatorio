@@ -1,172 +1,258 @@
-
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from './ui/button';
-import { Dices, Loader2, Crown } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/supabase';
-import { addDoc, collection, doc, setDoc, deleteDoc } from '@/lib/documents';
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Dices, Eye, EyeOff, Loader2, MonitorUp, ShieldCheck, Trophy } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { db, getSupabase } from "@/lib/supabase";
+import { doc, onSnapshot, setDoc } from "@/lib/documents";
+import type { SealedTiebreak } from "@/lib/tiebreak-integrity";
 
 interface TieBreakerProps {
   roundName: string;
-  team1: string;
-  team2: string;
+  teams: string[];
+  slotsAvailable: number;
 }
 
-const TIEBREAK_DOC_ID = "current";
-const tiebreakRef = doc(db, "tiebreak", TIEBREAK_DOC_ID);
+type PublicTiebreakState = {
+  active?: boolean;
+  status?: "ready" | "resolved";
+  roundName?: string;
+  teams?: string[];
+  slotsAvailable?: number;
+  integrityHash?: string;
+};
 
-export const TieBreaker: React.FC<TieBreakerProps> = ({ roundName, team1, team2 }) => {
+export function TieBreaker({ roundName, teams, slotsAvailable }: TieBreakerProps) {
   const { toast } = useToast();
-  const [isRolling, setIsRolling] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [results, setResults] = useState<{ team1: number; team2: number } | null>(null);
-  const [winner, setWinner] = useState<string | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [record, setRecord] = useState<SealedTiebreak | null>(null);
+  const [publicState, setPublicState] = useState<PublicTiebreakState | null>(null);
 
   useEffect(() => {
-    // Set initial state for public view
-    setDoc(tiebreakRef, {
-        isActive: true,
-        roundName,
-        team1,
-        team2,
-        results: null,
-        winner: null,
-        isRolling: false,
-    });
-    // Cleanup on component unmount
-    return () => {
-        deleteDoc(tiebreakRef);
-    }
-  }, [roundName, team1, team2]);
+    const unsubscribe = onSnapshot(
+      doc(db, "debateState", "current"),
+      (snapshot) => {
+        const data = snapshot.exists() ? snapshot.data() : {};
+        setPublicState((data.publicTiebreak || null) as PublicTiebreakState | null);
+      },
+      (error) => console.error("Error loading public tiebreak state:", error),
+    );
+    return unsubscribe;
+  }, []);
 
+  const isThisTieOnDebate = Boolean(
+    publicState?.active
+      && publicState.roundName === roundName
+      && publicState.status === "ready",
+  );
 
-  const determineWinner = useCallback((rollResults: { team1: number; team2: number }) => {
-      if (rollResults.team1 > rollResults.team2) {
-        setWinner(team1);
-        setDoc(tiebreakRef, { winner: team1 }, { merge: true });
-      } else if (rollResults.team2 > rollResults.team1) {
-        setWinner(team2);
-        setDoc(tiebreakRef, { winner: team2 }, { merge: true });
-      } else {
-        setWinner(null); // Tie, prompt for re-roll
-        setDoc(tiebreakRef, { winner: null }, { merge: true });
-      }
-  }, [team1, team2]);
+  const isResolvedOnDebate = Boolean(
+    publicState?.active
+      && publicState.roundName === roundName
+      && publicState.status === "resolved",
+  );
 
+  const normalizedTeams = useMemo(
+    () => teams.map((team) => team.trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, "es")),
+    [teams],
+  );
 
-  const rollDice = useCallback(() => {
-    if (isRolling) return;
-
-    setIsRolling(true);
-    setResults(null);
-    setWinner(null);
-    
-    // Update public state to show rolling animation
-    setDoc(tiebreakRef, { isRolling: true, results: null, winner: null }, { merge: true });
-
-    setTimeout(() => {
-      // This logic now runs only on the client, ensuring true randomness
-      const newResults = {
-          team1: Math.floor(Math.random() * 6) + 1,
-          team2: Math.floor(Math.random() * 6) + 1,
-      };
-      
-      setResults(newResults);
-      determineWinner(newResults);
-      
-      // Update public state with results
-      setDoc(tiebreakRef, { isRolling: false, results: newResults }, { merge: true });
-      setIsRolling(false);
-    }, 2000);
-  }, [isRolling, determineWinner]);
-
-  const confirmWinner = async () => {
-    if (!winner) return;
-
-    setIsSaving(true);
+  const sendToDebate = async () => {
+    setIsSending(true);
     try {
-      const tieBreakerScore = {
-        matchId: roundName,
-        judgeId: 'system',
-        judgeName: 'Desempate por Dado',
-        judgeCedula: 'N/A',
-        teams: [
-          { name: winner, total: 1 }, // Add 1 point to the winner
-          { name: winner === team1 ? team2 : team1, total: 0 },
-        ],
-        fullScores: [{
-            name: winner,
-            total: 1,
-            scores: { tiebreaker: 1 },
-            checksum: 'TIEBREAK'
-        }],
-        createdAt: new Date(),
-      };
-      await addDoc(collection(db, 'scores'), tieBreakerScore);
-      
-      // Clean up tiebreak state
-      await deleteDoc(tiebreakRef);
-
+      await setDoc(
+        doc(db, "debateState", "current"),
+        {
+          publicTiebreak: {
+            active: true,
+            status: "ready",
+            roundName,
+            teams: normalizedTeams,
+            slotsAvailable,
+            sentAt: Date.now(),
+          },
+        },
+        { merge: true },
+      );
       toast({
-        title: '¡Ganador Confirmado!',
-        description: `${winner} avanza a la siguiente ronda.`,
+        title: "Desempate enviado a Debate",
+        description: "La pantalla pública ya muestra los equipos empatados. Ahora puede realizar el desempate.",
       });
     } catch (error) {
-      console.error('Error saving tie-breaker score:', error);
+      console.error("Error sending tiebreak to debate:", error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No se pudo guardar el resultado del desempate.',
+        variant: "destructive",
+        title: "No se pudo enviar a Debate",
+        description: "Revise la conexión e inténtelo nuevamente.",
       });
     } finally {
-      setIsSaving(false);
+      setIsSending(false);
+    }
+  };
+
+  const hideFromDebate = async () => {
+    setIsSending(true);
+    try {
+      await setDoc(
+        doc(db, "debateState", "current"),
+        {
+          publicTiebreak: {
+            ...(publicState || {}),
+            active: false,
+          },
+        },
+        { merge: true },
+      );
+      toast({
+        title: "Desempate retirado de pantalla",
+        description: "La pantalla pública volvió al contenido normal del conversatorio.",
+      });
+    } catch (error) {
+      console.error("Error hiding tiebreak from debate:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo retirar de Debate",
+        description: "Inténtelo nuevamente.",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const resolveTie = async () => {
+    if (!isThisTieOnDebate) {
+      toast({
+        variant: "destructive",
+        title: "Primero envíelo a Debate",
+        description: "Por transparencia, el público debe ver el desempate antes de ejecutar el sorteo.",
+      });
+      return;
+    }
+
+    setIsResolving(true);
+    try {
+      const { data: { session } } = await getSupabase().auth.getSession();
+      if (!session) throw new Error("Debe iniciar sesión como administrador o moderador.");
+
+      const response = await fetch("/api/tiebreak/resolve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ roundName }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo resolver el empate.");
+
+      setRecord(result.record as SealedTiebreak);
+      toast({
+        title: result.alreadySealed ? "Desempate ya sellado" : "Desempate realizado y sellado",
+        description: "El resultado ya es visible en Debate y quedó protegido con SHA-256.",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo realizar el desempate",
+        description: error instanceof Error ? error.message : "Inténtelo nuevamente.",
+      });
+    } finally {
+      setIsResolving(false);
     }
   };
 
   return (
-    <div className="space-y-4 text-center">
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <div className={cn("p-3 rounded-lg", winner === team1 && 'bg-green-200 dark:bg-green-800')}>
-          <p className="font-bold">{team1}</p>
-          {isRolling && <Dices className="h-10 w-10 mx-auto my-2 animate-spin" />}
-          {results && <p className="text-4xl font-bold my-2">{results.team1}</p>}
-        </div>
-        <div className={cn("p-3 rounded-lg", winner === team2 && 'bg-green-200 dark:bg-green-800')}>
-          <p className="font-bold">{team2}</p>
-          {isRolling && <Dices className="h-10 w-10 mx-auto my-2 animate-spin" />}
-          {results && <p className="text-4xl font-bold my-2">{results.team2}</p>}
-        </div>
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {teams.map((team) => (
+          <div key={team} className="rounded-lg border bg-background p-4 text-center">
+            <p className="font-semibold">{team}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Equipo empatado</p>
+          </div>
+        ))}
       </div>
-      
-      {!results && (
-        <Button onClick={rollDice} disabled={isRolling}>
-          <Dices className="mr-2 h-4 w-4" />
-          Lanzar Dados
-        </Button>
-      )}
 
-      {results && !winner && (
-        <div className='text-center space-y-2'>
-            <p className='font-bold text-lg text-amber-600'>¡Otro Empate!</p>
-            <Button onClick={rollDice} disabled={isRolling}>
-             <Dices className="mr-2 h-4 w-4" />
-             Lanzar de Nuevo
+      <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+        Se sortearán <strong>{slotsAvailable}</strong> {slotsAvailable === 1 ? "cupo" : "cupos"} entre{" "}
+        <strong>{teams.length}</strong> equipos. El cálculo se realiza en el servidor con aleatoriedad criptográfica.
+      </div>
+
+      {!record ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3">
+            {!isThisTieOnDebate ? (
+              <Button type="button" variant="outline" onClick={sendToDebate} disabled={isSending}>
+                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MonitorUp className="mr-2 h-4 w-4" />}
+                Enviar a Debate
+              </Button>
+            ) : (
+              <Badge variant="secondary" className="gap-2 px-3 py-2 text-sm">
+                <Eye className="h-4 w-4" />
+                Visible en la pantalla de Debate
+              </Badge>
+            )}
+
+            <Button type="button" onClick={resolveTie} disabled={isResolving || !isThisTieOnDebate}>
+              {isResolving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Dices className="mr-2 h-4 w-4" />}
+              {isResolving ? "Generando sorteo seguro..." : "Realizar Desempate"}
             </Button>
-        </div>
-      )}
+          </div>
 
-      {winner && (
-        <div className="text-center space-y-3 pt-2">
-          <p className="text-lg font-bold">Ganador: <span className="text-green-600">{winner}</span></p>
-          <Button onClick={confirmWinner} disabled={isSaving}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Crown className="mr-2 h-4 w-4" />}
-            Confirmar Ganador y Avanzar
-          </Button>
+          {!isThisTieOnDebate && (
+            <p className="text-xs text-muted-foreground">
+              El botón de desempate se habilita cuando los equipos empatados ya estén visibles para el público.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4 dark:bg-emerald-950/20">
+          <div className="flex flex-wrap items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-emerald-600" />
+            <span className="font-semibold">Resultado sellado</span>
+            <Badge variant="outline">SHA-256</Badge>
+            {isResolvedOnDebate && (
+              <Badge variant="secondary" className="gap-1">
+                <Eye className="h-3.5 w-3.5" />
+                Visible en Debate
+              </Badge>
+            )}
+          </div>
+
+          {record.attempts.map((attempt) => (
+            <div key={attempt.number}>
+              <p className="mb-2 text-sm font-medium">Lanzamiento {attempt.number}</p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {attempt.rolls.map((roll) => (
+                  <div key={`${attempt.number}-${roll.team}`} className="rounded-md bg-background p-3 text-center">
+                    <div className="text-sm font-medium">{roll.team}</div>
+                    <div className="text-3xl font-bold">{roll.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Trophy className="h-5 w-5 text-amber-500" />
+            <span className="font-semibold">Clasifica:</span>
+            {record.selectedTeams.map((team) => <Badge key={team}>{team}</Badge>)}
+          </div>
+
+          <div className="break-all rounded bg-background/80 p-3 font-mono text-[11px]">
+            Hash: {record.integrity.hash}
+          </div>
+
+          {isResolvedOnDebate && (
+            <Button type="button" variant="outline" onClick={hideFromDebate} disabled={isSending}>
+              {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <EyeOff className="mr-2 h-4 w-4" />}
+              Quitar de la pantalla de Debate
+            </Button>
+          )}
         </div>
       )}
     </div>
   );
-};
+}

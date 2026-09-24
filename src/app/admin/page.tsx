@@ -54,7 +54,9 @@ const SemifinalsStageResults = dynamic(() => import('@/components/semifinals-sta
 const KnockoutStageResults = dynamic(() => import('@/components/knockout-stage-results').then(mod => mod.KnockoutStageResults), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const FinalResultCard = dynamic(() => import('@/components/final-result-card').then(mod => mod.FinalResultCard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const AuditLogViewer = dynamic(() => import('@/components/audit-log-viewer').then(mod => mod.AuditLogViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const JudgeAuditViewer = dynamic(() => import('@/components/judge-audit-viewer').then(mod => mod.JudgeAuditViewer), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 const RealTimeDashboard = dynamic(() => import('@/components/real-time-dashboard').then(mod => mod.RealTimeDashboard), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
+const AdminNetworkMonitor = dynamic(() => import('@/components/admin-network-monitor').then(mod => mod.AdminNetworkMonitor), { ssr: false, loading: () => <Loader2 className="animate-spin" /> });
 
 
 interface Student {
@@ -75,7 +77,7 @@ interface JudgeData {
     id: string;
     name: string;
     cedula: string;
-    token?: string;
+    passwordConfigured?: boolean;
     status: 'active' | 'inactive';
 }
 interface ModeratorData {
@@ -104,7 +106,7 @@ interface DebateState {
 const ADMIN_VIEW_STORAGE_KEY = "conversatorio-admin-active-view";
 const ADMIN_VIEWS = new Set([
   "dashboard", "home", "schedule", "schools", "rounds", "bracket", "rubric",
-  "draw", "survey", "debate-control", "results", "judges", "moderators", "logs",
+  "draw", "survey", "debate-control", "results", "judges", "moderators", "judge-audit", "logs",
   "settings",
 ]);
 
@@ -132,6 +134,11 @@ function AdminDashboard() {
   
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeCedula, setNewJudgeCedula] = useState("");
+  const [newJudgePassword, setNewJudgePassword] = useState("");
+  const [judgePasswordDrafts, setJudgePasswordDrafts] = useState<Record<string, string>>({});
+  const [isJudgeEditDialogOpen, setIsJudgeEditDialogOpen] = useState(false);
+  const [selectedJudge, setSelectedJudge] = useState<JudgeData | null>(null);
+  const [editJudgeCedula, setEditJudgeCedula] = useState("");
   const [isSubmittingJudge, setIsSubmittingJudge] = useState(false);
   
   const [newModeratorUsername, setNewModeratorUsername] = useState("");
@@ -194,16 +201,22 @@ function AdminDashboard() {
 
  const handleAddJudge = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newJudgeName.trim() || !newJudgeCedula.trim()) {
-        toast({ variant: "destructive", title: "Error", description: "Nombre y cédula son requeridos." });
+    if (!newJudgeName.trim() || !newJudgeCedula.trim() || newJudgePassword.length < 8) {
+        toast({ variant: "destructive", title: "Error", description: "Nombre, cédula y una contraseña de mínimo 8 caracteres son requeridos." });
         return;
     }
     setIsSubmittingJudge(true);
     try {
-        await manageAccount({ role: 'judge', name: newJudgeName.trim(), identifier: newJudgeCedula.trim() });
-        toast({ title: "Jurado Añadido", description: "El nuevo jurado ha sido registrado como activo." });
+        await manageAccount({
+            role: 'judge',
+            name: newJudgeName.trim(),
+            identifier: newJudgeCedula.trim(),
+            password: newJudgePassword,
+        });
+        toast({ title: "Jurado Añadido", description: "El jurado fue creado. Entrará con su cédula y la contraseña asignada." });
         setNewJudgeName("");
         setNewJudgeCedula("");
+        setNewJudgePassword("");
     } catch (error) {
         console.error("Error adding judge:", error);
         toast({ variant: "destructive", title: "Error", description: "No se pudo añadir el jurado." });
@@ -238,6 +251,65 @@ function AdminDashboard() {
     } catch (error) {
       console.error("Error deleting moderator:", error);
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el moderador." });
+    }
+  };
+
+  const openJudgeEditDialog = (judge: JudgeData) => {
+    setSelectedJudge(judge);
+    setEditJudgeCedula(judge.cedula || "");
+    setIsJudgeEditDialogOpen(true);
+  };
+
+  const handleSaveJudgeCedula = async () => {
+    if (!selectedJudge || !editJudgeCedula.trim()) {
+      toast({ variant: "destructive", title: "Cédula requerida", description: "Ingrese la cédula del jurado." });
+      return;
+    }
+    setIsSubmittingJudge(true);
+    try {
+      await manageAccount({
+        role: 'judge',
+        id: selectedJudge.id,
+        identifier: editJudgeCedula.trim(),
+      }, 'PATCH');
+      toast({
+        title: "Cédula actualizada",
+        description: `El acceso de ${selectedJudge.name} quedó asociado a la nueva cédula.`,
+      });
+      setIsJudgeEditDialogOpen(false);
+      setSelectedJudge(null);
+      setEditJudgeCedula("");
+    } catch (error) {
+      console.error("Error updating judge identifier:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudo actualizar",
+        description: error instanceof Error ? error.message : "No se pudo cambiar la cédula del jurado.",
+      });
+    } finally {
+      setIsSubmittingJudge(false);
+    }
+  };
+
+  const handleResetJudgePassword = async (judge: JudgeData) => {
+    const password = judgePasswordDrafts[judge.id] || "";
+    if (password.length < 8) {
+      toast({ variant: "destructive", title: "Contraseña inválida", description: "Debe tener al menos 8 caracteres." });
+      return;
+    }
+    setIsSubmittingJudge(true);
+    try {
+      await manageAccount({ role: 'judge', id: judge.id, password }, 'PATCH');
+      setJudgePasswordDrafts(current => ({ ...current, [judge.id]: "" }));
+      toast({
+        title: "Contraseña actualizada",
+        description: `Ya puede entregar la nueva contraseña a ${judge.name}. La anterior dejó de ser válida.`,
+      });
+    } catch (error) {
+      console.error("Error resetting judge password:", error);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo cambiar la contraseña del jurado." });
+    } finally {
+      setIsSubmittingJudge(false);
     }
   };
 
@@ -521,6 +593,7 @@ function AdminDashboard() {
         case "rubric": return <RubricManagement />;
         case "draw": return <DrawAnimation />;
         case "survey": return <SurveyManagement />;
+        case "judge-audit": return <JudgeAuditViewer />;
         case "logs": return <AuditLogViewer />;
         case "settings": return <CompetitionSettings allScores={scores} />;
         case "judges": return (
@@ -540,6 +613,21 @@ function AdminDashboard() {
                                 <div className="space-y-2">
                                     <Label htmlFor="judge-cedula">Cédula</Label>
                                     <Input id="judge-cedula" value={newJudgeCedula} onChange={(e) => setNewJudgeCedula(e.target.value)} placeholder="Cédula del jurado" disabled={isSubmittingJudge}/>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="judge-password">Contraseña de acceso</Label>
+                                    <Input
+                                        id="judge-password"
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={newJudgePassword}
+                                        onChange={(e) => setNewJudgePassword(e.target.value)}
+                                        placeholder="Mínimo 8 caracteres"
+                                        disabled={isSubmittingJudge}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Entréguela directamente al jurado. La plataforma no la mostrará ni la almacenará en texto legible.
+                                    </p>
                                 </div>
                                 <Button type="submit" className="w-full" disabled={isSubmittingJudge}>
                                     {isSubmittingJudge && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -575,10 +663,9 @@ function AdminDashboard() {
                                             <TableCell>{judge.name}</TableCell>
                                             <TableCell>
                                                 <div>{judge.cedula}</div>
-                                                {judge.token && <Button type="button" variant="outline" size="sm" onClick={async () => {
-                                                    try { await navigator.clipboard.writeText(judge.token!); toast({ title: 'Token copiado' }); }
-                                                    catch { toast({ variant: 'destructive', title: 'No se pudo copiar el token' }); }
-                                                }}><Copy className="mr-2 h-3 w-3" />Copiar token</Button>}
+                                                {!judge.passwordConfigured && (
+                                                    <Badge variant="destructive" className="mt-1">Requiere contraseña nueva</Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <Badge variant={judge.status === 'active' ? 'default' : 'destructive'}>
@@ -586,6 +673,29 @@ function AdminDashboard() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
+                                                <div className="mb-2 ml-auto flex max-w-sm items-center justify-end gap-2">
+                                                    <Input
+                                                        type="password"
+                                                        autoComplete="new-password"
+                                                        placeholder="Nueva contraseña"
+                                                        value={judgePasswordDrafts[judge.id] || ""}
+                                                        onChange={(event) => setJudgePasswordDrafts(current => ({
+                                                            ...current,
+                                                            [judge.id]: event.target.value,
+                                                        }))}
+                                                        className="h-8 max-w-[190px]"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        disabled={isSubmittingJudge || (judgePasswordDrafts[judge.id] || "").length < 8}
+                                                        onClick={() => handleResetJudgePassword(judge)}
+                                                    >
+                                                        <KeyRound className="mr-2 h-3 w-3" />
+                                                        Cambiar
+                                                    </Button>
+                                                </div>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button aria-haspopup="true" size="icon" variant="ghost">
@@ -595,6 +705,10 @@ function AdminDashboard() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => openJudgeEditDialog(judge)}>
+                                                            <FilePen className="mr-2 h-4 w-4" />
+                                                            Editar cédula
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => handleToggleJudgeStatus(judge)}>
                                                             {judge.status === 'active' ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
                                                             {judge.status === 'active' ? 'Desactivar' : 'Activar'}
@@ -656,14 +770,14 @@ function AdminDashboard() {
                     </Card>
                      <Card className="mt-6">
                         <CardHeader>
-                            <CardTitle>Crear Administrador</CardTitle>
-                            <CardDescription>Añada un nuevo usuario con permisos de administrador.</CardDescription>
+                            <CardTitle>Crear Administrador / Proyección</CardTitle>
+                            <CardDescription>Cree una cuenta administrativa o el perfil del equipo de proyección.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Button asChild className="w-full">
                                 <Link href="/admin/crear-usuario">
                                     <UserPlus className="mr-2 h-4 w-4" />
-                                    Crear Nuevo Administrador
+                                    Crear Usuario de Organización
                                 </Link>
                             </Button>
                         </CardContent>
@@ -796,7 +910,7 @@ function AdminDashboard() {
                     </CardContent>
                 </Card>
 
-                <FinalResultCard scores={scores} resultsPublished={true} loading={loading} />
+                <FinalResultCard scores={scores} rounds={allRounds} resultsPublished={true} loading={loading} />
                 
                 <TournamentBracket />
             </div>
@@ -814,8 +928,46 @@ function AdminDashboard() {
             setActiveView={setActiveView} 
         />
         <main className="flex-1 p-4 md:p-6 lg:p-8">
+            {renderContent()}
+
+            <AdminNetworkMonitor />
+
+            <Dialog open={isJudgeEditDialogOpen} onOpenChange={setIsJudgeEditDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Editar jurado</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="font-medium">{selectedJudge?.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                                La cédula será también el identificador que utilizará para iniciar sesión.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-judge-cedula">Cédula</Label>
+                            <Input
+                                id="edit-judge-cedula"
+                                value={editJudgeCedula}
+                                onChange={(event) => setEditJudgeCedula(event.target.value)}
+                                placeholder="Número de cédula"
+                                autoComplete="off"
+                            />
+                        </div>
+                        <Button
+                            type="button"
+                            className="w-full"
+                            onClick={handleSaveJudgeCedula}
+                            disabled={isSubmittingJudge || !editJudgeCedula.trim()}
+                        >
+                            {isSubmittingJudge && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Guardar cédula
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={isSchoolEditDialogOpen} onOpenChange={setIsSchoolEditDialogOpen}>
-                    {renderContent()}
                     <DialogContent className="max-w-3xl">
                     <DialogHeader>
                         <DialogTitle>Editar Colegio</DialogTitle>

@@ -2,10 +2,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { TimerAudio } from "@/lib/timer-audio";
+import { TimerAudio, getSharedTimerAudio } from "@/lib/timer-audio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Play, Pause, RotateCcw, Bell, TimerIcon } from "lucide-react";
+import { Play, Pause, RotateCcw, Bell, BellRing, TimerIcon } from "lucide-react";
 import { db } from "@/lib/supabase";
 import { doc, onSnapshot, setDoc } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -14,8 +14,11 @@ const DEBATE_STATE_DOC_ID = "current";
 
 interface TimerState {
   duration: number;
+  configuredDuration?: number;
   lastUpdated: number;
   isActive: boolean;
+  endsAt?: number;
+  alarmId?: string;
 }
 
 interface TimerProps {
@@ -23,47 +26,145 @@ interface TimerProps {
   title: string;
   showControls?: boolean;
   size?: 'default' | 'small';
+  enableAlarm?: boolean;
 }
 
-export function Timer({ initialTime, title, showControls = true, size = 'default' }: TimerProps) {
+export function Timer({ initialTime, title, showControls = true, size = 'default', enableAlarm = false }: TimerProps) {
   const [timeRemaining, setTimeRemaining] = useState(initialTime);
   const [serverState, setServerState] = useState<TimerState | null>(null);
+  const [visualAlarm, setVisualAlarm] = useState(false);
   const audio = useRef<TimerAudio | null>(null);
   const completedRun = useRef<number | null>(null);
+  const lastAlarmId = useRef<string | null>(null);
+  const serverOffsetMs = useRef(0);
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const { toast } = useToast();
 
+  const queueTimerWrite = (payload: Record<string, unknown>) => {
+    const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+    writeQueue.current = writeQueue.current
+      .catch(() => {})
+      .then(async () => {
+        await setDoc(docRef, { timer: payload }, { merge: true });
+      });
+    return writeQueue.current;
+  };
+
   useEffect(() => {
-    const controller = new TimerAudio();
+    const controller = getSharedTimerAudio();
     audio.current = controller;
-    return () => { controller.dispose(); audio.current = null; };
-  }, []);
+    const unlock = () => {
+      if (!showControls && !enableAlarm) return;
+      void controller.enable();
+    };
+
+    if (showControls || enableAlarm) {
+      window.addEventListener("pointerdown", unlock, { once: true });
+      window.addEventListener("keydown", unlock, { once: true });
+      window.addEventListener("touchstart", unlock, { once: true });
+    }
+
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      audio.current = null;
+    };
+  }, [showControls, enableAlarm]);
   
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const syncClock = async () => {
+      const started = Date.now();
+      try {
+        const response = await fetch(`/api/time?t=${started}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as { now?: number };
+        const finished = Date.now();
+        if (cancelled || typeof data.now !== "number") return;
+
+        const midpoint = started + (finished - started) / 2;
+        serverOffsetMs.current = data.now - midpoint;
+      } catch {
+        // Keep the last known offset. Timer still works if the time probe is unavailable.
+      }
+    };
+
+    void syncClock();
+    timer = setInterval(() => { void syncClock(); }, 15_000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
     const unsubscribe = onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         if (data.timer) {
-            setServerState(data.timer as TimerState);
+            const nextTimer = data.timer as TimerState;
+            setServerState(nextTimer);
+
+            if (nextTimer.alarmId && nextTimer.alarmId !== lastAlarmId.current) {
+                lastAlarmId.current = nextTimer.alarmId;
+
+                if (showControls || enableAlarm) {
+                  const runAlarmId = `${nextTimer.lastUpdated}-${nextTimer.endsAt ?? ""}`;
+                  if (lastAlarmId.current !== nextTimer.alarmId && lastAlarmId.current !== runAlarmId) {
+                    const rang = audio.current?.ring() ?? false;
+                    setVisualAlarm(true);
+                    if (rang) {
+                      window.setTimeout(() => setVisualAlarm(false), 2500);
+                    }
+                  }
+                }
+            }
         }
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [showControls, enableAlarm]);
 
   useEffect(() => {
     const tick = () => {
         if (serverState && serverState.isActive) {
-            const elapsed = Math.floor((Date.now() - serverState.lastUpdated) / 1000);
-            const newTime = Math.max(0, serverState.duration - elapsed);
+            const now = Date.now() + serverOffsetMs.current;
+            const targetEnd = serverState.endsAt
+                ?? (serverState.lastUpdated + serverState.duration * 1000);
+            const newTime = Math.max(0, Math.ceil((targetEnd - now) / 1000));
             setTimeRemaining(newTime);
 
-            if (newTime <= 0 && showControls && completedRun.current !== serverState.lastUpdated) {
+            if (newTime <= 0 && completedRun.current !== serverState.lastUpdated) {
                 completedRun.current = serverState.lastUpdated;
-                audio.current?.ring();
-                void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
-                    timer: { isActive: false, duration: 0, lastUpdated: Date.now() },
-                }, { merge: true }).catch(error => console.error("Error stopping expired timer:", error));
+
+                if (showControls || enableAlarm) {
+                    const localAlarmId = `${serverState.lastUpdated}-${targetEnd}`;
+                    lastAlarmId.current = localAlarmId;
+                    const rang = audio.current?.ring() ?? false;
+                    setVisualAlarm(true);
+                    if (rang) {
+                      window.setTimeout(() => setVisualAlarm(false), 2500);
+                    }
+                }
+
+                if (showControls) {
+                    const alarmId = `${serverState.lastUpdated}-${targetEnd}`;
+                    lastAlarmId.current = alarmId;
+
+                    void queueTimerWrite({
+                        isActive: false,
+                        duration: 0,
+                        configuredDuration: serverState.configuredDuration ?? initialTime,
+                        lastUpdated: now,
+                        endsAt: targetEnd,
+                        alarmId,
+                    }).catch(error => console.error("Error stopping expired timer:", error));
+                }
             }
         } else if (serverState) {
             completedRun.current = null;
@@ -74,18 +175,44 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     // Initial tick to sync immediately
     tick();
 
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(tick, 200);
     return () => clearInterval(interval);
 
-  }, [serverState, showControls]);
+  }, [serverState, showControls, enableAlarm]);
   
 
   const playSound = async () => {
     const controller = audio.current;
-    if (controller && await controller.enable()) {
-        controller.ring();
+    const enabled = Boolean(controller && await controller.enable());
+
+    if (controller && enabled && controller.ring()) {
+        setVisualAlarm(false);
+        return;
+    }
+
+    toast({
+      title: "Audio no disponible",
+      description: "El navegador bloqueó la campana. Revise el volumen del dispositivo y vuelva a probar.",
+    });
+  };
+
+  const activateSound = async () => {
+    const controller = audio.current;
+    const enabled = Boolean(controller && await controller.enable());
+
+    if (enabled) {
+      controller?.ring();
+      setVisualAlarm(false);
+      toast({
+        title: "Campana lista",
+        description: "La alarma de proyección quedó preparada.",
+      });
     } else {
-        toast({ title: "Audio no disponible", description: "No se pudo activar el sonido. El temporizador seguirá funcionando." });
+      toast({
+        variant: "destructive",
+        title: "No se pudo activar el sonido",
+        description: "Revise que la pestaña y el dispositivo no estén silenciados.",
+      });
     }
   };
   
@@ -97,14 +224,32 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     const newIsActive = !(serverState?.isActive);
 
     try {
-        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-        await setDoc(docRef, { 
-            timer: { 
-                isActive: newIsActive,
-                duration: timeRemaining > 0 ? timeRemaining : initialTime,
-                lastUpdated: Date.now()
-            } 
-        }, { merge: true });
+        const now = Date.now() + serverOffsetMs.current;
+        const configuredDuration = serverState?.configuredDuration ?? initialTime;
+        const duration = timeRemaining > 0 ? timeRemaining : configuredDuration;
+        const nextTimerState: TimerState = {
+            isActive: newIsActive,
+            duration,
+            configuredDuration,
+            lastUpdated: now,
+            endsAt: newIsActive ? now + duration * 1000 : undefined,
+            alarmId: undefined,
+        };
+
+        // El equipo de control cambia inmediatamente; Debate usa el mismo endsAt
+        // cuando recibe el estado, por lo que ambos convergen al mismo segundo.
+        setServerState(nextTimerState);
+        setTimeRemaining(duration);
+        completedRun.current = null;
+
+        await queueTimerWrite({
+            isActive: nextTimerState.isActive,
+            duration: nextTimerState.duration,
+            configuredDuration: nextTimerState.configuredDuration,
+            lastUpdated: nextTimerState.lastUpdated,
+            endsAt: nextTimerState.endsAt ?? null,
+            alarmId: null,
+        });
     } catch (error) {
         console.error("Error updating timer state in Supabase:", error);
     }
@@ -113,15 +258,28 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   const resetTimer = async () => {
     if (showControls) {
         try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { 
-                timer: { 
-                    isActive: false, 
-                    duration: initialTime,
-                    lastUpdated: Date.now()
-                } 
-            }, { merge: true });
-            setTimeRemaining(initialTime);
+            const now = Date.now() + serverOffsetMs.current;
+            const resetDuration = serverState?.configuredDuration ?? initialTime;
+            const nextTimerState: TimerState = {
+                isActive: false,
+                duration: resetDuration,
+                configuredDuration: resetDuration,
+                lastUpdated: now,
+                endsAt: undefined,
+                alarmId: undefined,
+            };
+            setServerState(nextTimerState);
+            setTimeRemaining(resetDuration);
+            completedRun.current = null;
+
+            await queueTimerWrite({
+                isActive: false,
+                duration: resetDuration,
+                configuredDuration: resetDuration,
+                lastUpdated: now,
+                endsAt: null,
+                alarmId: null,
+            });
         } catch (error) {
             console.error("Error resetting timer state in Supabase:", error);
         }
@@ -142,8 +300,8 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
 
   if (size === 'small') {
       return (
-          <Card className="max-w-xs">
-              <CardContent className="p-2 flex items-center gap-3">
+          <Card className={visualAlarm ? "max-w-xs border-destructive ring-2 ring-destructive/50" : "max-w-xs"}>
+              <CardContent className="p-2 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 text-muted-foreground">
                         <TimerIcon className="h-5 w-5" />
                         <span className="text-sm font-medium">{title}</span>
@@ -161,17 +319,41 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                             </Button>
                         </div>
                      )}
-                     <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="h-8 w-8">
-                        <Bell className="h-4 w-4" />
-                    </Button>
+                     {showControls && (
+                       <Button onClick={playSound} aria-label="Probar alarma" variant="outline" size="icon" className="h-8 w-8">
+                          <Bell className="h-4 w-4" />
+                       </Button>
+                     )}
+                     {enableAlarm && !showControls && (
+                       <Button
+                         onClick={activateSound}
+                         aria-label="Activar o probar alarma de proyección"
+                         title="Activar / probar alarma"
+                         variant="outline"
+                         size="icon"
+                         className="h-8 w-8"
+                       >
+                         <BellRing className="h-4 w-4" />
+                       </Button>
+                     )}
+                     {visualAlarm && (showControls || enableAlarm) && (
+                       <div className="w-full animate-pulse rounded-md bg-destructive px-3 py-2 text-center text-sm font-bold text-destructive-foreground">
+                         TIEMPO FINALIZADO
+                       </div>
+                     )}
               </CardContent>
           </Card>
       )
   }
 
   return (
-    <Card>
+    <Card className={visualAlarm ? "border-destructive ring-2 ring-destructive/50" : undefined}>
       <CardContent className="p-3 flex flex-col items-center justify-center space-y-2">
+        {visualAlarm && (showControls || enableAlarm) && (
+          <div className="w-full animate-pulse rounded-md bg-destructive px-3 py-2 text-center text-sm font-bold text-destructive-foreground">
+            TIEMPO FINALIZADO
+          </div>
+        )}
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
         <div className="relative w-28 h-28 md:w-36 md:h-36">
           <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -215,9 +397,23 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                     </Button>
                 </>
             )}
-            <Button onClick={playSound} aria-label="Probar alarma y activar sonido" variant="outline" size="icon" className="w-10 h-10">
-                <Bell className="h-4 w-4" />
-            </Button>
+            {showControls && (
+              <Button onClick={playSound} aria-label="Probar alarma" variant="outline" size="icon" className="w-10 h-10">
+                  <Bell className="h-4 w-4" />
+              </Button>
+            )}
+            {enableAlarm && !showControls && (
+              <Button
+                onClick={activateSound}
+                aria-label="Probar campana de proyección"
+                title="Probar campana"
+                variant="outline"
+                size="icon"
+                className="w-10 h-10"
+              >
+                  <BellRing className="h-4 w-4" />
+              </Button>
+            )}
         </div>
       </CardContent>
     </Card>

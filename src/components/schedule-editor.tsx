@@ -8,14 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, PlusCircle, Save, Eye, EyeOff } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Eye, EyeOff, CheckCircle2, CloudUpload } from "lucide-react";
 import { db } from "@/lib/supabase";
 import { doc, setDoc, onSnapshot } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
+import { SchedulePdfDownload } from "@/components/schedule-pdf-download";
 
 const scheduleItemSchema = z.object({
   id: z.string(),
@@ -68,8 +69,11 @@ const defaultSchedule: FormData = {
 export function ScheduleEditor() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "pending" | "error">("saved");
+  const lastSavedRef = useRef("");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef = useRef(false);
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -89,10 +93,13 @@ export function ScheduleEditor() {
             day1: data.day1 && data.day1.length > 0 ? data.day1.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day1,
             day2: data.day2 && data.day2.length > 0 ? data.day2.map((item: any) => ({ ...item, completed: item.completed ?? false })) : defaultSchedule.day2,
         };
+        lastSavedRef.current = JSON.stringify(sanitizedData);
         form.reset(sanitizedData, { keepDirtyValues: true });
       } else {
+        lastSavedRef.current = JSON.stringify(defaultSchedule);
         form.reset(defaultSchedule);
       }
+      setAutoSaveStatus("saved");
       setLoading(false);
     });
 
@@ -131,25 +138,56 @@ export function ScheduleEditor() {
     }
   }, [form, toast]);
 
-  const onSubmit = async (values: FormData) => {
-    setIsSubmitting(true);
-    try {
-      await setDoc(doc(db, 'siteContent', 'schedule'), values);
-      toast({
-        title: "¡Programación Guardada!",
-        description: "Los cambios en el cronograma han sido guardados exitosamente.",
-      });
-    } catch (error) {
-      console.error("Error saving schedule: ", error);
-      toast({
-        variant: "destructive",
-        title: "Error al Guardar",
-        description: "No se pudieron guardar los cambios.",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  useEffect(() => {
+    if (loading) return;
+
+    const subscription = form.watch((values) => {
+      const currentValues = values as FormData;
+      const serialized = JSON.stringify(currentValues);
+
+      if (serialized === lastSavedRef.current) {
+        setAutoSaveStatus("saved");
+        return;
+      }
+
+      setAutoSaveStatus("pending");
+
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+
+      saveTimerRef.current = setTimeout(async () => {
+        if (savingRef.current) return;
+
+        savingRef.current = true;
+        setAutoSaveStatus("saving");
+
+        try {
+          const latestValues = form.getValues();
+          const latestSerialized = JSON.stringify(latestValues);
+
+          if (latestSerialized === lastSavedRef.current) {
+            setAutoSaveStatus("saved");
+            return;
+          }
+
+          await setDoc(doc(db, 'siteContent', 'schedule'), latestValues);
+          lastSavedRef.current = latestSerialized;
+          setAutoSaveStatus("saved");
+        } catch (error) {
+          console.error("Error auto-saving schedule:", error);
+          setAutoSaveStatus("error");
+        } finally {
+          savingRef.current = false;
+        }
+      }, 900);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [form, loading]);
 
   if (loading) {
     return (
@@ -162,14 +200,44 @@ export function ScheduleEditor() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Editor de Programación del Evento</CardTitle>
-        <CardDescription>
-        Modifique el cronograma y controle la visibilidad pública de cada día.
-        </CardDescription>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle>Editor de Programación del Evento</CardTitle>
+            <CardDescription>
+              Modifique el cronograma y controle la visibilidad pública de cada día.
+            </CardDescription>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <SchedulePdfDownload
+              schedule={{
+                ...form.getValues(),
+                day1Date: form.getValues("day1Date") || "Día 1",
+                day2Date: form.getValues("day2Date") || "Día 2",
+              }}
+            />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {autoSaveStatus === "saving" || autoSaveStatus === "pending" ? (
+                <>
+                  {autoSaveStatus === "saving"
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <CloudUpload className="h-4 w-4" />}
+                  <span>{autoSaveStatus === "saving" ? "Guardando..." : "Cambio pendiente..."}</span>
+                </>
+              ) : autoSaveStatus === "error" ? (
+                <span className="text-destructive">No se pudo guardar. Se reintentará con el próximo cambio.</span>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span>Todos los cambios guardados</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <form onSubmit={(event) => event.preventDefault()} className="space-y-8">
             
             <div className="space-y-6">
                 <ScheduleDayEditor
@@ -187,11 +255,7 @@ export function ScheduleEditor() {
                   onPublicationChange={handlePublicationChange}
                 />
             </div>
-            
-            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Guardar Cambios en la Programación
-            </Button>
+
           </form>
         </Form>
       </CardContent>

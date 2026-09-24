@@ -46,6 +46,7 @@ const navItems = [
 const settingsNavItems = [
     { id: "judges", label: "Jurados", icon: User },
     { id: "moderators", label: "Moderadores", icon: KeyRound },
+    { id: "judge-audit", label: "Auditoría Jurados", icon: ShieldAlert },
     { id: "logs", label: "Logs", icon: ShieldAlert },
     { id: "settings", label: "Ajustes Generales", icon: Settings },
 ];

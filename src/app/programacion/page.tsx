@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, CheckCircle, CalendarOff } from "lucide-react";
 import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { SchedulePdfDownload } from "@/components/schedule-pdf-download";
 
 
 interface ScheduleItem {
@@ -125,13 +126,16 @@ export default function ProgramacionPage() {
 
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
-      <div className="mb-8 text-center">
-        <h1 className="font-headline text-3xl md:text-4xl font-bold">
-          Programación del Evento
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Cronograma de actividades para el Conversatorio Colgemelli.
-        </p>
+      <div className="mb-8 flex flex-col items-center gap-4 text-center">
+        <div>
+          <h1 className="font-headline text-3xl md:text-4xl font-bold">
+            Programación del Evento
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Cronograma de actividades para el Conversatorio Colgemelli.
+          </p>
+        </div>
+        {anyDayPublished && <SchedulePdfDownload schedule={schedule} />}
       </div>
 
       <Card>

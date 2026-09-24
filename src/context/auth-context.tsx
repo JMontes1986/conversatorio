@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/accounts';
+import { reconciliationIntervalMs } from '@/lib/network-profile';
 
 type AuthState = { user: User | null; profile: Profile | null; loading: boolean; logout: () => Promise<void> };
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -26,18 +27,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (sessionError) throw sessionError;
           let nextProfile: Profile | null = null;
           if (session) {
-            const { data, error: profileError } = await supabase.rpc('current_profile');
-            if (profileError) throw profileError;
-            nextProfile = data;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            try {
+              const response = await fetch('/api/auth/profile', {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${session.access_token}` },
+                cache: 'no-store',
+                signal: controller.signal,
+              });
+
+              if (response.status === 401 || response.status === 404) {
+                nextProfile = null;
+              } else if (!response.ok) {
+                throw new Error('No se pudo verificar temporalmente el perfil.');
+              } else {
+                const result = await response.json();
+                nextProfile = result.profile ?? null;
+              }
+            } finally {
+              clearTimeout(timeout);
+            }
           }
           if (!disposed && request === generation) {
             setProfile(previous => JSON.stringify(previous) === JSON.stringify(nextProfile) ? previous : nextProfile);
-            setUser(nextProfile?.role === 'admin' ? session?.user ?? null : null);
+            setUser(nextProfile?.role === 'admin' || nextProfile?.role === 'projection' ? session?.user ?? null : null);
             setError('');
           }
         } catch (cause) {
           if (!disposed && request === generation) {
-            setProfile(null); setUser(null);
             setError(cause instanceof Error ? cause.message : 'No se pudo verificar la sesión.');
           }
         } finally { if (!disposed && request === generation) setLoading(false); }
@@ -46,16 +64,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') setLoading(true);
         setTimeout(() => { void refresh(); }, 0);
       });
-      const timer = setInterval(() => { void refresh(); }, 15000);
-      window.addEventListener('focus', refresh);
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const scheduleRefresh = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async () => {
+          if (!document.hidden) await refresh();
+          scheduleRefresh();
+        }, reconciliationIntervalMs(true));
+      };
+      const onFocus = () => { void refresh(); };
+      const onVisibility = () => { if (!document.hidden) void refresh(); };
+      window.addEventListener('focus', onFocus);
+      document.addEventListener('visibilitychange', onVisibility);
+      scheduleRefresh();
       void refresh();
-      cleanup = () => { subscription.unsubscribe(); clearInterval(timer); window.removeEventListener('focus', refresh); };
+      cleanup = () => {
+        subscription.unsubscribe();
+        if (timer) clearTimeout(timer);
+        window.removeEventListener('focus', onFocus);
+        document.removeEventListener('visibilitychange', onVisibility);
+      };
     } catch (cause) { setError((cause as Error).message); setLoading(false); }
     return () => { disposed = true; cleanup(); };
   }, []);
   const logout = async () => {
     const { error } = await getSupabase().auth.signOut();
     if (error) throw error;
+    try {
+      window.sessionStorage.removeItem("conversatorio:projection-session");
+    } catch {}
     setUser(null); setProfile(null);
   };
   return <AuthContext.Provider value={{ user, profile, loading, logout }}>

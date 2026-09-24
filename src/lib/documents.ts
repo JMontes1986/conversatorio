@@ -1,4 +1,5 @@
 import { getSupabase, db } from './supabase';
+import { reconciliationIntervalMs } from './network-profile';
 
 /** Document-shaped records stored in separate Postgres tables; all access uses RLS. */
 export const tables: Record<string, string> = {
@@ -85,8 +86,11 @@ export function onSnapshot(ref: DocumentRef | CollectionRef, callback: (value: a
   let running = false;
   let pending = false;
   let previous: string | undefined;
+  let realtimeConnected = false;
+  let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+
   const refresh = async () => {
-    if (stopped) return;
+    if (stopped || (typeof document !== 'undefined' && document.hidden)) return;
     if (running) { pending = true; return; }
     running = true;
     try {
@@ -98,19 +102,50 @@ export function onSnapshot(ref: DocumentRef | CollectionRef, callback: (value: a
     } catch (error) { if (!stopped) onError(error as Error); }
     finally { running = false; if (pending) { pending = false; void refresh(); } }
   };
+
+  const scheduleReconcile = () => {
+    if (stopped) return;
+    if (reconcileTimer) clearTimeout(reconcileTimer);
+    reconcileTimer = setTimeout(async () => {
+      if (!stopped && (typeof document === 'undefined' || !document.hidden)) {
+        await refresh();
+      }
+      scheduleReconcile();
+    }, reconciliationIntervalMs(realtimeConnected));
+  };
+
   let cleanup = () => {};
   try {
     const supabase = getSupabase();
-    // Subscribe to the whole table so DELETE events also refresh filtered queries.
     const channel = supabase.channel(`documents:${ref.table}:${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: ref.table }, () => { void refresh(); })
-      .subscribe(status => { if (status === 'SUBSCRIBED') void refresh(); });
+      .subscribe(status => {
+        realtimeConnected = status === 'SUBSCRIBED';
+        if (realtimeConnected) void refresh();
+        scheduleReconcile();
+      });
     const auth = supabase.auth.onAuthStateChange(() => { setTimeout(() => { void refresh(); }, 0); });
-    // Reconcile deletions, reconnects and changes in RLS permissions.
-    const interval = setInterval(() => { void refresh(); }, 15000);
-    window.addEventListener('focus', refresh);
-    cleanup = () => { clearInterval(interval); window.removeEventListener('focus', refresh); auth.data.subscription.unsubscribe(); void supabase.removeChannel(channel); };
+
+    const onFocus = () => { void refresh(); };
+    const onVisibility = () => {
+      if (!document.hidden) {
+        void refresh();
+        scheduleReconcile();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    scheduleReconcile();
     void refresh();
+
+    cleanup = () => {
+      if (reconcileTimer) clearTimeout(reconcileTimer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      auth.data.subscription.unsubscribe();
+      void supabase.removeChannel(channel);
+    };
   } catch (error) { queueMicrotask(() => { if (!stopped) onError(error as Error); }); }
   return () => { stopped = true; cleanup(); };
 }

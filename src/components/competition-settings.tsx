@@ -14,13 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertTriangle, Lock, Eye, Trash2, ShieldQuestion, FileQuestion } from "lucide-react";
-import { db } from '@/lib/supabase';
+import { db, getSupabase } from '@/lib/supabase';
 import { doc, setDoc, collection, query, onSnapshot, orderBy, getDoc, where, deleteDoc, writeBatch, getDocs } from '@/lib/documents';
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from './ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
+import { CompetitionBackupManager } from '@/components/competition-backup-manager';
 
 
 const SETTINGS_DOC_ID = "competition";
@@ -157,20 +158,30 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
     const handleResetAllScores = async () => {
         setIsSubmitting(true);
         try {
-            const batch = writeBatch(db);
-            allScores.forEach(score => {
-                const scoreRef = doc(db, "scores", score.id);
-                batch.delete(scoreRef);
+            const { data: { session } } = await getSupabase().auth.getSession();
+            if (!session) throw new Error("La sesión de administrador expiró.");
+
+            const response = await fetch('/api/admin/reset-results', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
             });
-            await batch.commit();
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "No se pudieron reiniciar los resultados.");
 
             toast({
-                title: "Resultados Reiniciados",
-                description: "Todas las puntuaciones han sido eliminadas."
+                title: "Resultados Reiniciados con Backup",
+                description: `Se creó una copia cifrada antes del reinicio. SHA-256: ${result.backup?.hash || "ver historial de versiones"}. Se eliminaron ${result.deletedScores ?? 0} puntuaciones y ${result.deletedTiebreaks ?? 0} desempates sellados.`
             });
+            window.dispatchEvent(new Event("competition-version-changed"));
         } catch (error) {
             console.error("Error resetting scores:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudieron eliminar las puntuaciones." });
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: error instanceof Error ? error.message : "No se pudieron reiniciar los resultados del conversatorio."
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -203,13 +214,33 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
         setIsSubmitting(true);
         try {
             await deleteDoc(doc(db, "drawState", DRAW_STATE_DOC_ID));
+
+            // El jurado no lee drawState directamente: toma la ronda y equipos activos
+            // desde debateState/current. Al reiniciar el sorteo debemos limpiar también
+            // ese estado para no dejar equipos de una competencia anterior.
+            await setDoc(
+                doc(db, "debateState", "current"),
+                {
+                    currentRound: "",
+                    teams: [],
+                    bracketTeamOrder: [],
+                    bracketTeams: [],
+                    bracketManualAccepted: false,
+                    bracketManualAcceptedAt: null,
+                    bracketAutomaticRandomizedAt: null,
+                    bracketConfigurationUpdatedAt: null,
+                    publicDraw: null,
+                },
+                { merge: true },
+            );
+
             toast({
                 title: "Sorteo Reiniciado",
-                description: "El estado del sorteo en vivo ha sido eliminado."
+                description: "Se eliminaron el sorteo, la ronda activa y los equipos pendientes de los jurados."
             });
         } catch (error) {
             console.error("Error resetting draw:", error);
-            toast({ variant: "destructive", title: "Error", description: "No se pudo reiniciar el sorteo." });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo reiniciar completamente el sorteo." });
         } finally {
             setIsSubmitting(false);
         }
@@ -373,7 +404,7 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Esta acción eliminará todas las puntuaciones de los jurados de la base de datos. No podrá recuperar estos datos.
+                                        Antes de eliminar las puntuaciones y los desempates, el sistema creará y verificará automáticamente una copia de seguridad cifrada. Después podrá restaurarla desde “Versiones y Copias de Seguridad”.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -447,6 +478,8 @@ export function CompetitionSettings({ allScores = [] }: { allScores?: ScoreData[
                     </div>
                 </CardContent>
             </Card>
+
+            <CompetitionBackupManager />
         </div>
     );
 }

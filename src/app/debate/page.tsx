@@ -9,10 +9,12 @@ import { Timer } from '@/components/timer';
 import { VideoEmbed } from '@/components/video-embed';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
-import Image from 'next/image';
+import { ExternalImage } from '@/components/external-image';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+import { PublicTiebreakDisplay } from '@/components/public-tiebreak-display';
+import { PublicDrawDisplay } from '@/components/public-draw-display';
 
 const DEBATE_STATE_DOC_ID = "current";
 
@@ -23,6 +25,7 @@ interface StudentQuestionOverlay {
 }
 
 interface DebateState {
+  currentRound?: string;
   question: string;
   questionId: string;
   videoUrl: string;
@@ -40,9 +43,22 @@ interface DebateState {
 export default function DebatePage() {
   const { profile } = useAuth();
   const canControl = profile?.role === 'admin' || profile?.role === 'moderator';
+  const [projectionSessionMarker, setProjectionSessionMarker] = useState(false);
+  const isProjection = profile?.role === 'projection'
+    || projectionSessionMarker;
   const [debateState, setDebateState] = useState<DebateState | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    try {
+      setProjectionSessionMarker(
+        window.sessionStorage.getItem("conversatorio:projection-session") === "1",
+      );
+    } catch {
+      setProjectionSessionMarker(false);
+    }
+  }, []);
 
   useEffect(() => {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -132,6 +148,9 @@ export default function DebatePage() {
 
   return (
     <div className="relative flex flex-col min-h-screen bg-secondary text-foreground p-4 md:p-8">
+        <PublicTiebreakDisplay />
+        <PublicDrawDisplay canControl={canControl} />
+
         {/* Student Question Overlay */}
         {studentQuestionOverlay && (
              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-20 flex items-center justify-center p-4">
@@ -179,7 +198,12 @@ export default function DebatePage() {
 
                  {showImage ? (
                      <div className="w-full h-full flex items-center justify-center">
-                        <Image src={temporaryImageUrl!} alt="Imagen temporal" width={600} height={400} className="object-contain rounded-lg max-w-full max-h-full" />
+                        <ExternalImage
+                          src={temporaryImageUrl!}
+                          alt="Imagen temporal"
+                          className="max-h-full max-w-full rounded-lg object-contain"
+                          fallbackClassName="min-h-[300px]"
+                        />
                     </div>
                 ) : showVideo ? (
                     <div className="w-full h-full flex items-center justify-center">
@@ -209,22 +233,26 @@ export default function DebatePage() {
                              </Link>
                         </>
                     ) : (
-                         <div className="relative w-full h-full">
-                            <Image
-                                src={sidebarImageUrl || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}
+                         <div className="relative flex h-full w-full items-center justify-center">
+                            {sidebarImageUrl ? (
+                              <ExternalImage
+                                src={sidebarImageUrl}
                                 alt="Imagen de barra lateral"
-                                fill
-                                className="object-contain"
-                            />
+                                className="max-h-full max-w-full object-contain"
+                                fallbackClassName="h-full"
+                              />
+                            ) : (
+                              <span className="text-sm text-muted-foreground">Sin imagen de barra lateral</span>
+                            )}
                         </div>
                     )}
                  </div>
                  <div className="bg-background rounded-lg shadow-2xl p-4 flex-shrink-0">
                    <Timer
-                        key={timer?.lastUpdated || 0}
                         initialTime={timer?.duration || 300}
                         title="Tiempo Restante"
                         showControls={false}
+                        enableAlarm={isProjection}
                         size="small"
                     />
                 </div>
@@ -248,10 +276,10 @@ export default function DebatePage() {
                 )}
                  <div className="fixed bottom-4 right-4 z-20">
                    <Timer
-                        key={`fs-${timer?.lastUpdated || 0}`}
                         initialTime={timer?.duration || 300}
                         title="Tiempo Restante"
                         showControls={false}
+                        enableAlarm={isProjection}
                         size="small"
                     />
                 </div>

@@ -33,7 +33,7 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
         ('${admin}','admin',null,'Admin','admin@example.com'),
         ('${judge}','judge','judge-1','Jurado Uno','123'),
         ('${moderator}','moderator','mod-1','Moderador','moderador');
-      insert into public.judges(id,data) values ('judge-1','{"name":"Jurado Uno","cedula":"123","token":"private-token","status":"active"}');
+      insert into public.judges(id,data) values ('judge-1','{"name":"Jurado Uno","cedula":"123","status":"active","passwordConfigured":true}');
       insert into public.moderators(id,data) values ('mod-1','{"username":"moderador","token":"private-token","status":"active"}');
     `);
     async function as(role, id = '') {
@@ -52,7 +52,21 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
       { table: 'questions', id: 'q1', operation: 'insert', data: { text: 'Pregunta activa' } },
       { table: 'questions', id: 'q2', operation: 'insert', data: { text: 'Pregunta privada' } },
     ]);
+
+    await as('service_role');
+    await pg.exec(`insert into public.tiebreak(id,data) values (
+      'Grupo A',
+      '{"sealed":true,"roundName":"Grupo A","phase":"Fase de Grupos","integrity":{"algorithm":"SHA-256","version":1,"hash":"abc"}}'
+    )`);
+    await as('authenticated', admin);
+    await assert.rejects(
+      pg.exec(`update public.tiebreak set data = data || '{"winner":"FORGED"}'::jsonb where id='Grupo A'`),
+      /sellado/,
+    );
+    await assert.rejects(pg.exec("delete from public.tiebreak where id='Grupo A'"), /sellado/);
+
     await as('anon');
+    assert.equal(await count('tiebreak'), 0);
     assert.equal(await count('debate_state'), 1);
     await assert.rejects(count('schools'), /permission denied/);
     await assert.rejects(count('judges'), /permission denied/);
@@ -75,6 +89,9 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     assert.equal(saved.teams[0].total, 4);
     assert.equal(saved.judgeName, 'Jurado Uno');
     assert.equal(saved.judgeCedula, undefined);
+    await as('authenticated', admin);
+    assert.equal(Number((await pg.query("select count(*) as n from audit_logs where data->>'action'='judge_score_submitted'")).rows[0].n), 1);
+    await as('authenticated', judge);
     await assert.rejects(write([{ table: 'scores', id: 'duplicate', operation: 'insert', data: validScore }]), /unique constraint/);
     await as('anon');
     assert.equal(await count('scores'), 0);
@@ -92,8 +109,12 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     await write([{ table: 'settings', id: 'competition', operation: 'merge', data: { groupStageResultsPublished: true } }]);
     await as('anon');
     assert.equal(await count('scores'), 1);
+    assert.equal(await count('tiebreak'), 1);
     await as('authenticated', admin);
     await write([{ table: 'settings', id: 'competition', operation: 'merge', data: { groupStageResultsPublished: false } }]);
+    await as('anon');
+    assert.equal(await count('tiebreak'), 0);
+    await as('authenticated', admin);
     await write([{ table: 'judges', id: 'judge-1', operation: 'update', data: { status: 'inactive' } }]);
     await as('authenticated', judge);
     assert.equal((await pg.query('select current_profile() as p')).rows[0].p, null);
@@ -120,5 +141,13 @@ test('Schema: instalación, RLS, puntuaciones, transacciones y permisos de Stora
     await as('authenticated', admin);
     await write([{ table: 'scores', id: 'score-1', operation: 'delete' }]);
     assert.equal(await count('scores'), 0);
+
+    const resetResult = (await pg.query('select reset_competition_results() as result')).rows[0].result;
+    assert.equal(resetResult.deletedTiebreaks, 1);
+    assert.equal(await count('tiebreak'), 0);
+    const resetSettings = (await pg.query("select data from settings where id='competition'")).rows[0].data;
+    assert.equal(resetSettings.groupStageResultsPublished, false);
+    assert.equal(resetSettings.semifinalsResultsPublished, false);
+    assert.equal(resetSettings.finalsResultsPublished, false);
   } finally { await pg.close(); }
 });

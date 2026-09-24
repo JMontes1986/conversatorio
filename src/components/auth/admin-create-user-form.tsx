@@ -14,13 +14,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, Loader2 } from "lucide-react";
+import { UserPlus, Loader2, Projector } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
 import { manageAccount } from "@/lib/accounts";
 
 const formSchema = z.object({
+  role: z.enum(["admin", "projection"]),
   email: z.string().email("Por favor, introduzca un correo electrónico válido."),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
 });
@@ -34,6 +36,7 @@ export function AdminCreateUserForm() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      role: "admin",
       email: "",
       password: "",
     },
@@ -42,10 +45,12 @@ export function AdminCreateUserForm() {
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     try {
-      await manageAccount({ role: "admin", ...values });
+      await manageAccount(values);
       toast({
         title: "¡Usuario Creado!",
-        description: `El usuario con el correo ${values.email} ha sido creado exitosamente.`,
+        description: values.role === "projection"
+          ? `La cuenta de Proyección ${values.email} fue creada.`
+          : `El administrador ${values.email} fue creado.`,
       });
       form.reset();
     } catch (error: any) {
@@ -65,14 +70,35 @@ export function AdminCreateUserForm() {
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
         <UserPlus className="mx-auto h-12 w-12 text-primary mb-4" />
-        <CardTitle className="font-headline text-3xl">Crear Nuevo Administrador</CardTitle>
+        <CardTitle className="font-headline text-3xl">Crear Usuario de Organización</CardTitle>
         <CardDescription>
-          Rellene los datos para registrar un nuevo usuario con acceso de administrador.
+          Cree una cuenta de Administrador o de Proyección.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Perfil</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione un perfil" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="projection">Proyección</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="email"

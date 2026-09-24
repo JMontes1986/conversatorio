@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle, ClipboardCheck } from "lucide-react";
+import { Loader2, Video, Send, Plus, Save, MessageSquare, RefreshCw, Settings, PenLine, Upload, Eraser, Crown, QrCode, Image as ImageIcon, Check, X, HelpCircle, EyeOff, XCircle, Settings2, Columns, AlertTriangle, Dices, Trash2, History, Swords, CheckCircle, ClipboardCheck, Shuffle } from "lucide-react";
 import { db } from '@/lib/supabase';
 import { uploadVideo } from "@/lib/uploads";
 import { collection, onSnapshot, query, orderBy, addDoc, doc, setDoc, deleteDoc, updateDoc, where, getDocs, writeBatch, getDoc } from '@/lib/documents';
@@ -44,11 +45,16 @@ import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
 import { TieBreaker } from './tie-breaker';
+import { TiebreakManagementTab } from './tiebreak-management-tab';
 import { logActivity } from '@/lib/audit-log';
 import { useAuth } from '@/context/auth-context';
 import { useModeratorAuth } from '@/context/moderator-auth-context';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import { normalizeExternalImageUrl, isMicrosoftCloudImage } from '@/lib/external-image';
+import { isMicrosoftVideoSource, normalizeVideoSource, serializeVideoSource } from '@/lib/external-video';
+import { ExternalImage } from '@/components/external-image';
+import { RoundDurationStopwatch } from "@/components/round-duration-stopwatch";
 import {
     DEFAULT_TOURNAMENT_FORMAT,
     type TournamentFormat,
@@ -196,6 +202,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [loadingRounds, setLoadingRounds] = useState(true);
     const [tournamentFormat, setTournamentFormat] = useState<TournamentFormat>(DEFAULT_TOURNAMENT_FORMAT);
+    const [sealedTiebreakRounds, setSealedTiebreakRounds] = useState<Set<string>>(new Set());
+    const [sealedTiebreakResults, setSealedTiebreakResults] = useState<Record<string, string[]>>({});
 
     useEffect(() => {
         setLoadingRounds(true);
@@ -218,9 +226,35 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             (error) => console.error("Error fetching tournament format:", error),
         );
 
+        const unsubscribeTiebreaks = onSnapshot(
+            collection(db, "tiebreak"),
+            (snapshot) => {
+                const sealedEntries = snapshot.docs
+                    .filter((entry) => entry.data().sealed === true)
+                    .map((entry) => ({
+                        roundName: String(entry.data().roundName || entry.id),
+                        selectedTeams: Array.isArray(entry.data().selectedTeams)
+                            ? entry.data().selectedTeams.map(String)
+                            : [],
+                    }));
+
+                setSealedTiebreakRounds(new Set(
+                    sealedEntries.map((entry) => entry.roundName),
+                ));
+
+                setSealedTiebreakResults(
+                    Object.fromEntries(
+                        sealedEntries.map((entry) => [entry.roundName, entry.selectedTeams]),
+                    ),
+                );
+            },
+            (error) => console.error("Error fetching sealed tiebreaks:", error),
+        );
+
         return () => {
             unsubscribeRounds();
             unsubscribeSettings();
+            unsubscribeTiebreaks();
         };
     }, []);
     
@@ -233,51 +267,53 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
 
         allScores.forEach(score => {
             if (score.judgeId === 'system') return;
-            
+
             const roundName = score.matchId.split('-bye-')[0];
-            if (!roundTotals[roundName]) {
-                roundTotals[roundName] = {};
-            }
+            if (!roundTotals[roundName]) roundTotals[roundName] = {};
             score.teams.forEach(team => {
-                if (!roundTotals[roundName][team.name]) {
-                    roundTotals[roundName][team.name] = 0;
-                }
-                roundTotals[roundName][team.name] += team.total;
+                roundTotals[roundName][team.name] = (roundTotals[roundName][team.name] || 0) + team.total;
             });
         });
-        
+
         const sortedRoundNames = Object.keys(roundTotals).sort();
 
         for (const roundName of sortedRoundNames) {
-            const totals = roundTotals[roundName];
-            const scores = Object.values(totals);
-            
-            const scoreCounts = scores.reduce((acc, score) => {
-                acc[score] = (acc[score] || 0) + 1;
-                return acc;
-            }, {} as Record<number, number>);
+            if (sealedTiebreakRounds.has(roundName)) continue;
 
-            const tiedScore = Object.keys(scoreCounts).find(score => scoreCounts[parseInt(score)] > 1);
+            const round = debateRounds.find((candidate) => candidate.name === roundName);
+            if (!round) continue;
 
-            if (tiedScore) {
-                const tiedValue = parseInt(tiedScore);
-                const teamsInTie = Object.keys(totals).filter(team => totals[team] === tiedValue);
-                
-                const tieBreakerExists = allScores.some(s => s.matchId === roundName && s.judgeId === 'system');
+            const qualifiersPerRound = formatForPhase(tournamentFormat, round.phase).qualifiersPerRound;
+            const ranking = Object.entries(roundTotals[roundName])
+                .map(([team, score]) => ({ team, score }))
+                .sort((a, b) => b.score - a.score || a.team.localeCompare(b.team, 'es'));
 
-                if (!tieBreakerExists && teamsInTie.length > 1) {
-                    return {
-                        roundName: roundName,
-                        team1: teamsInTie[0],
-                        team2: teamsInTie[1],
-                        score: tiedValue,
-                    };
-                }
+            if (ranking.length <= qualifiersPerRound) continue;
+
+            const cutoff = ranking[qualifiersPerRound - 1];
+            const next = ranking[qualifiersPerRound];
+            if (!cutoff || !next || cutoff.score !== next.score) continue;
+
+            const tiedScore = cutoff.score;
+            const teamsAbove = ranking.filter((entry) => entry.score > tiedScore);
+            const teamsInTie = ranking
+                .filter((entry) => entry.score === tiedScore)
+                .map((entry) => entry.team);
+            const slotsAvailable = qualifiersPerRound - teamsAbove.length;
+
+            if (slotsAvailable > 0 && teamsInTie.length > slotsAvailable) {
+                return {
+                    roundName,
+                    teams: teamsInTie,
+                    score: tiedScore,
+                    qualifiersPerRound,
+                    slotsAvailable,
+                };
             }
         }
 
         return null;
-    }, [allScores]);
+    }, [allScores, debateRounds, sealedTiebreakRounds, tournamentFormat]);
 
 
     const handleRoundChange = useCallback((roundName: string) => {
@@ -292,6 +328,36 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
             isBye: false,
         })));
     }, [debateRounds, tournamentFormat]);
+
+    const loadDrawMatchup = useCallback((roundName: string, matchupTeams: string[]) => {
+        setCurrentRound(roundName);
+        const selectedRound = debateRounds.find((round) => round.name === roundName);
+        const teamsPerRound = selectedRound
+            ? formatForPhase(tournamentFormat, selectedRound.phase).teamsPerRound
+            : matchupTeams.length;
+
+        const normalizedTeams = [
+            ...matchupTeams.map((name) => ({
+                id: nanoid(),
+                name,
+                isBye: false,
+            })),
+            ...Array.from(
+                { length: Math.max(0, teamsPerRound - matchupTeams.length) },
+                () => ({
+                    id: nanoid(),
+                    name: '',
+                    isBye: false,
+                }),
+            ),
+        ];
+
+        setTeams(normalizedTeams);
+        toast({
+            title: "Ronda cargada",
+            description: `${roundName}: ${matchupTeams.join(" · ")}`,
+        });
+    }, [debateRounds, tournamentFormat, toast]);
 
      const handleUpdateRound = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -459,6 +525,58 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
 
     }, [debateRounds]);
 
+
+    const getClassifiedTeamsForMatchup = (
+        roundName: string,
+        phaseName: string,
+        matchupTeams: string[],
+    ) => {
+        const sealedSelection = sealedTiebreakResults[roundName];
+        if (sealedSelection?.length) {
+            return sealedSelection.filter((teamName) => matchupTeams.includes(teamName));
+        }
+
+        const qualifiersPerRound = formatForPhase(tournamentFormat, phaseName).qualifiersPerRound;
+        const totals = new Map<string, number>();
+
+        allScores
+            .filter((score) => score.judgeId !== 'system' && score.matchId.split('-bye-')[0] === roundName)
+            .forEach((score) => {
+                score.teams.forEach((team) => {
+                    if (!matchupTeams.includes(team.name)) return;
+                    totals.set(team.name, (totals.get(team.name) || 0) + team.total);
+                });
+            });
+
+        if (totals.size === 0) {
+            const byeWinner = allScores.find(
+                (score) => score.judgeId === 'system'
+                    && score.matchId.startsWith(`${roundName}-bye-`)
+                    && score.teams.some((team) => matchupTeams.includes(team.name)),
+            );
+            return byeWinner?.teams
+                .filter((team) => team.total > 0 && matchupTeams.includes(team.name))
+                .map((team) => team.name)
+                .slice(0, qualifiersPerRound) || [];
+        }
+
+        const ranking = Array.from(totals.entries())
+            .map(([teamName, total]) => ({ teamName, total }))
+            .sort((a, b) => b.total - a.total || a.teamName.localeCompare(b.teamName, 'es'));
+
+        if (ranking.length < qualifiersPerRound) return [];
+
+        const cutoff = ranking[qualifiersPerRound - 1];
+        const next = ranking[qualifiersPerRound];
+        if (cutoff && next && cutoff.total === next.total) {
+            return [];
+        }
+
+        return ranking
+            .slice(0, qualifiersPerRound)
+            .map((entry) => entry.teamName);
+    };
+
     const isByeRound = teams.some(t => t.isBye);
 
     return (
@@ -482,8 +600,8 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                         <CardContent>
                             <TieBreaker
                                 roundName={unresolvedTieInfo.roundName}
-                                team1={unresolvedTieInfo.team1}
-                                team2={unresolvedTieInfo.team2}
+                                teams={unresolvedTieInfo.teams}
+                                slotsAvailable={unresolvedTieInfo.slotsAvailable}
                             />
                         </CardContent>
                     </Card>
@@ -567,26 +685,133 @@ function RoundAndTeamSetter({ registeredSchools = [], allScores = [], drawState 
                     )}
                 </form>
                 {drawState && drawState.phases.length > 0 && (
-                    <div className="mt-8 pt-6 border-t">
-                        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
-                            <History className="h-5 w-5" /> Historial de Configuración
-                        </h3>
-                        <div className="space-y-4">
-                            {drawState.phases.map(phase => (
-                                <div key={phase.name}>
-                                    <h4 className="font-medium text-muted-foreground">{phase.name}</h4>
-                                    <ul className="mt-2 space-y-1 text-sm list-disc pl-5">
-                                        {phase.matchups.map(matchup => {
-                                            const isScored = allScores.some(score => score.matchId.startsWith(matchup.roundName));
+                    <div className="mt-8 border-t pt-6">
+                        <div className="mb-5">
+                            <h3 className="flex items-center gap-2 text-xl font-semibold">
+                                <History className="h-5 w-5" />
+                                Rondas definidas por el sorteo
+                            </h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Revise aquí cómo quedaron organizados los equipos. Puede cargar una ronda directamente para evitar errores al configurar el debate activo.
+                            </p>
+                        </div>
+
+                        <div className="space-y-6">
+                            {drawState.phases.map((phase) => (
+                                <div key={phase.name} className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h4 className="font-semibold text-muted-foreground">{phase.name}</h4>
+                                        <Badge variant="outline">
+                                            {phase.matchups.length} {phase.matchups.length === 1 ? "ronda" : "rondas"}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="grid gap-3 lg:grid-cols-2">
+                                        {phase.matchups.map((matchup) => {
+                                            const isScored = allScores.some(
+                                                (score) => score.matchId.startsWith(matchup.roundName),
+                                            );
+                                            const isActive = currentRound === matchup.roundName;
+                                            const classifiedTeams = getClassifiedTeamsForMatchup(
+                                                matchup.roundName,
+                                                phase.name,
+                                                matchup.teams,
+                                            );
+
                                             return (
-                                                <li key={matchup.roundName} className="flex items-center gap-2">
-                                                    {isScored && <CheckCircle className="h-4 w-4 text-green-500" />}
-                                                    <span className="font-semibold">{matchup.roundName}:</span>
-                                                    <span className="ml-2">{matchup.teams.join(' vs ')}</span>
-                                                </li>
+                                                <div
+                                                    key={matchup.roundName}
+                                                    className={cn(
+                                                        "rounded-lg border p-4 transition-colors",
+                                                        isActive
+                                                            ? "border-primary bg-primary/5"
+                                                            : "bg-background",
+                                                    )}
+                                                >
+                                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="font-semibold">{matchup.roundName}</span>
+                                                                {isActive && (
+                                                                    <Badge>Ronda seleccionada</Badge>
+                                                                )}
+                                                                {isScored && (
+                                                                    <Badge variant="secondary" className="gap-1">
+                                                                        <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                                                                        Puntaje registrado
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                {matchup.teams.map((teamName, index) => {
+                                                                    const isClassified = classifiedTeams.includes(teamName);
+                                                                    return (
+                                                                        <div
+                                                                            key={`${matchup.roundName}-${teamName}`}
+                                                                            className={cn(
+                                                                                "rounded-md border px-3 py-2 text-sm",
+                                                                                isClassified
+                                                                                    ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30"
+                                                                                    : "bg-muted/40",
+                                                                            )}
+                                                                        >
+                                                                            <span className="mr-1 text-xs text-muted-foreground">
+                                                                                Equipo {index + 1}
+                                                                            </span>
+                                                                            <span className="font-medium">{teamName}</span>
+                                                                            {isClassified && (
+                                                                                <Badge className="ml-2 bg-emerald-600 hover:bg-emerald-600">
+                                                                                    <Crown className="mr-1 h-3 w-3" />
+                                                                                    Clasificado
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            {isScored && (
+                                                                <div className="mt-3 text-sm">
+                                                                    {classifiedTeams.length > 0 ? (
+                                                                        <div className="flex flex-wrap items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                                                                            <Crown className="h-4 w-4" />
+                                                                            <span className="font-semibold">
+                                                                                Pasa a la siguiente fase:
+                                                                            </span>
+                                                                            {classifiedTeams.map((teamName) => (
+                                                                                <Badge key={teamName} variant="secondary">
+                                                                                    {teamName}
+                                                                                </Badge>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                                                                            <AlertTriangle className="h-4 w-4" />
+                                                                            <span>
+                                                                                Clasificación pendiente de resolver.
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant={isActive ? "secondary" : "outline"}
+                                                            onClick={() => loadDrawMatchup(matchup.roundName, matchup.teams)}
+                                                            disabled={isSubmitting}
+                                                        >
+                                                            <Send className="mr-2 h-4 w-4" />
+                                                            {isActive ? "Volver a cargar" : "Cargar esta ronda"}
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
-                                    </ul>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -1008,13 +1233,23 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            const normalized = normalizeExternalImageUrl(imageUrl);
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            await setDoc(docRef, { sidebarImageUrl: imageUrl }, { merge: true });
+            await setDoc(docRef, {
+                sidebarImageUrl: normalized.displayUrl,
+                sidebarImageOriginalUrl: normalized.originalUrl,
+            }, { merge: true });
+            setImageUrl(normalized.originalUrl);
 
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Se actualizó la imagen de la barra lateral.`, userContext);
 
-            toast({ title: "Imagen Guardada" });
+            toast({
+                title: "Imagen Guardada",
+                description: isMicrosoftCloudImage(imageUrl)
+                    ? "Se configuró el enlace de OneDrive/SharePoint. El archivo debe estar compartido públicamente."
+                    : "La imagen quedó configurada."
+            });
         } catch (error) {
             console.error("Error saving image URL:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la URL de la imagen." });
@@ -1039,6 +1274,18 @@ function SidebarImageSetter({ initialUrl }: { initialUrl: string }) {
                         onChange={(e) => setImageUrl(e.target.value)}
                         disabled={isSaving}
                     />
+                    <p className="text-xs text-muted-foreground">
+                        Puede pegar un vínculo compartido de OneDrive o SharePoint. Para verlo en la pantalla pública, compártalo como “Cualquier persona con el vínculo puede ver”.
+                    </p>
+                    {imageUrl && (
+                        <div className="rounded-lg border bg-muted/20 p-2">
+                            <ExternalImage
+                                src={imageUrl}
+                                alt="Vista previa de barra lateral"
+                                className="mx-auto max-h-40 max-w-full object-contain"
+                            />
+                        </div>
+                    )}
                 </div>
                 <Button className="w-full" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
@@ -1053,7 +1300,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const { toast } = useToast();
     const { user: adminUser } = useAuth();
     const { moderator } = useModeratorAuth();
-    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
+    const [mainTimer, setMainTimer] = useState({ duration: 5 * 60, configuredDuration: 5 * 60, label: "Temporizador General", lastUpdated: Date.now(), isActive: false });
     const [previewQuestion, setPreviewQuestion] = useState("Esperando pregunta del moderador...");
     const [previewVideoUrl, setPreviewVideoUrl] = useState("");
     const [previewImageUrl, setPreviewImageUrl] = useState("");
@@ -1065,6 +1312,44 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const [tempImageInput, setTempImageInput] = useState("");
     const [tempMessageSize, setTempMessageSize] = useState<'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl'>('normal');
     const [isSendingTempMessage, setIsSendingTempMessage] = useState(false);
+
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem("conversatorio:debate-temporary-content");
+            if (!stored) return;
+
+            const parsed = JSON.parse(stored) as {
+                message?: string;
+                video?: string;
+                image?: string;
+                messageSize?: 'xs' | 'sm' | 'normal' | 'large' | 'xl' | 'xxl';
+            };
+
+            if (typeof parsed.message === "string") setTempMessageInput(parsed.message);
+            if (typeof parsed.video === "string") setTempVideoInput(parsed.video);
+            if (typeof parsed.image === "string") setTempImageInput(parsed.image);
+            if (parsed.messageSize) setTempMessageSize(parsed.messageSize);
+        } catch (error) {
+            console.error("Error restoring temporary debate content:", error);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(
+                "conversatorio:debate-temporary-content",
+                JSON.stringify({
+                    message: tempMessageInput,
+                    video: tempVideoInput,
+                    image: tempImageInput,
+                    messageSize: tempMessageSize,
+                    savedAt: Date.now(),
+                }),
+            );
+        } catch (error) {
+            console.error("Error saving temporary debate content:", error);
+        }
+    }, [tempMessageInput, tempVideoInput, tempImageInput, tempMessageSize]);
     
     const [preparedQuestions, setPreparedQuestions] = useState<Question[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(true);
@@ -1073,6 +1358,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     const [currentRound, setCurrentRound] = useState('');
     const [debateRounds, setDebateRounds] = useState<RoundData[]>([]);
     const [drawState, setDrawState] = useState<LiveDrawState | null>(null);
+    const [isPublicDrawActive, setIsPublicDrawActive] = useState(false);
 
     useEffect(() => {
         const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -1088,11 +1374,21 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 if(data.timer) {
                     setMainTimer(prev => ({
                         ...prev,
-                        duration: data.timer.duration,
+                        duration: typeof data.timer.configuredDuration === "number"
+                            ? data.timer.configuredDuration
+                            : data.timer.duration > 0
+                                ? data.timer.duration
+                                : prev.configuredDuration,
+                        configuredDuration: typeof data.timer.configuredDuration === "number"
+                            ? data.timer.configuredDuration
+                            : data.timer.duration > 0
+                                ? data.timer.duration
+                                : prev.configuredDuration,
                         isActive: data.timer.isActive || false
                     }));
                 }
                 setCurrentRound(data.currentRound || '');
+                setIsPublicDrawActive(data.publicDraw?.active === true);
             }
         }, (error) => {
             console.error("Error listening to debate state:", error);
@@ -1139,23 +1435,44 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
     
 
     const updateTimer = async (newDuration: number) => {
+        const now = Date.now();
+
+        // Cambio inmediato en el panel: no esperamos a Supabase para reflejar el nuevo tiempo.
+        setMainTimer(prev => ({
+            ...prev,
+            duration: newDuration,
+            configuredDuration: newDuration,
+            isActive: false,
+            lastUpdated: now,
+        }));
+
         try {
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
-            const currentDoc = await getDoc(docRef);
-            const currentTimerState = currentDoc.data()?.timer || {};
 
             await setDoc(docRef, { 
                 timer: { 
-                    ...currentTimerState,
+                    isActive: false,
                     duration: newDuration,
-                    lastUpdated: Date.now() 
+                    configuredDuration: newDuration,
+                    lastUpdated: now,
+                    endsAt: null,
+                    alarmId: null,
                 } 
             }, { merge: true });
             
-            const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
-            await logActivity(`Temporizador actualizado a ${Math.floor(newDuration/60)}m ${newDuration%60}s.`, userContext);
+            const userContext = adminUser
+                ? { userId: adminUser.id, role: 'Admin' }
+                : (moderator
+                    ? { userId: moderator.id, username: moderator.username, role: 'Moderator' }
+                    : undefined);
 
-             toast({
+            // Auditoría en segundo plano para no retrasar la interfaz.
+            void logActivity(
+                `Temporizador actualizado a ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,
+                userContext,
+            ).catch(error => console.error("Error logging timer update:", error));
+
+            toast({
                 title: "Temporizador Actualizado",
                 description: `El tiempo se ha establecido en ${Math.floor(newDuration/60)}m ${newDuration%60}s.`,
             });
@@ -1163,8 +1480,8 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             console.error("Error updating timer: ", error);
             toast({
                 variant: "destructive",
-                title: "Error",
-                description: "No se pudo actualizar el temporizador.",
+                title: "Error de sincronización",
+                description: "El tiempo cambió en este equipo, pero no pudo sincronizarse con Debate. Inténtelo nuevamente.",
             });
         }
     };
@@ -1178,6 +1495,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                 videoUrl: "", 
                 temporaryImageUrl: "",
                 questionSize: 'normal',
+                publicDraw: { active: false, hiddenAt: new Date().toISOString() },
             }, { merge: true });
             
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
@@ -1198,9 +1516,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
 
         try {
+            const normalizedVideo = normalizeVideoSource(videoValue);
+            const videoUrl = serializeVideoSource(normalizedVideo);
+
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: videoValue,
+                videoUrl,
                 question: "",
                 questionId: "",
                 temporaryImageUrl: "",
@@ -1209,10 +1530,81 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Video enviado a pantalla (asociado a pregunta: "${question.text.substring(0, 30)}...")`, userContext);
 
-            toast({ title: "Video Enviado", description: "El video es ahora visible." });
+            toast({
+                title: "Video Enviado",
+                description: isMicrosoftVideoSource(videoValue)
+                    ? "El enlace de OneDrive/SharePoint se convirtió a reproducción directa."
+                    : "El video es ahora visible."
+            });
         } catch (error) {
              console.error("Error setting video: ", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
+        }
+    };
+
+    const handlePublishDraw = async () => {
+        const groupPhase = drawState?.phases?.find((phase) => phase.name === "Fase de Grupos");
+        if (!groupPhase || groupPhase.matchups.length === 0) {
+            toast({
+                variant: "destructive",
+                title: "No hay sorteo para publicar",
+                description: "Realice primero el sorteo de la fase de grupos.",
+            });
+            return;
+        }
+
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, {
+                publicDraw: {
+                    active: true,
+                    publishedAt: new Date().toISOString(),
+                },
+                videoUrl: "",
+                temporaryImageUrl: "",
+                studentQuestionOverlay: null,
+            }, { merge: true });
+
+            const userContext = adminUser
+                ? { userId: adminUser.id, role: 'Admin' }
+                : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator' } : undefined);
+            await logActivity("Sorteo publicado en la pantalla de debate.", userContext);
+
+            toast({
+                title: "Sorteo enviado a Debate",
+                description: "El público ya puede ver las rondas sorteadas y el hash SHA-256.",
+            });
+        } catch (error) {
+            console.error("Error publishing draw:", error);
+            toast({
+                variant: "destructive",
+                title: "No se pudo publicar el sorteo",
+                description: "Revise la conexión e inténtelo nuevamente.",
+            });
+        }
+    };
+
+    const handleHideDraw = async () => {
+        try {
+            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+            await setDoc(docRef, {
+                publicDraw: {
+                    active: false,
+                    hiddenAt: new Date().toISOString(),
+                },
+            }, { merge: true });
+
+            toast({
+                title: "Sorteo ocultado",
+                description: "La pantalla de Debate volvió a su contenido normal.",
+            });
+        } catch (error) {
+            console.error("Error hiding draw:", error);
+            toast({
+                variant: "destructive",
+                title: "No se pudo ocultar el sorteo",
+                description: "Revise la conexión e inténtelo nuevamente.",
+            });
         }
     };
 
@@ -1311,9 +1703,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
         setIsSendingTempMessage(true);
         try {
+            const normalizedVideo = normalizeVideoSource(tempVideoInput);
+            const videoUrl = serializeVideoSource(normalizedVideo);
+
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                videoUrl: tempVideoInput,
+                videoUrl,
                 question: "",
                 questionId: "",
                 temporaryImageUrl: "",
@@ -1322,7 +1717,12 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
             const userContext = adminUser ? { userId: adminUser.id, role: 'Admin' } : (moderator ? { userId: moderator.id, username: moderator.username, role: 'Moderator'} : undefined);
             await logActivity(`Video temporal enviado.`, userContext);
             
-            toast({ title: "Video Temporal Enviado" });
+            toast({
+                title: "Video Temporal Enviado",
+                description: isMicrosoftVideoSource(tempVideoInput)
+                    ? "El enlace de OneDrive/SharePoint se convirtió a reproducción directa."
+                    : undefined,
+            });
         } catch (error) {
             console.error("Error sending temporary video:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el video." });
@@ -1338,9 +1738,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
         }
         setIsSendingTempMessage(true);
         try {
+            const normalized = normalizeExternalImageUrl(tempImageInput);
             const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             await setDoc(docRef, { 
-                temporaryImageUrl: tempImageInput,
+                temporaryImageUrl: normalized.displayUrl,
+                temporaryImageOriginalUrl: normalized.originalUrl,
                 question: "",
                 questionId: "",
                 videoUrl: "",
@@ -1406,12 +1808,20 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
 
     const handleSaveVideoLink = async (questionId: string) => {
         setSavingVideoId(questionId);
-        const urlToSave = videoInputs[questionId] || "";
+        const rawVideoValue = videoInputs[questionId] || "";
 
         try {
+            const normalizedVideo = normalizeVideoSource(rawVideoValue);
+            const urlToSave = serializeVideoSource(normalizedVideo);
             const questionRef = doc(db, "questions", questionId);
             await updateDoc(questionRef, { videoUrl: urlToSave });
-            toast({ title: "Video Guardado", description: "El video se ha asociado a la pregunta." });
+            setVideoInputs((prev: any) => ({ ...prev, [questionId]: urlToSave }));
+            toast({
+                title: "Video Guardado",
+                description: isMicrosoftVideoSource(rawVideoValue)
+                    ? "El vínculo de OneDrive/SharePoint quedó convertido a reproducción directa."
+                    : "El video se ha asociado a la pregunta."
+            });
         } catch (error) {
             console.error("Error saving video link:", error);
             toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el video." });
@@ -1529,14 +1939,16 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                         </div>
                     </CardContent>
                 </Card>
-                <Tabs defaultValue="round-config" className="w-full">
-                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-6 h-auto sm:h-10">
+                <Tabs defaultValue="display-settings" className="w-full">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-8 h-auto sm:h-10">
+                        <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                         <TabsTrigger value="round-config"><Columns className="mr-2 h-4 w-4"/>Config. Ronda</TabsTrigger>
                         <TabsTrigger value="questions"><MessageSquare className="mr-2 h-4 w-4"/>Preguntas</TabsTrigger>
                         <TabsTrigger value="audience"><HelpCircle className="mr-2 h-4 w-4"/>Público</TabsTrigger>
                         <TabsTrigger value="scoring-status"><ClipboardCheck className="mr-2 h-4 w-4"/>Puntuaciones</TabsTrigger>
+                        <TabsTrigger value="tiebreaks"><Dices className="mr-2 h-4 w-4"/>Empates</TabsTrigger>
+                        <TabsTrigger value="public-draw"><Shuffle className="mr-2 h-4 w-4"/>Sorteo</TabsTrigger>
                         <TabsTrigger value="messages"><Send className="mr-2 h-4 w-4"/>Mensajes</TabsTrigger>
-                        <TabsTrigger value="display-settings"><Settings2 className="mr-2 h-4 w-4"/>Ajustes</TabsTrigger>
                     </TabsList>
                     <TabsContent value="round-config">
                         <RoundAndTeamSetter registeredSchools={registeredSchools} allScores={allScores} drawState={drawState} />
@@ -1567,6 +1979,65 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                     </TabsContent>
                      <TabsContent value="scoring-status">
                         <ScoringStatusTracker allRounds={debateRounds} allJudges={allJudges} allScores={allScores} />
+                    </TabsContent>
+                    <TabsContent value="tiebreaks">
+                        <TiebreakManagementTab allScores={allScores} allRounds={debateRounds} />
+                    </TabsContent>
+                    <TabsContent value="public-draw">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shuffle className="h-5 w-5" />
+                                    Sorteo Público
+                                </CardTitle>
+                                <CardDescription>
+                                    Publique en la pantalla de Debate el sorteo oficial ya generado. Se mostrará el mismo resultado usado por el bracket y su hash SHA-256.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {drawState?.phases?.find((phase) => phase.name === "Fase de Grupos")?.matchups?.length ? (
+                                    <>
+                                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                            {drawState.phases
+                                                .find((phase) => phase.name === "Fase de Grupos")!
+                                                .matchups.map((matchup) => (
+                                                    <div key={matchup.roundName} className="rounded-lg border p-3">
+                                                        <p className="font-semibold">{matchup.roundName}</p>
+                                                        <p className="mt-1 text-sm text-muted-foreground">
+                                                            {matchup.teams.join(" · ")}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <Button
+                                                type="button"
+                                                onClick={handlePublishDraw}
+                                                disabled={isPublicDrawActive}
+                                            >
+                                                <Send className="mr-2 h-4 w-4" />
+                                                {isPublicDrawActive ? "Sorteo visible en Debate" : "Enviar Sorteo a Debate"}
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleHideDraw}
+                                                disabled={!isPublicDrawActive}
+                                            >
+                                                <EyeOff className="mr-2 h-4 w-4" />
+                                                Ocultar Sorteo
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+                                        Aún no hay un sorteo generado. Realícelo primero desde la sección Sorteo.
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                     <TabsContent value="messages">
                         <Card>
@@ -1645,7 +2116,11 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                      </div>
                                      {tempImageInput && (
                                         <div className="mt-2 text-center">
-                                            <Image src={tempImageInput} alt="Vista previa de imagen temporal" width={150} height={100} className="object-contain rounded-md mx-auto border" />
+                                            <ExternalImage
+                                                src={tempImageInput}
+                                                alt="Vista previa de imagen temporal"
+                                                className="mx-auto max-h-32 max-w-full rounded-md border object-contain"
+                                            />
                                         </div>
                                      )}
                                      <div className="flex justify-end">
@@ -1659,7 +2134,9 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                         </Card>
                     </TabsContent>
                     <TabsContent value="display-settings">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-6">
+                            <RoundDurationStopwatch />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Control de Pantalla</CardTitle>
@@ -1667,12 +2144,13 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                 <div>
-                                        <Timer key={mainTimer.lastUpdated} initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} />
+                                        <Timer initialTime={mainTimer.duration} title={mainTimer.label} showControls={true} size="small" />
                                         <div className="mt-2 grid grid-cols-2 gap-2">
-                                            <div className='col-span-2 grid grid-cols-3 gap-2'>
+                                            <div className='col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2'>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(120)}>2 min</Button>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(60)}>1 min</Button>
                                                 <Button variant="outline" size="sm" onClick={() => updateTimer(30)}>30 seg</Button>
+                                                <Button variant="outline" size="sm" onClick={() => updateTimer(15)}>15 seg</Button>
                                             </div>
                                             <div className="col-span-2">
                                                  <TimerSettings />
@@ -1698,6 +2176,7 @@ export function DebateControlPanel({ registeredSchools = [], allScores = [], all
                                 </CardContent>
                             </Card>
                             <SidebarImageSetter initialUrl={sidebarImageUrl} />
+                            </div>
                         </div>
                     </TabsContent>
                 </Tabs>

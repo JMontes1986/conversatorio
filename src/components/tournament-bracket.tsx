@@ -24,6 +24,7 @@ type SchoolData = {
   teamName?: string;
   schoolName?: string;
   status?: string;
+  participants?: Array<{ name?: string }>;
 };
 
 type RoundData = {
@@ -318,7 +319,15 @@ function buildBracket(
   return stages;
 }
 
-function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: boolean }) {
+function MatchCard({
+  match,
+  isLastStage,
+  teamMembers,
+}: {
+  match: BracketMatch;
+  isLastStage: boolean;
+  teamMembers: Record<string, string[]>;
+}) {
   return (
     <div className="relative w-64 shrink-0">
       <div className="mb-2 flex items-center justify-between gap-2 px-1">
@@ -341,7 +350,20 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
                 isQualifier && "bg-emerald-600 font-semibold text-white",
               )}
             >
-              <span className="min-w-0 truncate">{team.name}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate">{team.name}</div>
+                {!team.pending && (teamMembers[team.name]?.length ?? 0) > 0 && (
+                  <div
+                    className={cn(
+                      "mt-0.5 line-clamp-2 text-[11px] font-normal leading-tight",
+                      isQualifier ? "text-white/85" : "text-muted-foreground",
+                    )}
+                    title={teamMembers[team.name].join(" · ")}
+                  >
+                    {teamMembers[team.name].join(" · ")}
+                  </div>
+                )}
+              </div>
               <span className="flex shrink-0 items-center gap-2">
                 {typeof team.score === "number" && (
                   <span className="tabular-nums">{team.score}</span>
@@ -367,6 +389,7 @@ function MatchCard({ match, isLastStage }: { match: BracketMatch; isLastStage: b
 export function TournamentBracket() {
   const bracketRef = useRef<HTMLDivElement>(null);
   const [registeredTeams, setRegisteredTeams] = useState<string[]>([]);
+  const [teamMembers, setTeamMembers] = useState<Record<string, string[]>>({});
   const [verifiedTeams, setVerifiedTeams] = useState<string[]>([]);
   const [publicTeams, setPublicTeams] = useState<string[]>([]);
   const [rounds, setRounds] = useState<RoundData[]>([]);
@@ -392,6 +415,18 @@ export function TournamentBracket() {
       query(collection(db, "schools"), orderBy("createdAt", "asc")),
       (snapshot) => {
         const schools = snapshot.docs.map((school) => school.data() as SchoolData);
+
+        const membersByTeam: Record<string, string[]> = {};
+        schools.forEach((school) => {
+          const teamName = (school.teamName || school.schoolName || "").trim().normalize("NFC");
+          if (!teamName) return;
+
+          membersByTeam[teamName] = (school.participants || [])
+            .map((participant) => participant?.name?.trim().normalize("NFC") || "")
+            .filter(Boolean);
+        });
+
+        setTeamMembers(membersByTeam);
         setRegisteredTeams(uniqueTeamNames(schools.map((school) => (
           school.teamName || school.schoolName || ""
         ))));
@@ -693,6 +728,7 @@ export function TournamentBracket() {
                         key={match.id}
                         match={match}
                         isLastStage={stageIndex === stages.length - 1}
+                        teamMembers={teamMembers}
                       />
                     ))}
                   </div>

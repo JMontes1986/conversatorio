@@ -44,17 +44,31 @@ interface KnockoutStageResultsProps {
     loading: boolean;
 }
 
+function isFinalPhase(phase: string) {
+    const normalized = phase.trim().normalize("NFC").toLocaleLowerCase("es");
+    return normalized.includes("final") && !normalized.includes("semifinal");
+}
+
+function finalRoundsFrom(allRounds: RoundData[]) {
+    const explicitFinals = allRounds.filter((round) => isFinalPhase(round.phase));
+    if (explicitFinals.length > 0) return explicitFinals;
+
+    const fallback = allRounds.filter((round) => {
+        const normalized = round.phase.trim().normalize("NFC").toLocaleLowerCase("es");
+        return !normalized.includes("grupo") && !normalized.includes("semifinal");
+    });
+    return fallback.length > 0 ? [fallback[fallback.length - 1]] : [];
+}
+
 
 export function KnockoutStageResults({ allScores, allRounds, debateState, resultsPublished, loading }: KnockoutStageResultsProps) {
     const finalStageResults = useMemo(() => {
         if (loading) return [];
         
-        const finalRoundName = "Ronda 8";
-        const finalRound = allRounds.find(r => r.name === finalRoundName);
+        const finalRounds = finalRoundsFrom(allRounds);
+        if (finalRounds.length === 0) return [];
 
-        if (!finalRound) return [];
-
-        const knockoutRoundNames = [finalRoundName];
+        const knockoutRoundNames = finalRounds.map((round) => round.name);
 
         const finalScores = allScores.filter(score => {
             return knockoutRoundNames.some(knockoutName => score.matchId.startsWith(knockoutName));
@@ -108,7 +122,7 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
             return { id: matchId, teams, winner, isTie };
         });
 
-        if (debateState?.currentRound === finalRoundName && debateState.teams.length > 0) {
+        if (debateState?.currentRound && knockoutRoundNames.includes(debateState.currentRound) && debateState.teams.length > 0) {
             const isAlreadyScored = processedMatches.some(match => match.id === debateState.currentRound);
             if (!isAlreadyScored) {
                 processedMatches.push({
@@ -121,6 +135,9 @@ export function KnockoutStageResults({ allScores, allRounds, debateState, result
             }
         }
         
+        const roundOrder = allRounds.map((round) => round.name);
+        processedMatches.sort((a, b) => roundOrder.indexOf(a.id) - roundOrder.indexOf(b.id));
+
         return processedMatches;
 
     }, [allScores, debateState, allRounds, loading]);

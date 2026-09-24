@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -14,14 +14,15 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
-import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info, User } from 'lucide-react';
+import { Swords, Check, Hash, Loader2, History, CheckCircle2, Info, User, LogOut, Trophy, AlertTriangle, ShieldCheck, Clock3 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/supabase';
+import { db, getSupabase } from '@/lib/supabase';
 import { collection, addDoc, doc, onSnapshot, query, where, getDocs, orderBy } from '@/lib/documents';
 import { JudgeAuth } from '@/components/auth/judge-auth';
 import { useJudgeAuth } from '@/context/judge-auth-context';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { judgeOutcomePollMs } from '@/lib/network-profile';
 
 interface RubricCriterion {
     id: string;
@@ -49,10 +50,23 @@ interface ScoreData {
     createdAt: any;
 }
 
+type RoundOutcome = {
+    roundName: string;
+    status: 'pending' | 'tie' | 'resolved';
+    completedJudges: number;
+    totalJudges: number;
+    qualifiersPerRound?: number;
+    method?: 'scores' | 'tiebreak';
+    classifiedTeams?: string[];
+    tiedTeams?: string[];
+    teamsAlreadyQualified?: string[];
+    integrityHash?: string | null;
+};
+
 
 function ScoringPanel() {
   const { toast } = useToast();
-  const { judge } = useJudgeAuth();
+  const { judge, logout } = useJudgeAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({});
   const [debateState, setDebateState] = useState<DebateState>({
@@ -64,6 +78,9 @@ function ScoringPanel() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [rubricCriteria, setRubricCriteria] = useState<RubricCriterion[]>([]);
   const [loadingRubric, setLoadingRubric] = useState(true);
+  const [roundOutcomes, setRoundOutcomes] = useState<Record<string, RoundOutcome>>({});
+  const [loadingOutcomes, setLoadingOutcomes] = useState(false);
+  const hydratedDraftKey = useRef<string | null>(null);
 
   useEffect(() => {
     const debateStateRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
@@ -113,20 +130,18 @@ function ScoringPanel() {
       if (!judge?.id) return;
       
       setLoadingHistory(true);
-      // Simplified query to avoid composite index
       const scoresQuery = query(
           collection(db, "scores"),
+          where("judgeId", "==", judge.id),
           orderBy("createdAt", "desc")
       );
 
       const unsubscribeHistory = onSnapshot(scoresQuery, (querySnapshot) => {
-          // Filter scores for the current judge on the client side
           const allScores = querySnapshot.docs
             .map(doc => ({
               id: doc.id,
               ...doc.data()
-            } as ScoreData))
-            .filter(score => score.judgeId === judge.id);
+            } as ScoreData));
           
           setPastScores(allScores);
           setLoadingHistory(false);
@@ -138,7 +153,115 @@ function ScoringPanel() {
       return () => unsubscribeHistory();
 
   }, [judge]);
+
+  useEffect(() => {
+      if (!judge?.id) return;
+
+      let cancelled = false;
+      let intervalId: ReturnType<typeof setInterval> | null = null;
+
+      const fetchRoundOutcomes = async () => {
+          const roundNames = Array.from(new Set([
+              debateState.currentRound,
+              ...pastScores.map((score) => score.matchId.split('-bye-')[0]),
+          ].filter((roundName) => roundName && roundName !== 'N/A')));
+
+          if (roundNames.length === 0) return;
+
+          setLoadingOutcomes(true);
+          try {
+              const { data: { session } } = await getSupabase().auth.getSession();
+              if (!session) return;
+
+              const response = await fetch('/api/judge/round-results', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({ roundNames }),
+              });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || 'No se pudieron consultar los resultados.');
+
+              if (!cancelled) {
+                  setRoundOutcomes(
+                      Object.fromEntries(
+                          (result.results || []).map((outcome: RoundOutcome) => [outcome.roundName, outcome]),
+                      ),
+                  );
+              }
+          } catch (error) {
+              console.error('Error loading round outcomes:', error);
+          } finally {
+              if (!cancelled) setLoadingOutcomes(false);
+          }
+      };
+
+      void fetchRoundOutcomes();
+      intervalId = setInterval(() => {
+          if (!document.hidden) void fetchRoundOutcomes();
+      }, judgeOutcomePollMs());
+
+      return () => {
+          cancelled = true;
+          if (intervalId) clearInterval(intervalId);
+      };
+  }, [judge?.id, debateState.currentRound, pastScores]);
   
+  useEffect(() => {
+      if (!judge?.id || !debateState.currentRound || debateState.currentRound === 'N/A') return;
+
+      const key = `conversatorio:score-draft:${judge.id}:${debateState.currentRound}`;
+      if (hydratedDraftKey.current === key) return;
+
+      hydratedDraftKey.current = key;
+      try {
+          const stored = window.localStorage.getItem(key);
+          if (!stored) return;
+
+          const parsed = JSON.parse(stored) as {
+              teams?: string[];
+              scores?: Record<string, Record<string, number>>;
+          };
+          const currentTeams = debateState.teams.map((team) => team.name).sort();
+          const storedTeams = [...(parsed.teams || [])].sort();
+
+          if (
+              JSON.stringify(currentTeams) === JSON.stringify(storedTeams)
+              && parsed.scores
+          ) {
+              setScores(parsed.scores);
+              toast({
+                  title: "Borrador recuperado",
+                  description: "Se restauraron las calificaciones guardadas en este dispositivo.",
+              });
+          }
+      } catch (error) {
+          console.error("Error restoring score draft:", error);
+      }
+  }, [judge?.id, debateState.currentRound, debateState.teams, toast]);
+
+  useEffect(() => {
+      if (!judge?.id || !debateState.currentRound || debateState.currentRound === 'N/A') return;
+      const key = `conversatorio:score-draft:${judge.id}:${debateState.currentRound}`;
+
+      const hasAnyScore = Object.values(scores).some((criterionScores) =>
+          Object.keys(criterionScores || {}).length > 0,
+      );
+      if (!hasAnyScore) return;
+
+      try {
+          window.localStorage.setItem(key, JSON.stringify({
+              teams: debateState.teams.map((team) => team.name),
+              scores,
+              savedAt: Date.now(),
+          }));
+      } catch (error) {
+          console.error("Error saving score draft:", error);
+      }
+  }, [scores, judge?.id, debateState.currentRound, debateState.teams]);
+
   const hasAlreadyScoredCurrentRound = useMemo(() => {
     if (!judge || !debateState.currentRound || pastScores.length === 0) {
         return false;
@@ -222,6 +345,13 @@ function ScoringPanel() {
             title: "Puntuación Enviada",
             description: "Sus calificaciones han sido registradas exitosamente.",
         });
+        if (judge?.id && debateState.currentRound) {
+            try {
+                window.localStorage.removeItem(
+                    `conversatorio:score-draft:${judge.id}:${debateState.currentRound}`,
+                );
+            } catch {}
+        }
         const resetScores: Record<string, Record<string, number>> = {};
         debateState.teams.forEach(team => {
             resetScores[team.name] = {};
@@ -263,6 +393,88 @@ function ScoringPanel() {
   }
 
 
+  const currentRoundOutcome = roundOutcomes[debateState.currentRound];
+
+  const renderOutcomeSummary = (outcome?: RoundOutcome, compact = false) => {
+      if (!outcome) {
+          return (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock3 className="h-4 w-4" />
+                  Esperando resultado consolidado...
+              </div>
+          );
+      }
+
+      if (outcome.status === 'pending') {
+          return (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <Clock3 className="h-4 w-4" />
+                  <span>
+                      Esperando a los demás jurados: {outcome.completedJudges}/{outcome.totalJudges} calificaciones recibidas.
+                  </span>
+              </div>
+          );
+      }
+
+      if (outcome.status === 'tie') {
+          return (
+              <div className={cn(
+                  "rounded-lg border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300",
+                  compact ? "p-3" : "p-5",
+              )}>
+                  <div className="flex items-center gap-2 font-semibold">
+                      <AlertTriangle className="h-5 w-5" />
+                      Empate
+                  </div>
+                  <p className="mt-2">
+                      Empate entre <strong>{(outcome.tiedTeams || []).join(' y ')}</strong>.
+                  </p>
+                  {(outcome.teamsAlreadyQualified || []).length > 0 && (
+                      <p className="mt-1 text-sm">
+                          Ya clasifica: <strong>{outcome.teamsAlreadyQualified!.join(', ')}</strong>.
+                      </p>
+                  )}
+                  <p className="mt-1 text-sm opacity-80">
+                      Esperando el sorteo de desempate.
+                  </p>
+              </div>
+          );
+      }
+
+      const classified = outcome.classifiedTeams || [];
+      return (
+          <div className={cn(
+              "rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
+              compact ? "p-3" : "p-5",
+          )}>
+              <div className="flex flex-wrap items-center gap-2 font-semibold">
+                  <Trophy className="h-5 w-5 text-amber-500" />
+                  <span>
+                      {outcome.qualifiersPerRound === 1 ? 'Ganador de la ronda' : 'Clasificados de la ronda'}
+                  </span>
+                  {outcome.method === 'tiebreak' && (
+                      <Badge variant="outline" className="gap-1">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Desempate sellado
+                      </Badge>
+                  )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                  {classified.map((team) => (
+                      <Badge key={team} className="bg-emerald-600 text-white hover:bg-emerald-600">
+                          {team}
+                      </Badge>
+                  ))}
+              </div>
+              {outcome.method === 'tiebreak' && outcome.integrityHash && (
+                  <p className="mt-2 text-xs opacity-80">
+                      Resultado definido por desempate verificado.
+                  </p>
+              )}
+          </div>
+      );
+  };
+
   if (loadingDebateState || loadingRubric || loadingHistory) {
     return (
         <div className="flex justify-center items-center h-screen">
@@ -273,13 +485,26 @@ function ScoringPanel() {
 
   return (
     <div className="container mx-auto py-10 px-4 md:px-6">
-      <div className="mb-8 text-center">
-        <h1 className="font-headline text-3xl md:text-4xl font-bold">
-          Panel de Puntuación del Jurado
-        </h1>
-        <div className="text-muted-foreground mt-2 capitalize">
-            Jurado: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
+      <div className="mb-8 flex flex-col items-center justify-between gap-4 md:flex-row md:text-left">
+        <div>
+          <h1 className="font-headline text-3xl md:text-4xl font-bold">
+            Panel de Puntuación del Jurado
+          </h1>
+          <div className="text-muted-foreground mt-2 capitalize">
+              Jurado: <span className="font-semibold text-foreground">{judge?.name}</span> | Ronda Activa: <Badge>{debateState.currentRound}</Badge>
+          </div>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={async () => {
+            await logout();
+            window.location.href = "/scoring/login";
+          }}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Cerrar sesión
+        </Button>
       </div>
       
       {debateState.teams.length > 0 ? (
@@ -300,13 +525,33 @@ function ScoringPanel() {
       )}
 
       { hasAlreadyScoredCurrentRound ? (
-            <Card className="bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
-                <CardContent className="pt-6 text-center text-green-700 dark:text-green-300">
-                    <CheckCircle2 className="h-12 w-12 mx-auto mb-4"/>
-                    <h3 className="text-xl font-bold">Ronda Calificada</h3>
-                    <p className="text-muted-foreground text-green-600 dark:text-green-400">Ya ha enviado su puntuación para esta ronda. Puede verla en su historial a continuación.</p>
-                </CardContent>
-            </Card>
+            <div className="space-y-4">
+                <Card className="bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
+                    <CardContent className="pt-6 text-center text-green-700 dark:text-green-300">
+                        <CheckCircle2 className="h-12 w-12 mx-auto mb-4"/>
+                        <h3 className="text-xl font-bold">Ronda Calificada</h3>
+                        <p className="text-muted-foreground text-green-600 dark:text-green-400">
+                            Su puntuación ya fue registrada. El resultado se mostrará cuando todos los jurados terminen.
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Trophy className="h-5 w-5 text-amber-500" />
+                            Resultado de la ronda
+                        </CardTitle>
+                        <CardDescription>
+                            Resultado agregado de todos los jurados activos.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {loadingOutcomes && !currentRoundOutcome
+                            ? <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Actualizando resultado...</div>
+                            : renderOutcomeSummary(currentRoundOutcome)}
+                    </CardContent>
+                </Card>
+            </div>
         ) : isByeRound ? (
             <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
                 <CardContent className="pt-6 text-center text-blue-700 dark:text-blue-300">
@@ -439,6 +684,9 @@ function ScoringPanel() {
                                 </div>
                             </AccordionTrigger>
                             <AccordionContent>
+                                <div className="mb-4">
+                                    {renderOutcomeSummary(roundOutcomes[score.matchId.split('-bye-')[0]], true)}
+                                </div>
                                 {score.fullScores && score.fullScores.length > 0 ? (
                                     <div className="space-y-4">
                                         {score.fullScores.map(teamScore => (

@@ -16,6 +16,12 @@ type ScoreData = {
   judgeName: string;
 }
 
+type RoundData = {
+  id: string;
+  name: string;
+  phase: string;
+}
+
 const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null => {
     const roundScores = scores.filter(s => s.matchId.startsWith(roundName));
     if (roundScores.length === 0) return null;
@@ -34,26 +40,57 @@ const getWinnerOfRound = (scores: ScoreData[], roundName: string): string | null
     const maxScore = Math.max(...teams.map(([, score]) => score));
     const winners = teams.filter(([, score]) => score === maxScore);
     
-    if (winners.length > 0) {
-        return winners[0][0]; // Return the first team in case of a tie
+    if (winners.length === 1) {
+        return winners[0][0];
     }
 
-    return null; // Should not happen if there are entries
+    return null;
 };
 
 interface FinalResultCardProps {
     scores: ScoreData[];
+    rounds: RoundData[];
     resultsPublished: boolean;
     loading: boolean;
 }
 
-export function FinalResultCard({ scores, resultsPublished, loading }: FinalResultCardProps) {
+function isFinalPhase(phase: string) {
+    const normalized = phase.trim().normalize("NFC").toLocaleLowerCase("es");
+    return normalized.includes("final") && !normalized.includes("semifinal");
+}
+
+function resolveFinalRoundName(rounds: RoundData[], scores: ScoreData[]) {
+    const explicitFinals = rounds.filter((round) => isFinalPhase(round.phase));
+    if (explicitFinals.length > 0) {
+        return explicitFinals[explicitFinals.length - 1].name;
+    }
+
+    const nonGroupNonSemifinal = rounds.filter((round) => {
+        const normalized = round.phase.trim().normalize("NFC").toLocaleLowerCase("es");
+        return !normalized.includes("grupo") && !normalized.includes("semifinal");
+    });
+    if (nonGroupNonSemifinal.length > 0) {
+        return nonGroupNonSemifinal[nonGroupNonSemifinal.length - 1].name;
+    }
+
+    const scoredRoundNames = Array.from(new Set(
+        scores.map((score) => score.matchId.split("-bye-")[0]).filter(Boolean),
+    ));
+    return scoredRoundNames[scoredRoundNames.length - 1] || null;
+}
+
+export function FinalResultCard({ scores, rounds, resultsPublished, loading }: FinalResultCardProps) {
     const { width, height } = useWindowSize();
     const [showConfetti, setShowConfetti] = useState(false);
 
+    const finalRoundName = useMemo(
+        () => resolveFinalRoundName(rounds, scores),
+        [rounds, scores],
+    );
+
     const finalWinner = useMemo(() => {
-        return getWinnerOfRound(scores, "Ronda 8");
-    }, [scores]);
+        return finalRoundName ? getWinnerOfRound(scores, finalRoundName) : null;
+    }, [scores, finalRoundName]);
     
     useEffect(() => {
         if (finalWinner && resultsPublished) {
@@ -110,7 +147,9 @@ export function FinalResultCard({ scores, resultsPublished, loading }: FinalResu
                     </div>
                 ) : (
                     <div className="text-center text-muted-foreground p-8">
-                        Esperando el resultado de la Ronda 8 para coronar al campeón...
+                        {finalRoundName
+                            ? `Esperando el resultado de ${finalRoundName} para coronar al campeón...`
+                            : "Esperando que se configure la ronda final..."}
                     </div>
                 )}
             </CardContent>

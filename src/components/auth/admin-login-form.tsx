@@ -44,25 +44,42 @@ export function AdminLoginForm() {
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+
+      let response: Response;
+      try {
+        response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          signal: controller.signal,
+          body: JSON.stringify({
+            email: values.email.trim().toLowerCase(),
+            password: values.password,
+          }),
+        });
+      } catch (cause) {
+        if ((cause as Error)?.name === 'AbortError') {
+          throw new Error('La conexión está tardando demasiado. Revise la red e inténtelo nuevamente.');
+        }
+        throw new Error('No se pudo contactar el servicio de acceso. Revise la conexión de este equipo.');
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const result = await response.json();
+      if (!response.ok || !result?.session?.access_token || !result?.session?.refresh_token) {
+        throw new Error(result?.error || 'No se pudo iniciar sesión.');
+      }
+
       const supabase = getSupabase();
-      const { error } = await supabase.auth.signInWithPassword({ email: values.email, password: values.password });
-      if (error) {
-        console.error('Supabase authentication failed:', error.code);
-        throw new Error(error.code === 'invalid_credentials'
-          ? 'Correo o contraseña incorrectos para este proyecto de Supabase.'
-          : error.code === 'email_not_confirmed'
-            ? 'El correo de esta cuenta aún no está confirmado en Supabase.'
-            : 'No se pudo iniciar sesión en Supabase. Inténtalo de nuevo.');
-      }
-      const { data: profile, error: profileError } = await supabase.rpc('current_profile');
-      if (profileError) {
-        console.error('Supabase profile lookup failed:', profileError);
-        await supabase.auth.signOut();
-        throw new Error('La contraseña fue aceptada, pero no se pudo consultar el perfil. Revisa que el schema esté instalado en el proyecto Supabase conectado a Vercel.');
-      }
-      if (profile?.role !== 'admin') {
-        await supabase.auth.signOut();
-        throw new Error('La contraseña fue aceptada, pero esta cuenta no tiene el rol administrador. Asigna el rol a este correo en public.profiles.');
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: result.session.access_token,
+        refresh_token: result.session.refresh_token,
+      });
+      if (sessionError) {
+        throw new Error('La cuenta fue validada, pero este navegador no pudo guardar la sesión.');
       }
       toast({
         title: "¡Inicio de Sesión Exitoso!",
