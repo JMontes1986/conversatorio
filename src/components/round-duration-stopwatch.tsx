@@ -64,24 +64,27 @@ export function RoundDurationStopwatch() {
 
   const elapsedMs = accumulatedMs + (running && startedAt ? Math.max(0, now - startedAt) : 0);
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  const overSeconds = Math.max(0, elapsedSeconds - ROUND_TARGET_SECONDS);
-  const remainingSeconds = Math.max(0, ROUND_TARGET_SECONDS - elapsedSeconds);
+  const differenceFromReference = elapsedSeconds - ROUND_TARGET_SECONDS;
   const progress = Math.min(100, (elapsedSeconds / ROUND_TARGET_SECONDS) * 100);
 
   const status = useMemo(() => {
-    if (overSeconds > 0) return {
-      label: `Excedido por ${formatElapsed(overSeconds)}`,
-      className: "text-destructive",
-    };
-    if (remainingSeconds <= 120) return {
-      label: `Quedan ${formatElapsed(remainingSeconds)}`,
-      className: "text-amber-600",
-    };
+    if (differenceFromReference < 0) {
+      return {
+        label: `Referencia 15:00 · faltan ${formatElapsed(Math.abs(differenceFromReference))}`,
+        className: "text-muted-foreground",
+      };
+    }
+    if (differenceFromReference === 0) {
+      return {
+        label: "Referencia de 15:00 alcanzada",
+        className: "text-amber-600",
+      };
+    }
     return {
-      label: `Límite: 15:00 · quedan ${formatElapsed(remainingSeconds)}`,
+      label: `Referencia superada por ${formatElapsed(differenceFromReference)}`,
       className: "text-muted-foreground",
     };
-  }, [overSeconds, remainingSeconds]);
+  }, [differenceFromReference]);
 
   const start = () => {
     if (running) return;
@@ -119,7 +122,7 @@ export function RoundDurationStopwatch() {
             <h3 className="font-semibold">Cronómetro de Duración de Ronda</h3>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Control interno del administrador. No se muestra al público y no genera sonido.
+            Control interno del administrador. La marca de 15:00 es solo una referencia; el cronómetro continúa sin límite.
           </p>
         </div>
 
@@ -153,9 +156,9 @@ export function RoundDurationStopwatch() {
         </Button>
       </div>
 
-      {overSeconds > 0 && (
-        <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-center font-semibold text-destructive">
-          La ronda superó el límite establecido de 15 minutos.
+      {elapsedSeconds >= ROUND_TARGET_SECONDS && (
+        <div className="mt-4 rounded-lg border bg-muted/40 p-3 text-center text-sm text-muted-foreground">
+          La referencia de 15 minutos ya fue alcanzada. El cronómetro continúa contando normalmente.
         </div>
       )}
     </div>
