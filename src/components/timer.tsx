@@ -37,7 +37,18 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   const completedRun = useRef<number | null>(null);
   const lastAlarmId = useRef<string | null>(null);
   const serverOffsetMs = useRef(0);
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const { toast } = useToast();
+
+  const queueTimerWrite = (payload: Record<string, unknown>) => {
+    const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
+    writeQueue.current = writeQueue.current
+      .catch(() => {})
+      .then(async () => {
+        await setDoc(docRef, { timer: payload }, { merge: true });
+      });
+    return writeQueue.current;
+  };
 
   useEffect(() => {
     const controller = getSharedTimerAudio();
@@ -137,16 +148,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
                       setTimeout(() => setVisualAlarm(false), 2500);
                     }
 
-                    void setDoc(doc(db, "debateState", DEBATE_STATE_DOC_ID), {
-                        timer: {
-                            isActive: false,
-                            duration: 0,
-                            configuredDuration: serverState.configuredDuration ?? initialTime,
-                            lastUpdated: now,
-                            endsAt: targetEnd,
-                            alarmId,
-                        },
-                    }, { merge: true }).catch(error => console.error("Error stopping expired timer:", error));
+                    void queueTimerWrite({
+                        isActive: false,
+                        duration: 0,
+                        configuredDuration: serverState.configuredDuration ?? initialTime,
+                        lastUpdated: now,
+                        endsAt: targetEnd,
+                        alarmId,
+                    }).catch(error => console.error("Error stopping expired timer:", error));
                 }
             }
         } else if (serverState) {
@@ -207,7 +216,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
     const newIsActive = !(serverState?.isActive);
 
     try {
-        const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
         const now = Date.now() + serverOffsetMs.current;
         const configuredDuration = serverState?.configuredDuration ?? initialTime;
         const duration = timeRemaining > 0 ? timeRemaining : configuredDuration;
@@ -226,16 +234,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
         setTimeRemaining(duration);
         completedRun.current = null;
 
-        await setDoc(docRef, { 
-            timer: {
-                isActive: nextTimerState.isActive,
-                duration: nextTimerState.duration,
-                configuredDuration: nextTimerState.configuredDuration,
-                lastUpdated: nextTimerState.lastUpdated,
-                endsAt: nextTimerState.endsAt ?? null,
-                alarmId: null,
-            } 
-        }, { merge: true });
+        await queueTimerWrite({
+            isActive: nextTimerState.isActive,
+            duration: nextTimerState.duration,
+            configuredDuration: nextTimerState.configuredDuration,
+            lastUpdated: nextTimerState.lastUpdated,
+            endsAt: nextTimerState.endsAt ?? null,
+            alarmId: null,
+        });
     } catch (error) {
         console.error("Error updating timer state in Supabase:", error);
     }
@@ -244,7 +250,6 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
   const resetTimer = async () => {
     if (showControls) {
         try {
-            const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
             const now = Date.now() + serverOffsetMs.current;
             const resetDuration = serverState?.configuredDuration ?? initialTime;
             const nextTimerState: TimerState = {
@@ -259,16 +264,14 @@ export function Timer({ initialTime, title, showControls = true, size = 'default
             setTimeRemaining(resetDuration);
             completedRun.current = null;
 
-            await setDoc(docRef, { 
-                timer: { 
-                    isActive: false, 
-                    duration: resetDuration,
-                    configuredDuration: resetDuration,
-                    lastUpdated: now,
-                    endsAt: null,
-                    alarmId: null,
-                } 
-            }, { merge: true });
+            await queueTimerWrite({
+                isActive: false,
+                duration: resetDuration,
+                configuredDuration: resetDuration,
+                lastUpdated: now,
+                endsAt: null,
+                alarmId: null,
+            });
         } catch (error) {
             console.error("Error resetting timer state in Supabase:", error);
         }
