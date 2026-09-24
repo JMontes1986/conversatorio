@@ -41,11 +41,11 @@ interface DebateState {
 }
 
 export default function DebatePage() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const canControl = profile?.role === 'admin' || profile?.role === 'moderator';
   const [projectionSessionMarker, setProjectionSessionMarker] = useState(false);
   const isProjection = profile?.role === 'projection'
-    || Boolean(user && projectionSessionMarker);
+    || projectionSessionMarker;
   const [debateState, setDebateState] = useState<DebateState | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
