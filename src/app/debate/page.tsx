@@ -41,12 +41,24 @@ interface DebateState {
 }
 
 export default function DebatePage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const canControl = profile?.role === 'admin' || profile?.role === 'moderator';
-  const isProjection = profile?.role === 'projection';
+  const [projectionSessionMarker, setProjectionSessionMarker] = useState(false);
+  const isProjection = profile?.role === 'projection'
+    || Boolean(user && projectionSessionMarker);
   const [debateState, setDebateState] = useState<DebateState | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    try {
+      setProjectionSessionMarker(
+        window.sessionStorage.getItem("conversatorio:projection-session") === "1",
+      );
+    } catch {
+      setProjectionSessionMarker(false);
+    }
+  }, []);
 
   useEffect(() => {
     const docRef = doc(db, "debateState", DEBATE_STATE_DOC_ID);
