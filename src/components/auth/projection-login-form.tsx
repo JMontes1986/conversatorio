@@ -44,6 +44,10 @@ export function ProjectionLoginForm() {
       const { error } = await getSupabase().auth.setSession(result.session);
       if (error) throw error;
 
+      // This marker only enables projection-only presentation features such as
+      // the local bell. Authorization continues to come from Supabase profiles.
+      window.sessionStorage.setItem("conversatorio:projection-session", "1");
+
       toast({
         title: "Proyección conectada",
         description: "El equipo de proyección quedó autenticado.",
