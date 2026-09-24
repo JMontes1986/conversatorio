@@ -90,6 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     const { error } = await getSupabase().auth.signOut();
     if (error) throw error;
+    try {
+      window.sessionStorage.removeItem("conversatorio:projection-session");
+    } catch {}
     setUser(null); setProfile(null);
   };
   return <AuthContext.Provider value={{ user, profile, loading, logout }}>
