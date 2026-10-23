@@ -1,0 +1,49 @@
+name: Security hotfix lockfile and validation
+on:
+  push:
+    branches:
+      - security/2026-10-23-nextjs-hotfix
+    paths:
+      - .github/workflows/security-hotfix-lock.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: security-hotfix-conversatorio
+  cancel-in-progress: false
+jobs:
+  lockfile-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout the authorized security branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+          ref: security/2026-10-23-nextjs-hotfix
+      - name: Setup Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Regenerate lockfile without executing package scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Check deterministic dependency installation
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check TypeScript
+        run: npm run typecheck --if-present
+      - name: Compile application
+        run: npm run build --if-present
+      - name: Test project schema
+        run: npm run test:schema --if-present
+      - name: Commit validated lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'Lockfile unchanged'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'security: synchronize validated npm lockfile'
+          git push origin HEAD:security/2026-10-23-nextjs-hotfix
