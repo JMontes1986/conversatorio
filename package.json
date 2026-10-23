@@ -43,7 +43,7 @@
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.475.0",
     "nanoid": "^5.1.5",
-    "next": "^15.5.25",
+    "next": "15.5.28",
     "qrcode.react": "^3.1.0",
     "react": "^18.3.1",
     "react-confetti": "^6.1.0",
@@ -69,6 +69,7 @@
     "node": "24.x"
   },
   "overrides": {
-    "postcss": "$postcss"
+    "postcss": "$postcss",
+    "dompurify": "3.4.17"
   }
 }
